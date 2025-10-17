@@ -237,7 +237,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
             )
 
     async def server_load(event: Message):
-        return await event.edit(get_sys.get_system_info())
+        return await event.edit(await get_sys.get_system_info())
 
     @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^/автофарм$"))
     @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^/автоферма$"))
