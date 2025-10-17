@@ -110,7 +110,7 @@ class Generator:
             else:
                 await asyncio.get_event_loop().run_in_executor(None, func)
         except Exception as e:
-            print(f"Ошибка выполнения задачи '{self.key_name}': {e}")
+            logger.error(f"Ошибка выполнения задачи '{self.key_name}': {e}")
         finally:
             await self._update_task_data(start_time)
 
