@@ -4,24 +4,8 @@ import random
 import asyncio
 import logging
 import orjson
-
-import modules.phrases as phrase
-from modules.flip_map import flip_map
-from modules.iterators import Counter
-from modules.settings import UBSettings
-import modules.get_sys as get_sys
-from modules import task_gen
-
 from loguru import logger
 from sys import stderr
-from telethon import events
-from telethon import functions, types
-from telethon.sync import TelegramClient
-from telethon.tl.types import MessageMediaDocument, PeerUser
-from telethon.tl.custom import Message
-from time import time
-from os import mkdir, listdir, path
-
 
 logger.remove()
 logger.add(
@@ -44,6 +28,20 @@ class InterceptHandler(logging.Handler):
 
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
+
+import modules.phrases as phrase  # noqa: E402
+from modules.flip_map import flip_map  # noqa: E402
+from modules.iterators import Counter  # noqa: E402
+from modules.settings import UBSettings  # noqa: E402
+import modules.get_sys as get_sys  # noqa: E402
+from modules import task_gen  # noqa: E402
+from telethon import events  # noqa: E402
+from telethon import functions, types  # noqa: E402
+from telethon.sync import TelegramClient  # noqa: E402
+from telethon.tl.types import MessageMediaDocument, PeerUser  # noqa: E402
+from telethon.tl.custom import Message  # noqa: E402
+from time import time  # noqa: E402
+from os import mkdir, listdir, path  # noqa: E402
 
 
 async def userbot(phone_number: str, api_id: int, api_hash: str):

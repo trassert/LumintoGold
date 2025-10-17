@@ -1,5 +1,6 @@
 clients
 sessions
+db
 
 **/__pycache__/
 .venv
