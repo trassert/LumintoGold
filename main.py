@@ -35,6 +35,7 @@ from modules.iterators import Counter  # noqa: E402
 from modules.settings import UBSettings  # noqa: E402
 import modules.get_sys as get_sys  # noqa: E402
 from modules import task_gen  # noqa: E402
+
 from telethon import events  # noqa: E402
 from telethon import functions, types  # noqa: E402
 from telethon.sync import TelegramClient  # noqa: E402
@@ -313,6 +314,14 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        try:
+            import uvloop
+
+            uvloop.run(main())
+        except ModuleNotFoundError:
+            logger.warning(
+                "Uvloop не найден! Установите его для большей производительности"
+            )
+            asyncio.run(main())
     except KeyboardInterrupt:
         logger.warning("Закрываю бота...")

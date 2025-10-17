@@ -3,3 +3,6 @@ orjson
 telethon
 loguru
 psutil
+
+uvloop
+cryptg
