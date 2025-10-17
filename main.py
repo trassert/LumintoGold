@@ -74,14 +74,11 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         )
 
     async def iris_farm():
-        await asyncio.sleep(random.randint(0, 750))
-        while True:
-            await client.send_message(
-                -1002355128955,
-                random.choice(["/ферма", "/фарма"]),
-            )
-            logger.warning("Фармлю!")
-            await asyncio.sleep(14500)
+        await client.send_message(
+            -1002355128955,
+            random.choice(["/ферма", "/фарма"]),
+        )
+        logger.warning("Фармлю!")
 
     async def typing(event: Message):
         try:
