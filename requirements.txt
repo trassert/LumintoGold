@@ -1,0 +1,5 @@
+aiofiles
+orjson
+telethon
+loguru
+psutil
