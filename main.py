@@ -10,6 +10,7 @@ from modules.flip_map import flip_map
 from modules.iterators import Counter
 from modules.settings import UBSettings
 import modules.get_sys as get_sys
+from modules import task_gen
 
 from loguru import logger
 from sys import stderr
@@ -59,7 +60,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
     logger.info(f"Запускаю клиент ({phone_number})")
     await client.start(phone=phone_number)
 
-    farm_task = None
+    farm_task = task_gen.Generator(f"{phone_number}_iris")
 
     async def reactions(event: Message):
         await asyncio.sleep(random.randint(0, 1000))
@@ -245,14 +246,12 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         nonlocal farm_task
         if await Settings.get("iris.farm"):
             await Settings.set("iris.farm", False)
-            if farm_task is not None:
-                farm_task.cancel()
-                return await event.edit(phrase.farm.off)
-            return await event.edit(phrase.farm.off_notask)
+            farm_task.stop()
+            return await event.edit(phrase.farm.off)
         else:
             await Settings.set("iris.farm", True)
             await event.edit(phrase.farm.on)
-            farm_task = asyncio.create_task(iris_farm())
+            farm_task.create(iris_farm, 4)
 
     client.add_event_handler(
         on_off_block_voice, events.NewMessage(outgoing=True, pattern=r"\.гс")
@@ -287,7 +286,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         )
 
     if await Settings.get("iris.farm"):
-        farm_task = asyncio.create_task(iris_farm())
+        farm_task.create(iris_farm, 4)
 
     await client.run_until_disconnected()
 
