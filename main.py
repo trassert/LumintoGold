@@ -78,7 +78,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
             -1002355128955,
             random.choice(["/ферма", "/фарма"]),
         )
-        logger.warning("Фармлю!")
+        logger.info(f"{phone_number} - сработала автоферма")
 
     async def typing(event: Message):
         try:
