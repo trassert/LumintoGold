@@ -7,6 +7,8 @@ import aiofiles
 import orjson
 from loguru import logger
 
+from . import pathes
+
 logger.info(f"Загружен модуль {__name__}!")
 
 TaskType = Literal["interval", "daily"]
@@ -17,7 +19,7 @@ RandomDelay = Optional[Tuple[int, int]]
 class Generator:
     _instances: Dict[str, "Generator"] = {}
 
-    def __init__(self, key_name: str, filename: str = "tasks.json"):
+    def __init__(self, key_name: str, filename: str = pathes.tasks):
         logger.info(f"Инициализирован таск-ген {key_name}")
         self.key_name = key_name
         self.filename = filename
