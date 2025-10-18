@@ -75,10 +75,16 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         )
 
     async def iris_farm():
-        await client.send_message(
-            -1002355128955,
-            random.choice(["/ферма", "/фарма"]),
-        )
+        try:
+            await client.send_message(
+                -1002355128955,
+                random.choice(["/ферма", "/фарма"]),
+            )
+        except Exception:
+            await client.send_message(
+                707693258,
+                random.choice(["/ферма", "/фарма"]),
+            )
         logger.info(f"{phone_number} - сработала автоферма")
 
     async def typing(event: Message):
