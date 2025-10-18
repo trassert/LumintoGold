@@ -82,7 +82,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
             )
         except Exception:
             await client.send_message(
-                707693258,
+                "iris_cm_bot",
                 random.choice(["/ферма", "/фарма"]),
             )
         logger.info(f"{phone_number} - сработала автоферма")
