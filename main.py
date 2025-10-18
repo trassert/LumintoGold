@@ -247,7 +247,9 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         else:
             await Settings.set("iris.farm", True)
             await event.edit(phrase.farm.on)
-            await farm_task.create(iris_farm, 4)
+            await farm_task.create(
+                func=iris_farm, task_param=4, random_delay=(5, 360)
+            )
 
     client.add_event_handler(
         on_off_block_voice, events.NewMessage(outgoing=True, pattern=r"\.гс")
@@ -282,7 +284,9 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         )
 
     if await Settings.get("iris.farm"):
-        await farm_task.create(iris_farm, 4)
+        await farm_task.create(
+            func=iris_farm, task_param=4, random_delay=(5, 360)
+        )
 
     await client.run_until_disconnected()
 
