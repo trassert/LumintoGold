@@ -5,7 +5,9 @@ from datetime import datetime, time as dt_time, timedelta
 from typing import Union, Callable, Optional, Literal, Dict, Any, Tuple
 import aiofiles
 import orjson
+from loguru import logger
 
+logger.info(f"Загружен модуль {__name__}!")
 
 TaskType = Literal["interval", "daily"]
 TaskParam = Union[int, str]
@@ -16,6 +18,7 @@ class Generator:
     _instances: Dict[str, "Generator"] = {}
 
     def __init__(self, key_name: str, filename: str = "tasks.json"):
+        logger.info(f"Инициализирован таск-ген {key_name}")
         self.key_name = key_name
         self.filename = filename
         self._task: Optional[asyncio.Task] = None
