@@ -118,6 +118,7 @@ class Generator:
             wait_time = self._next_run_timestamp - current_time
 
             if wait_time > 0:
+                logger.info("{self.key_name} - жду {wait_time} с. до запуска..")
                 await asyncio.sleep(wait_time)
 
             await self._safe_execute_with_delay(func)
