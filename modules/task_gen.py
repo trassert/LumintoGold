@@ -120,13 +120,8 @@ class Generator:
             self._next_run_timestamp = self._get_next_daily_run(target_time)
 
     async def _safe_execute_with_delay(self, func: Callable) -> None:
-        """Добавляет случайную задержку, затем безопасно выполняет функцию"""
-
         delay = self._get_random_delay()
         if delay > 0:
-            print(
-                f"[{self.key_name}] Добавляем случайную задержку: {delay:.2f} сек."
-            )
             await asyncio.sleep(delay)
 
         await self._safe_execute(func)
