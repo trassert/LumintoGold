@@ -2,6 +2,8 @@ clients
 sessions
 db
 
+tokens.yml
+
 **/__pycache__/
 .venv
 .env

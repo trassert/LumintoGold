@@ -29,12 +29,14 @@ class InterceptHandler(logging.Handler):
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
+import modules.get_sys as get_sys  # noqa: E402
 import modules.phrases as phrase  # noqa: E402
+
 from modules.flip_map import flip_map  # noqa: E402
 from modules.iterators import Counter  # noqa: E402
 from modules.settings import UBSettings  # noqa: E402
-import modules.get_sys as get_sys  # noqa: E402
 from modules import task_gen  # noqa: E402
+from modules import ai  # noqa: E402
 
 from telethon import events  # noqa: E402
 from telethon import functions, types  # noqa: E402
@@ -60,6 +62,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
     await client.start(phone=phone_number)
 
     farm_task = task_gen.Generator(f"{phone_number}_iris")
+    ai_client = ai.Client(await Settings.get("ai.token", None))
 
     async def reactions(event: Message):
         await asyncio.sleep(random.randint(0, 1000))
@@ -242,8 +245,20 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
     async def server_load(event: Message):
         return await event.edit(await get_sys.get_system_info())
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^/автофарм$"))
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^/автоферма$"))
+    @client.on(events.NewMessage(outgoing=True, pattern=r"\.токен (.+)"))
+    async def ai_token(event: Message):
+        token: str = event.pattern_match.group(1).strip()
+        await Settings.set("ai.token", token)
+        ai_client.change_api_key(token)
+        await event.edit(phrase.ai.token_set)
+
+    @client.on(events.NewMessage(outgoing=True, pattern=r"\.т (.+)"))
+    async def ai_resp(event: Message):
+        if await Settings.get("ai.token", None) is None:
+            return await event.edit(phrase.ai.no_token)
+
+    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^.автофарм$"))
+    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^.автоферма$"))
     async def on_off_farming(event: Message):
         nonlocal farm_task
         if await Settings.get("iris.farm"):
