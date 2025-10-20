@@ -10,6 +10,7 @@ logger.info(f"Загружен модуль {__name__}!")
 class Client:
     def __init__(self, api_key: str):
         self.api_key = api_key
+        self._client_init()
 
     def _client_init(self):
         self.client = genai.Client(
