@@ -37,6 +37,7 @@ from modules.iterators import Counter  # noqa: E402
 from modules.settings import UBSettings  # noqa: E402
 from modules import task_gen  # noqa: E402
 from modules import ai  # noqa: E402
+from modules import formatter  # noqa: E402
 
 from telethon import events  # noqa: E402
 from telethon import functions, types  # noqa: E402
@@ -252,10 +253,25 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         ai_client.change_api_key(token)
         await event.edit(phrase.ai.token_set)
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"\.т (.+)"))
+    @client.on(events.NewMessage(outgoing=True, pattern=r"\.ии\s([\s\S]+)"))
     async def ai_resp(event: Message):
         if await Settings.get("ai.token", None) is None:
             return await event.edit(phrase.ai.no_token)
+        text = event.pattern_match.group(1).strip()
+        try:
+            response = await ai_client.generate(text)
+        except Exception as e:
+            return await event.edit(phrase.error.format(e))
+        try:
+            if len(response) > 4096:
+                response = formatter.splitter(response)
+                await event.edit(response.pop(0))
+                for chunk in response:
+                    await event.reply(chunk)
+            else:
+                return await event.edit(response)
+        except Exception as e:
+            return await event.edit(phrase.error.format(e))
 
     @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^.автофарм$"))
     @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^.автоферма$"))
