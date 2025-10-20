@@ -258,10 +258,10 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         if await Settings.get("ai.token", None) is None:
             return await event.edit(phrase.ai.no_token)
         text = event.pattern_match.group(1).strip()
-        try:
-            response = await ai_client.generate(text)
-        except Exception as e:
-            return await event.edit(phrase.error.format(e))
+        # try:
+        response = await ai_client.generate(text)
+        # except Exception as e:
+        #     return await event.edit(phrase.error.format(e))
         try:
             if len(response) > 4096:
                 response = formatter.splitter(response)
