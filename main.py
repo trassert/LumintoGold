@@ -12,7 +12,7 @@ logger.add(
     stderr,
     format="<blue>{time:HH:mm:ss}</blue>"
     " | <level>{level}</level>"
-    " | <green>{function}</green>"
+    " | <green>{file}:{function}</green>"
     " <cyan>></cyan> {message}",
     level="INFO",
     colorize=True,
