@@ -54,7 +54,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         session=f"sessions/{phone_number}",
         api_id=api_id,
         api_hash=api_hash,
-        use_ipv6=True,
+        use_ipv6=False,
         system_version="4.16.30-vxCUSTOM",
         device_model="LumintoGold",
         system_lang_code="ru",
