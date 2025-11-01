@@ -1,11 +1,12 @@
-import re
-import aiofiles
-import random
 import asyncio
 import logging
+import random
+import re
+from sys import stderr
+
+import aiofiles
 import orjson
 from loguru import logger
-from sys import stderr
 
 logger.remove()
 logger.add(
@@ -20,35 +21,42 @@ logger.add(
 
 
 class InterceptHandler(logging.Handler):
-    def emit(self, record):
+    def emit(self, record) -> None:
         level = "TRACE" if record.levelno == 5 else record.levelname
         logger.opt(depth=6, exception=record.exc_info).log(
-            level, record.getMessage()
+            level,
+            record.getMessage(),
         )
 
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
-import modules.get_sys as get_sys  # noqa: E402
-import modules.phrases as phrase  # noqa: E402
+import contextlib
+from os import listdir, mkdir, path  # noqa: E402
+from time import time  # noqa: E402
 
+from telethon import (  # noqa: E402
+    events,
+    functions,
+    types,
+)
+from telethon.sync import TelegramClient  # noqa: E402
+from telethon.tl.custom import Message  # noqa: E402
+from telethon.tl.types import MessageMediaDocument, PeerUser  # noqa: E402
+
+import modules.phrases as phrase  # noqa: E402
+from modules import (
+    ai,
+    formatter,
+    get_sys,
+    task_gen,
+)
 from modules.flip_map import flip_map  # noqa: E402
 from modules.iterators import Counter  # noqa: E402
 from modules.settings import UBSettings  # noqa: E402
-from modules import task_gen  # noqa: E402
-from modules import ai  # noqa: E402
-from modules import formatter  # noqa: E402
-
-from telethon import events  # noqa: E402
-from telethon import functions, types  # noqa: E402
-from telethon.sync import TelegramClient  # noqa: E402
-from telethon.tl.types import MessageMediaDocument, PeerUser  # noqa: E402
-from telethon.tl.custom import Message  # noqa: E402
-from time import time  # noqa: E402
-from os import mkdir, listdir, path  # noqa: E402
 
 
-async def userbot(phone_number: str, api_id: int, api_hash: str):
+async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
     Settings = UBSettings(phone_number, "clients")
     client = TelegramClient(
         session=f"sessions/{phone_number}",
@@ -75,10 +83,10 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
                 big=True,
                 add_to_recent=True,
                 reaction=[types.ReactionEmoji(emoticon="❤️")],
-            )
+            ),
         )
 
-    async def iris_farm():
+    async def iris_farm() -> None:
         try:
             await client.send_message(
                 -1002355128955,
@@ -105,8 +113,9 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
             text = text[1:]
             await event.edit(bep)
             await asyncio.sleep(await Settings.get("typing.delay"))
+        return None
 
-    async def words(event: Message):
+    async def words(event: Message) -> None:
         arg = None
         arg2 = None
         try:
@@ -127,7 +136,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         total = 0
         dots = ""
         msg: Message = await event.edit(
-            phrase.words.all.format(words=total, dots=dots)
+            phrase.words.all.format(words=total, dots=dots),
         )
 
         async for message in client.iter_messages(event.chat_id):
@@ -136,16 +145,14 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
                 try:
                     dots = dots + "." if len(dots) < 3 else ""
                     await msg.edit(
-                        phrase.words.all.format(words=total, dots=dots)
+                        phrase.words.all.format(words=total, dots=dots),
                     )
                 except Exception:
                     await asyncio.sleep(await Settings.get("typing.delay"))
-                    try:
+                    with contextlib.suppress(Exception):
                         msg = await event.reply(
-                            phrase.words.except_all.format(total)
+                            phrase.words.except_all.format(total),
                         )
-                    except Exception:
-                        pass
             if message.text:
                 for word in message.text.split():
                     word = re.sub(r"\W+", "", word).strip()
@@ -161,10 +168,9 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         freq = sorted(words, key=words.get, reverse=True)
         out = phrase.words.out
         minsize = 50
-        maxsize = len(freq) if len(freq) < minsize else minsize
-        if arg2 is not None:
-            if arg2 < len(freq):
-                maxsize = arg2
+        maxsize = min(minsize, len(freq))
+        if arg2 is not None and arg2 < len(freq):
+            maxsize = arg2
         for i in range(maxsize):
             out += f"{i + 1}. {words[freq[i]]}: {freq[i]}\n"
         try:
@@ -172,31 +178,25 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
         except Exception:
             await event.reply(out)
 
-    async def ping(event: Message):
+    async def ping(event: Message) -> None:
         timestamp = event.date.timestamp()
         ping = round(time() - timestamp, 2)
-        if ping < 0:
-            ping = phrase.ping.min
-        else:
-            ping = f"за {str(ping)} сек."
+        ping = phrase.ping.min if ping < 0 else f"за {ping!s} сек."
         await event.edit(phrase.ping.form.replace("~", ping))
 
     async def mask_read_any(event: Message):
-        "Просматривает сообщение"
+        """Просматривает сообщение."""
         return await event.mark_read()
 
     async def flip_text(event: Message):
         text = event.text.split(" ", maxsplit=1)[1]
         final_str = ""
         for char in text:
-            if char in flip_map.keys():
-                new_char = flip_map[char]
-            else:
-                new_char = char
+            new_char = flip_map.get(char, char)
             final_str += new_char
         return await event.edit("".join(reversed(list(final_str))))
 
-    async def block_voice(event: Message):
+    async def block_voice(event: Message) -> None:
         if not isinstance(event.peer_id, PeerUser):
             return
         me = await client.get_me()
@@ -208,11 +208,12 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
             await event.delete()
             await event.respond(
                 await Settings.get(
-                    "voice.message", phrase.voice.default_message
-                )
+                    "voice.message",
+                    phrase.voice.default_message,
+                ),
             )
 
-    async def on_off_block_voice(event: Message):
+    async def on_off_block_voice(event: Message) -> None:
         if await Settings.get("block.voice"):
             await Settings.set("block.voice", False)
             await event.edit(phrase.voice.unblock)
@@ -228,26 +229,31 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
             all_chats.remove(event.chat_id)
             await Settings.set("mask.read", all_chats)
             event.client.remove_event_handler(
-                mask_read_any, events.NewMessage(chats=event.chat_id)
+                mask_read_any,
+                events.NewMessage(chats=event.chat_id),
             )
             return await event.client.edit_message(
-                event.sender_id, event.message, phrase.read.off
+                event.sender_id,
+                event.message,
+                phrase.read.off,
             )
-        else:
-            all_chats.append(event.chat_id)
-            await Settings.set("mask.read", all_chats)
-            event.client.add_event_handler(
-                mask_read_any, events.NewMessage(chats=event.chat_id)
-            )
-            return await event.client.edit_message(
-                event.sender_id, event.message, phrase.read.on
-            )
+        all_chats.append(event.chat_id)
+        await Settings.set("mask.read", all_chats)
+        event.client.add_event_handler(
+            mask_read_any,
+            events.NewMessage(chats=event.chat_id),
+        )
+        return await event.client.edit_message(
+            event.sender_id,
+            event.message,
+            phrase.read.on,
+        )
 
     async def server_load(event: Message):
         return await event.edit(await get_sys.get_system_info())
 
     @client.on(events.NewMessage(outgoing=True, pattern=r"\.токен (.+)"))
-    async def ai_token(event: Message):
+    async def ai_token(event: Message) -> None:
         token: str = event.pattern_match.group(1).strip()
         await Settings.set("ai.token", token)
         ai_client.change_api_key(token)
@@ -281,62 +287,75 @@ async def userbot(phone_number: str, api_id: int, api_hash: str):
             await Settings.set("iris.farm", False)
             farm_task.stop()
             return await event.edit(phrase.farm.off)
-        else:
-            await Settings.set("iris.farm", True)
-            await event.edit(phrase.farm.on)
-            await farm_task.create(
-                func=iris_farm, task_param=4, random_delay=(5, 360)
-            )
+        await Settings.set("iris.farm", True)
+        await event.edit(phrase.farm.on)
+        await farm_task.create(
+            func=iris_farm,
+            task_param=4,
+            random_delay=(5, 360),
+        )
+        return None
 
     client.add_event_handler(
-        on_off_block_voice, events.NewMessage(outgoing=True, pattern=r"\.гс")
+        on_off_block_voice,
+        events.NewMessage(outgoing=True, pattern=r"\.гс"),
     )
     client.add_event_handler(
-        on_off_mask_read, events.NewMessage(outgoing=True, pattern=r"\.читать")
+        on_off_mask_read,
+        events.NewMessage(outgoing=True, pattern=r"\.читать"),
     )
     client.add_event_handler(
-        server_load, events.NewMessage(outgoing=True, pattern=r"\.серв")
+        server_load,
+        events.NewMessage(outgoing=True, pattern=r"\.серв"),
     )
     client.add_event_handler(
-        flip_text, events.NewMessage(outgoing=True, pattern=r"\.флип")
+        flip_text,
+        events.NewMessage(outgoing=True, pattern=r"\.флип"),
     )
     client.add_event_handler(
-        typing, events.NewMessage(outgoing=True, pattern=r"\.т ")
+        typing,
+        events.NewMessage(outgoing=True, pattern=r"\.т "),
     )
     client.add_event_handler(
-        words, events.NewMessage(outgoing=True, pattern=r"\.слов")
+        words,
+        events.NewMessage(outgoing=True, pattern=r"\.слов"),
     )
     client.add_event_handler(
-        ping, events.NewMessage(outgoing=True, pattern=r"\.пинг")
+        ping,
+        events.NewMessage(outgoing=True, pattern=r"\.пинг"),
     )
 
     if await Settings.get("block.voice"):
         client.add_event_handler(block_voice, events.NewMessage())
     if await Settings.get("luminto.reactions", True):
         client.add_event_handler(
-            reactions, events.NewMessage(chats="lumintoch")
+            reactions,
+            events.NewMessage(chats="lumintoch"),
         )
         client.add_event_handler(
-            reactions, events.NewMessage(chats="trassert_ch")
+            reactions,
+            events.NewMessage(chats="trassert_ch"),
         )
 
     if await Settings.get("iris.farm"):
         await farm_task.create(
-            func=iris_farm, task_param=4, random_delay=(5, 360)
+            func=iris_farm,
+            task_param=4,
+            random_delay=(5, 360),
         )
 
     await client.run_until_disconnected()
 
 
-async def run_userbot(number, api_id, api_hash):
-    """Обертка для запуска userbot с обработкой исключений"""
+async def run_userbot(number, api_id, api_hash) -> None:
+    """Обертка для запуска userbot с обработкой исключений."""
     try:
         await userbot(number, api_id, api_hash)
     except Exception as e:
         logger.error(f"Ошибка в userbot {number}: {e}")
 
 
-async def main():
+async def main() -> None:
     try:
         clients = listdir("clients")
         tasks = []
@@ -344,7 +363,9 @@ async def main():
             async with aiofiles.open(path.join("clients", client), "rb") as f:
                 data = orjson.loads(await f.read())
             task = run_userbot(
-                client.replace(".json", ""), data["api_id"], data["api_hash"]
+                client.replace(".json", ""),
+                data["api_id"],
+                data["api_hash"],
             )
             tasks.append(task)
         await asyncio.gather(*tasks)
@@ -361,7 +382,7 @@ if __name__ == "__main__":
             uvloop.run(main())
         except ModuleNotFoundError:
             logger.warning(
-                "Uvloop не найден! Установите его для большей производительности"
+                "Uvloop не найден! Установите его для большей производительности",
             )
             asyncio.run(main())
     except KeyboardInterrupt:

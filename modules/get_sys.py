@@ -1,25 +1,24 @@
-import psutil
-import platform
-
 import asyncio
-
+import platform
 from time import time
+
+import psutil
 from loguru import logger
 
 logger.info(f"Загружен модуль {__name__}!")
 
 if platform.system() == "Windows":
-    import WinTmp # type: ignore
+    import WinTmp  # type: ignore
 
     logger.info("Система - Windows, использую WinTMP")
 
-    def get_temperature():
+    def get_temperature() -> str:
         temp = WinTmp.CPU_Temps()
         return f"{round(max(temp))} | {round(sum(temp) / len(temp))} | {round(min(temp))}"
 else:
     logger.info("Система - Linux, использую psutil")
 
-    def get_temperature():
+    def get_temperature() -> str | None:
         try:
             temps = psutil.sensors_temperatures()
 
@@ -65,7 +64,7 @@ async def get_current_speed():
     return [round(download_speed_mbps, 2), round(upload_speed_mbps, 2)]
 
 
-async def get_system_info():
+async def get_system_info() -> str:
     boot_time = psutil.boot_time()
     current_time = time()
     uptime_seconds = current_time - boot_time
@@ -101,11 +100,3 @@ async def get_system_info():
         Загрузка: {network[0]} Мбит/с
         Выгрузка: {network[1]} Мбит/с
     """
-
-
-if __name__ == "__main__":
-
-    async def main():
-        print(await get_system_info())
-
-    asyncio.run(main())

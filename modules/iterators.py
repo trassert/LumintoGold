@@ -4,7 +4,7 @@ class Counter(dict):
 
 
 class StringIterator:
-    def __init__(self, strings_list):
+    def __init__(self, strings_list) -> None:
         self.strings_list = strings_list
         self.current_index = 0
 
