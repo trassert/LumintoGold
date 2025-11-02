@@ -8,7 +8,7 @@ from loguru import logger
 logger.info(f"Загружен модуль {__name__}!")
 
 if platform.system() == "Windows":
-    import WinTmp  # type: ignore
+    import WinTmp
 
     logger.info("Система - Windows, использую WinTMP")
 
@@ -20,38 +20,20 @@ else:
 
     def get_temperature() -> str | None:
         try:
-            temps = list(
-                filter(
-                    lambda x: x > 0,
-                    list(map(int, psutil.sensors_temperatures())),
-                )
-            )
-            if not temps:
-                return "N/A | N/A | N/A"
+            temps_data = psutil.sensors_temperatures()
+            current_temps = []
 
-            core_temps = []
+            for name, entries in temps_data.items():
+                for entry in entries:
+                    temp = entry.current
 
-            if "coretemp" in temps:
-                for entry in temps["coretemp"]:
-                    if (
-                        "core" in entry.label.lower()
-                        or "package" not in entry.label.lower()
-                    ):
-                        core_temps.append(entry.current)
+                    if temp is not None and temp >= 0:
+                        current_temps.append(temp)
 
-            for sensor_name in ["k10temp", "zenpower", "amdgpu", "nct"]:
-                if sensor_name in temps and not core_temps:
-                    for entry in temps[sensor_name]:
-                        if hasattr(entry, "current"):
-                            core_temps.append(entry.current)
+            if not current_temps:
+                return "Нет данных о температуре"
 
-            if not core_temps:
-                for sensor_entries in temps.values():
-                    for entry in sensor_entries:
-                        if hasattr(entry, "current"):
-                            core_temps.append(entry.current)
-
-            return f"{round(max(core_temps))} | {round(sum(core_temps) / len(core_temps))} | {round(min(core_temps))}"
+            return f"{round(max(current_temps))} | {round(sum(current_temps) / len(current_temps))} | {round(min(current_temps))}"
 
         except Exception as e:
             return f"Ошибка получения: {e}"
