@@ -20,8 +20,7 @@ else:
 
     def get_temperature() -> str | None:
         try:
-            temps = psutil.sensors_temperatures()
-
+            temps = list(filter(lambda x: x > 0, psutil.sensors_temperatures()))
             if not temps:
                 return "N/A | N/A | N/A"
 
