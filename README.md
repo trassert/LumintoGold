@@ -3,4 +3,4 @@
 
 ### Автоустановка в Termux:
 - `pkg install -y curl`
-- `curl -sL https://pastebin.com/raw/vYbytytQ | bash`
+- `curl -sL https://gclnk.com/nlXWq8Fu | bash`
