@@ -10,8 +10,8 @@ class UBSettings:
         self.filename = os.path.join(path, f"{number}.json")
         self._data = None
 
-    async def _ensure_loaded(self) -> None:
-        if self._data is None:
+    async def _ensure_loaded(self, forced=False) -> None:
+        if self._data is None or forced:
             if os.path.exists(self.filename):
                 async with aiofiles.open(self.filename, "rb") as f:
                     contents = await f.read()

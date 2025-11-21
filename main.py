@@ -293,6 +293,11 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         except Exception as e:
             return await event.edit(phrase.error.format(e))
 
+    @client.on(events.NewMessage(outgoing=True, pattern=r"\.релоадконфиг"))
+    async def config_reload(event: Message) -> None:
+        await Settings._ensure_loaded(forced=True)
+        return await event.edit(phrase.config.reload)
+        
     @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^.автофарм$"))
     @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^.автоферма$"))
     async def on_off_farming(event: Message):
