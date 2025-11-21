@@ -22,7 +22,7 @@ class UBSettings:
     async def make(self, api_id: int, api_hash: str) -> None:
         self._data = {"api_id": api_id, "api_hash": api_hash}
         async with aiofiles.open(self.filename, "wb") as f:
-            content = orjson.dumps(self._data)
+            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
             await f.write(content)
 
     async def get(self, name_setting: str, if_none: Any = None) -> Any:
@@ -33,5 +33,5 @@ class UBSettings:
         await self._ensure_loaded()
         self._data[key] = value
         async with aiofiles.open(self.filename, "wb") as f:
-            content = orjson.dumps(self._data)
+            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
             await f.write(content)
