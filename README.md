@@ -1,4 +1,5 @@
-### Установка в Тermux:  
-- `pkg install libuv`
-- `pkg install binutils`
-- `pip install -r requirements.txt`
+# LumintoGold - развивающийся юзербот, улучшающий Telegram!
+
+### Автоустановка в Termux:
+- `pkg install curl`
+- `curl -sL https://pastebin.com/raw/vYbytytQ | bash`
