@@ -1,4 +1,5 @@
-# LumintoGold - развивающийся юзербот, улучшающий Telegram!
+# LumintoGold
+Развивающийся юзербот, улучшающий Telegram!
 
 ### Автоустановка в Termux:
 - `pkg install curl`
