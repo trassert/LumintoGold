@@ -8,3 +8,4 @@ tokens.yml
 .venv
 .env
 .vscode
+uv.lock
