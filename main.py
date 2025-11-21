@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import re
+import contextlib
 from sys import stderr
 
 import aiofiles
@@ -31,7 +32,6 @@ class InterceptHandler(logging.Handler):
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
-import contextlib
 from os import listdir, mkdir, path  # noqa: E402
 from time import time  # noqa: E402
 
@@ -45,7 +45,7 @@ from telethon.tl.custom import Message  # noqa: E402
 from telethon.tl.types import MessageMediaDocument, PeerUser  # noqa: E402
 
 import modules.phrases as phrase  # noqa: E402
-from modules import (
+from modules import (  # noqa: E402
     ai,
     formatter,
     get_sys,
@@ -71,7 +71,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
     await client.start(phone=phone_number)
 
     farm_task = task_gen.Generator(f"{phone_number}_iris")
-    ai_client = ai.Client(await Settings.get("ai.token", None))
+    ai_client = ai.Client(await Settings.get("ai.token", None), await Settings.get("ai.proxy", None))
 
     async def reactions(event: Message):
         await asyncio.sleep(random.randint(0, 1000))
@@ -258,6 +258,13 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         await Settings.set("ai.token", token)
         ai_client.change_api_key(token)
         await event.edit(phrase.ai.token_set)
+
+    @client.on(events.NewMessage(outgoing=True, pattern=r"\.прокси (.+)"))
+    async def ai_proxy(event: Message) -> None:
+        proxy: str = event.pattern_match.group(1).strip()
+        await Settings.set("ai.proxy", proxy)
+        ai_client.change_api_key(proxy)
+        await event.edit(phrase.ai.proxy_set)
 
     @client.on(events.NewMessage(outgoing=True, pattern=r"\.ии\s([\s\S]+)"))
     async def ai_resp(event: Message):
