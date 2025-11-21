@@ -13,8 +13,11 @@ if platform.system() == "Windows":
     logger.info("Система - Windows, использую WinTMP")
 
     def get_temperature() -> str:
-        temp = WinTmp.CPU_Temps()
-        return f"{round(max(temp))} | {round(sum(temp) / len(temp))} | {round(min(temp))}"
+        try:
+            temp = WinTmp.CPU_Temps()
+            return f"{round(max(temp))} | {round(sum(temp) / len(temp))} | {round(min(temp))}"
+        except Exception:
+            return "Неизвестно"
 else:
     logger.info("Система - Linux, использую psutil")
 

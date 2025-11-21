@@ -1,6 +1,6 @@
-clients
-sessions
-db
+clients/*
+sessions/*
+db/*
 
 tokens.yml
 
