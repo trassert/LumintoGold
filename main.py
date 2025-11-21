@@ -180,9 +180,16 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
 
     async def ping(event: Message) -> None:
         timestamp = event.date.timestamp()
-        ping = round(time() - timestamp, 2)
-        ping = phrase.ping.min if ping < 0 else f"за {ping!s} сек."
-        await event.edit(phrase.ping.form.replace("~", ping))
+        timedel = round(time() - timestamp, 2)
+        t1 = time()
+        await event.edit(phrase.ping.pong)
+        pingtime = round(time() - t1, 2)
+        return await event.edit(
+            phrase.ping.pong.format(
+                timedel=f"{timedel} сек.",
+                ping=f"{pingtime} сек.",
+            )
+        )
 
     async def mask_read_any(event: Message):
         """Просматривает сообщение."""
