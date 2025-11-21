@@ -185,7 +185,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         await event.edit(phrase.ping.pong)
         pingtime = round(time() - t1, 2)
         return await event.edit(
-            phrase.ping.pong.format(
+            phrase.ping.ping.format(
                 timedel=f"{timedel} сек.",
                 ping=f"{pingtime} сек.",
             )
