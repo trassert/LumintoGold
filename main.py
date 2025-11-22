@@ -283,6 +283,12 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         except Exception as e:
             return await event.edit(phrase.error.format(e))
         try:
+            response = await ai_client.generate(text)
+        except Exception as e:
+            error_type = type(e).__name__
+            error_message = f"{error_type}: {e}"
+            return await event.edit(phrase.error.format(error_message))
+        try:
             if len(response) > 4096:
                 response = formatter.splitter(response)
                 await event.edit(response.pop(0))
