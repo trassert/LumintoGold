@@ -17,11 +17,11 @@ class Default:
 
 def gen_pass(length, letters, digits, special):
     parts = []
-    if letters:
+    if letters != Default.letters and letters > 0:
         parts.extend(random.choices(CHARSETS["letters"], k=letters))
-    if digits:
+    if digits != Default.digits and digits > 0:
         parts.extend(random.choices(CHARSETS["digits"], k=digits))
-    if special:
+    if special != Default.special and special > 0:
         parts.extend(random.choices(CHARSETS["special"], k=special))
 
     used = len(parts)
