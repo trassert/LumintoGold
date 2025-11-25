@@ -13,6 +13,7 @@ dependencies = [
     "orjson>=3.11.4",
     "psutil>=7.1.3",
     "telethon>=1.42.0",
+    "uvloop>=0.22.1",
 ]
 
 [tool.ruff]
