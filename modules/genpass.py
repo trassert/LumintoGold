@@ -24,13 +24,6 @@ def gen_pass(length:int, letters:int, digits:int, special:int) -> str:
         + "".join(random.choices(CHARSETS["special"], k=special))
     )
 
-    remaining = length - len(chars)
-    if remaining > 0:
-        all_chars = (
-            CHARSETS["letters"] + CHARSETS["digits"] + CHARSETS["special"]
-        )
-        chars += "".join(random.choices(all_chars, k=remaining))
-
     password = list(chars)
     random.shuffle(password)
-    return "".join(password)
+    return "".join(password)[:length]
