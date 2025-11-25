@@ -50,6 +50,7 @@ from modules import (  # noqa: E402
     formatter,
     get_sys,
     task_gen,
+    genpass,
 )
 from modules.flip_map import flip_map  # noqa: E402
 from modules.iterators import Counter  # noqa: E402
@@ -71,7 +72,10 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
     await client.start(phone=phone_number)
 
     farm_task = task_gen.Generator(f"{phone_number}_iris")
-    ai_client = ai.Client(await Settings.get("ai.token", None), await Settings.get("ai.proxy", None))
+    ai_client = ai.Client(
+        await Settings.get("ai.token", None),
+        await Settings.get("ai.proxy", None),
+    )
 
     async def reactions(event: Message):
         await asyncio.sleep(random.randint(0, 1000))
@@ -281,9 +285,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         try:
             response = await ai_client.generate(text)
         except Exception as e:
-            error_type = type(e).__name__
-            error_message = f"{error_type}: {e}"
-            return await event.edit(phrase.error.format(error_message))
+            return await event.edit(phrase.error.format(e))
         try:
             if len(response) > 4096:
                 response = formatter.splitter(response)
@@ -299,9 +301,9 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
     async def config_reload(event: Message) -> None:
         await Settings._ensure_loaded(forced=True)
         return await event.edit(phrase.config.reload)
-        
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^.автофарм$"))
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^.автоферма$"))
+
+    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.автофарм$"))
+    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.автоферма$"))
     async def on_off_farming(event: Message):
         nonlocal farm_task
         if await Settings.get("iris.farm"):
@@ -316,6 +318,34 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
             random_delay=(5, 360),
         )
         return None
+
+    @client.on(
+        events.NewMessage(outgoing=True, pattern=r"(?i)^\.genpass(?:\s+(.+))?")
+    )
+    @client.on(
+        events.NewMessage(outgoing=True, pattern=r"(?i)^\.генпасс(?:\s+(.+))?")
+    )
+    @client.on(
+        events.NewMessage(outgoing=True, pattern=r"(?i)^\.пароль(?:\s+(.+))?")
+    )
+    async def generate_password(event: Message):
+        args = (event.pattern_match.group(1) or "").strip()
+
+        if d_match := re.search(r"д(\d+)", args):
+            length = int(d_match[1])
+        if b_match := re.search(r"б(\d+)", args):
+            letters = int(b_match[1])
+        if c_match := re.search(r"ц(\d+)", args):
+            digits = int(c_match[1])
+        if s_match := re.search(r"с(\d+)", args):
+            special = int(s_match[1])
+
+        length = length or 12
+        try:
+            pwd = genpass.gen_pass(length, letters, digits, special)
+            await event.edit(phrase.password.done.format(pwd))
+        except Exception as ex:
+            await event.edit(phrase.error.format(ex))
 
     client.add_event_handler(
         on_off_block_voice,
