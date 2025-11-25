@@ -15,10 +15,8 @@ class Default:
     special = 0
 
 
-def gen_pass(length, letters, digits, special):
+def gen_pass(length:int, letters:int, digits:int, special:int) -> str:
     letters, digits, special = max(0, letters), max(0, digits), max(0, special)
-    total = letters + digits + special
-    length = total if length == 0 or total > length else length
 
     chars = (
         "".join(random.choices(CHARSETS["letters"], k=letters))
