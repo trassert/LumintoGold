@@ -438,10 +438,20 @@ async def main() -> None:
             mkdir("clients")
         except Exception:
             pass
-        logger.error(
-            "Нет ни одного клиента!\n"
-            "> nano clients/<ваш номер>.json"
-        )
+        logger.warning("Нет ни одного клиента! Создаём нового..")
+        number = input("Введи номер: ")
+        api_id = int(input("Введи api_id: "))
+        api_hash = input("Введи api_hash: ")
+        async with aiofiles.open(
+            path.join("clients", f"{number}.json"), "wb"
+        ) as f:
+            await f.write(
+                orjson.dumps(
+                    {"api_id": api_id, "api_hash": api_hash},
+                    option=orjson.OPT_INDENT_2,
+                )
+            )
+        await main()
 
 
 if __name__ == "__main__":
