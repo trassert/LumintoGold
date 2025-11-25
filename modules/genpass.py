@@ -10,26 +10,29 @@ CHARSETS = {
 
 class Default:
     length = 12
-    letters = 0
-    digits = 0
+    letters = 10
+    digits = 2
     special = 0
 
 
 def gen_pass(length, letters, digits, special):
-    parts = []
-    if letters != Default.letters and letters > 0:
-        parts.extend(random.choices(CHARSETS["letters"], k=letters))
-    if digits != Default.digits and digits > 0:
-        parts.extend(random.choices(CHARSETS["digits"], k=digits))
-    if special != Default.special and special > 0:
-        parts.extend(random.choices(CHARSETS["special"], k=special))
+    letters, digits, special = max(0, letters), max(0, digits), max(0, special)
+    total = letters + digits + special
+    length = total if length == 0 or total > length else length
 
-    used = len(parts)
-    if used < length:
-        all_chars = "".join(CHARSETS.values())
-        parts.extend(random.choices(all_chars, k=length - used))
-    elif used > length:
-        parts = parts[:length]
+    chars = (
+        "".join(random.choices(CHARSETS["letters"], k=letters))
+        + "".join(random.choices(CHARSETS["digits"], k=digits))
+        + "".join(random.choices(CHARSETS["special"], k=special))
+    )
 
-    random.shuffle(parts)
-    return "".join(parts)
+    remaining = length - len(chars)
+    if remaining > 0:
+        all_chars = (
+            CHARSETS["letters"] + CHARSETS["digits"] + CHARSETS["special"]
+        )
+        chars += "".join(random.choices(all_chars, k=remaining))
+
+    password = list(chars)
+    random.shuffle(password)
+    return "".join(password)
