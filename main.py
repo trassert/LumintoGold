@@ -434,8 +434,14 @@ async def main() -> None:
             tasks.append(task)
         await asyncio.gather(*tasks)
     except FileNotFoundError:
-        mkdir("clients")
-        logger.error("Создайте, пожалуйста, файлы в clients")
+        try:
+            mkdir("clients")
+        except Exception:
+            pass
+        logger.error(
+            "Нет ни одного клиента!\n"
+            "> nano clients/<ваш номер>.json"
+        )
 
 
 if __name__ == "__main__":
