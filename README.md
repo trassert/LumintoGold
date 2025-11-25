@@ -13,3 +13,7 @@
     "api_hash":"abc123abc123abc123"
 }
 ```
+
+Сохраните с помощью клавиш `CTRL+S` и `CTRL+X`
+
+Перезагрузите Termux и введите команду `lumintogold`
