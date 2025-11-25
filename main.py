@@ -331,6 +331,11 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
     async def generate_password(event: Message):
         args = (event.pattern_match.group(1) or "").strip()
 
+        length = genpass.Default.length
+        letters = genpass.Default.letters
+        digits = genpass.Default.digits
+        special = genpass.Default.special
+
         if d_match := re.search(r"д(\d+)", args):
             length = int(d_match[1])
         if b_match := re.search(r"б(\d+)", args):
@@ -340,7 +345,6 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         if s_match := re.search(r"с(\d+)", args):
             special = int(s_match[1])
 
-        length = length or 12
         try:
             pwd = genpass.gen_pass(length, letters, digits, special)
             await event.edit(phrase.password.done.format(pwd))

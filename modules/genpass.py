@@ -8,7 +8,14 @@ CHARSETS = {
 }
 
 
-def gen_pass(length=12, letters=0, digits=0, special=0):
+class Default:
+    length = 12
+    letters = 0
+    digits = 0
+    special = 0
+
+
+def gen_pass(length, letters, digits, special):
     parts = []
     if letters:
         parts.extend(random.choices(CHARSETS["letters"], k=letters))
