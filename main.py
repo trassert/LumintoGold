@@ -419,7 +419,9 @@ async def run_userbot(number, api_id, api_hash) -> None:
 async def main() -> None:
     try:
         clients = listdir("clients")
-        logger.info(clients)
+        logger.info(f"Клиенты: {clients}")
+        if clients == []:
+            raise FileNotFoundError
         tasks = []
         for client in clients:
             async with aiofiles.open(path.join("clients", client), "rb") as f:
