@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from operator import length_hint
 import random
 import re
 import contextlib
@@ -345,6 +346,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         if s_match := re.search(r"с(\d+)", args):
             special = int(s_match[1])
 
+        logger.info(f"Генерирую пароль с д{length}, б{letters} ц{digits} с{special}")
         try:
             pwd = genpass.gen_pass(length, letters, digits, special)
             await event.edit(phrase.password.done.format(pwd))
