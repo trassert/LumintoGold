@@ -446,7 +446,9 @@ if __name__ == "__main__":
             uvloop.run(main())
         except ModuleNotFoundError:
             logger.warning(
-                "Uvloop не найден! Установите его для большей производительности",
+                "Uvloop не найден!\n"
+                "Установите его для большей производительности\n"
+                "> pip install uvloop"
             )
             asyncio.run(main())
     except KeyboardInterrupt:
