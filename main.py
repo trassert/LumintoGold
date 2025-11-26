@@ -44,14 +44,13 @@ from telethon.sync import TelegramClient  # noqa: E402
 from telethon.tl.custom import Message  # noqa: E402
 from telethon.tl.types import MessageMediaDocument, PeerUser  # noqa: E402
 
-import modules.phrases as phrase  # noqa: E402
 from modules import (  # noqa: E402
     ai,
     formatter,
     get_sys,
     task_gen,
     genpass,
-    config
+    phrase
 )
 from modules.flip_map import flip_map  # noqa: E402
 from modules.iterators import Counter  # noqa: E402
