@@ -104,6 +104,24 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
             )
         logger.info(f"{phone_number} - сработала автоферма")
 
+    async def block_voice(event: Message) -> None:
+        if not isinstance(event.peer_id, PeerUser):
+            return
+        me = await client.get_me()
+        if me.id == event.sender_id:
+            return
+        if not isinstance(event.media, MessageMediaDocument):
+            return
+        if event.media.voice:
+            await event.delete()
+            await event.respond(
+                await Settings.get(
+                    "voice.message",
+                    phrase.voice.default_message,
+                ),
+            )
+
+    @client.on(d.cmd(r"(?i)^\.т"))
     async def typing(event: Message):
         try:
             original = event.text.split(" ", maxsplit=1)[1]
@@ -120,11 +138,12 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
             await asyncio.sleep(await Settings.get("typing.delay"))
         return None
 
+    @client.on(d.cmd(r"(?i)^\.слов"))
     async def words(event: Message) -> None:
         arg = None
         arg2 = None
         try:
-            args = event.text.split()
+            args = event.text.lower().split()
             del args[0]
             for x in args:
                 if "л" in x:
@@ -183,6 +202,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         except Exception:
             await event.reply(out)
 
+    @client.on(d.cmd(r"(?i)^\.пинг$"))
     async def ping(event: Message) -> None:
         timestamp = event.date.timestamp()
         timedel = round(time() - timestamp, 2)
@@ -200,32 +220,19 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         """Просматривает сообщение."""
         return await event.mark_read()
 
+    @client.on(d.cmd(r"(?i)^\.флип"))
     async def flip_text(event: Message):
-        text = event.text.split(" ", maxsplit=1)[1]
+        try:
+            text = event.text.split(" ", maxsplit=1)[1]
+        except Exception:
+            return await event.edit(phrase.no_text)
         final_str = ""
         for char in text:
             new_char = flip_map.get(char, char)
             final_str += new_char
         return await event.edit("".join(reversed(list(final_str))))
 
-    async def block_voice(event: Message) -> None:
-        if not isinstance(event.peer_id, PeerUser):
-            return
-        me = await client.get_me()
-        if me.id == event.sender_id:
-            return
-        if not isinstance(event.media, MessageMediaDocument):
-            return
-        if event.media.voice:
-            await event.delete()
-            await event.respond(
-                await Settings.get(
-                    "voice.message",
-                    phrase.voice.default_message,
-                ),
-            )
-
-    @client.on(d.cmd(r"(?i)^\.гс"))
+    @client.on(d.cmd(r"(?i)^\.гс$"))
     async def on_off_block_voice(event: Message) -> None:
         if await Settings.get("block.voice"):
             await Settings.set("block.voice", False)
@@ -236,7 +243,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
             await event.edit(phrase.voice.block)
             client.add_event_handler(block_voice, events.NewMessage())
 
-    @client.on(d.cmd(r"(?i)^\.читать"))
+    @client.on(d.cmd(r"(?i)^\.читать$"))
     async def on_off_mask_read(event: Message):
         all_chats = await Settings.get("mask.read")
         if event.chat_id in all_chats:
@@ -263,6 +270,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
             phrase.read.on,
         )
 
+    @client.on(d.cmd(r"(?i)^\.серв$"))
     async def server_load(event: Message):
         return await event.edit(await get_sys.get_system_info())
 
@@ -300,7 +308,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         except Exception as e:
             return await event.edit(phrase.error.format(e))
 
-    @client.on(d.cmd(r"(?i)^\.релоадконфиг"))
+    @client.on(d.cmd(r"(?i)^\.релоадконфиг$"))
     async def config_reload(event: Message) -> None:
         await Settings._ensure_loaded(forced=True)
         return await event.edit(phrase.config.reload)
@@ -354,27 +362,6 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         except Exception as ex:
             await event.edit(phrase.error.format(ex))
 
-    client.add_event_handler(
-        server_load,
-        d.cmd(r"\.серв"),
-    )
-    client.add_event_handler(
-        flip_text,
-        d.cmd(r"\.флип"),
-    )
-    client.add_event_handler(
-        typing,
-        d.cmd(r"\.т "),
-    )
-    client.add_event_handler(
-        words,
-        d.cmd(r"\.слов"),
-    )
-    client.add_event_handler(
-        ping,
-        d.cmd(r"\.пинг"),
-    )
-
     if await Settings.get("block.voice"):
         client.add_event_handler(block_voice, events.NewMessage())
     if await Settings.get("luminto.reactions"):
@@ -386,7 +373,6 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
             reactions,
             events.NewMessage(chats="trassert_ch"),
         )
-
     if await Settings.get("iris.farm"):
         await farm_task.create(
             func=iris_farm,
