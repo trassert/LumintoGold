@@ -5,7 +5,11 @@ import aiofiles
 import orjson
 
 default = {
-    "typings": ".."
+    "typings": "..",
+    "typing.delay": 0.05,
+    "iris.farm": False,
+    "block.voice": False,
+    "mask.read": []
 }
 
 
