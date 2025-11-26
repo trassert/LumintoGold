@@ -74,8 +74,8 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
 
     farm_task = task_gen.Generator(f"{phone_number}_iris")
     ai_client = ai.Client(
-        await Settings.get("ai.token", None),
-        await Settings.get("ai.proxy", None),
+        await Settings.get("ai.token"),
+        await Settings.get("ai.proxy"),
     )
 
     async def reactions(event: Message):
@@ -225,6 +225,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
                 ),
             )
 
+    @client.on(d.cmd(r"(?i)^\.гс"))
     async def on_off_block_voice(event: Message) -> None:
         if await Settings.get("block.voice"):
             await Settings.set("block.voice", False)
@@ -235,6 +236,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
             await event.edit(phrase.voice.block)
             client.add_event_handler(block_voice, events.NewMessage())
 
+    @client.on(d.cmd(r"(?i)^\.читать"))
     async def on_off_mask_read(event: Message):
         all_chats = await Settings.get("mask.read")
         if event.chat_id in all_chats:
@@ -352,14 +354,6 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         except Exception as ex:
             await event.edit(phrase.error.format(ex))
 
-    client.add_event_handler(
-        on_off_block_voice,
-        d.cmd(r"\.гс"),
-    )
-    client.add_event_handler(
-        on_off_mask_read,
-        d.cmd(r"\.читать"),
-    )
     client.add_event_handler(
         server_load,
         d.cmd(r"\.серв"),
