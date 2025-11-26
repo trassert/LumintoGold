@@ -263,21 +263,21 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
     async def server_load(event: Message):
         return await event.edit(await get_sys.get_system_info())
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"\.токен (.+)"))
+    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.токен (.+)"))
     async def ai_token(event: Message) -> None:
         token: str = event.pattern_match.group(1).strip()
         await Settings.set("ai.token", token)
         ai_client.change_api_key(token)
         await event.edit(phrase.ai.token_set)
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"\.прокси (.+)"))
+    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.прокси (.+)"))
     async def ai_proxy(event: Message) -> None:
         proxy: str = event.pattern_match.group(1).strip()
         await Settings.set("ai.proxy", proxy)
         ai_client.change_api_key(proxy)
         await event.edit(phrase.ai.proxy_set)
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"\.ии\s([\s\S]+)"))
+    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.ии\s([\s\S]+)"))
     async def ai_resp(event: Message):
         if await Settings.get("ai.token", None) is None:
             return await event.edit(phrase.ai.no_token)
@@ -297,7 +297,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         except Exception as e:
             return await event.edit(phrase.error.format(e))
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"\.релоадконфиг"))
+    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.релоадконфиг"))
     async def config_reload(event: Message) -> None:
         await Settings._ensure_loaded(forced=True)
         return await event.edit(phrase.config.reload)
