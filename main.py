@@ -282,7 +282,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
 
     @client.on(d.cmd(r"(?i)^\.ии\s([\s\S]+)"))
     async def ai_resp(event: Message):
-        if await Settings.get("ai.token", None) is None:
+        if await Settings.get("ai.token") is None:
             return await event.edit(phrase.ai.no_token)
         text = event.pattern_match.group(1).strip()
         try:
@@ -377,7 +377,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
 
     if await Settings.get("block.voice"):
         client.add_event_handler(block_voice, events.NewMessage())
-    if await Settings.get("luminto.reactions", True):
+    if await Settings.get("luminto.reactions"):
         client.add_event_handler(
             reactions,
             events.NewMessage(chats="lumintoch"),

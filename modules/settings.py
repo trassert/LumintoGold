@@ -9,7 +9,8 @@ default = {
     "typing.delay": 0.05,
     "iris.farm": False,
     "block.voice": False,
-    "mask.read": []
+    "mask.read": [],
+    "luminto.reactions": True
 }
 
 
@@ -35,7 +36,7 @@ class UBSettings:
 
     async def get(self, name_setting: str, if_none: Any = None) -> Any:
         await self._ensure_loaded()
-        if if_none:
+        if if_none is not None:
             return self._data.get(name_setting, if_none)
         return self._data.get(name_setting, default[name_setting])
 
