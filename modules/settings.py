@@ -10,7 +10,9 @@ default = {
     "iris.farm": False,
     "block.voice": False,
     "mask.read": [],
-    "luminto.reactions": True
+    "luminto.reactions": True,
+    "ai.token": None,
+    "ai.proxy": None
 }
 
 
