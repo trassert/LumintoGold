@@ -46,11 +46,12 @@ from telethon.tl.types import MessageMediaDocument, PeerUser  # noqa: E402
 
 from modules import (  # noqa: E402
     ai,
+    d,
     formatter,
     get_sys,
     task_gen,
     genpass,
-    phrase
+    phrase,
 )
 from modules.flip_map import flip_map  # noqa: E402
 from modules.iterators import Counter  # noqa: E402
@@ -263,21 +264,21 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
     async def server_load(event: Message):
         return await event.edit(await get_sys.get_system_info())
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.токен (.+)"))
+    @client.on(d.cmd(r"(?i)^\.токен (.+)"))
     async def ai_token(event: Message) -> None:
         token: str = event.pattern_match.group(1).strip()
         await Settings.set("ai.token", token)
         ai_client.change_api_key(token)
         await event.edit(phrase.ai.token_set)
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.прокси (.+)"))
+    @client.on(d.cmd(r"(?i)^\.прокси (.+)"))
     async def ai_proxy(event: Message) -> None:
         proxy: str = event.pattern_match.group(1).strip()
         await Settings.set("ai.proxy", proxy)
         ai_client.change_api_key(proxy)
         await event.edit(phrase.ai.proxy_set)
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.ии\s([\s\S]+)"))
+    @client.on(d.cmd(r"(?i)^\.ии\s([\s\S]+)"))
     async def ai_resp(event: Message):
         if await Settings.get("ai.token", None) is None:
             return await event.edit(phrase.ai.no_token)
@@ -297,13 +298,13 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         except Exception as e:
             return await event.edit(phrase.error.format(e))
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.релоадконфиг"))
+    @client.on(d.cmd(r"(?i)^\.релоадконфиг"))
     async def config_reload(event: Message) -> None:
         await Settings._ensure_loaded(forced=True)
         return await event.edit(phrase.config.reload)
 
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.автофарм$"))
-    @client.on(events.NewMessage(outgoing=True, pattern=r"(?i)^\.автоферма$"))
+    @client.on(d.cmd(r"(?i)^\.автофарм$"))
+    @client.on(d.cmd(r"(?i)^\.автоферма$"))
     async def on_off_farming(event: Message):
         nonlocal farm_task
         if await Settings.get("iris.farm"):
@@ -319,15 +320,9 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         )
         return None
 
-    @client.on(
-        events.NewMessage(outgoing=True, pattern=r"(?i)^\.genpass(?:\s+(.+))?")
-    )
-    @client.on(
-        events.NewMessage(outgoing=True, pattern=r"(?i)^\.генпасс(?:\s+(.+))?")
-    )
-    @client.on(
-        events.NewMessage(outgoing=True, pattern=r"(?i)^\.пароль(?:\s+(.+))?")
-    )
+    @client.on(d.cmd(r"(?i)^\.genpass(?:\s+(.+))?"))
+    @client.on(d.cmd(r"(?i)^\.генпасс(?:\s+(.+))?"))
+    @client.on(d.cmd(r"(?i)^\.пароль(?:\s+(.+))?"))
     async def generate_password(event: Message):
         args = (event.pattern_match.group(1) or "").strip()
 
@@ -359,31 +354,31 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
 
     client.add_event_handler(
         on_off_block_voice,
-        events.NewMessage(outgoing=True, pattern=r"\.гс"),
+        d.cmd(r"\.гс"),
     )
     client.add_event_handler(
         on_off_mask_read,
-        events.NewMessage(outgoing=True, pattern=r"\.читать"),
+        d.cmd(r"\.читать"),
     )
     client.add_event_handler(
         server_load,
-        events.NewMessage(outgoing=True, pattern=r"\.серв"),
+        d.cmd(r"\.серв"),
     )
     client.add_event_handler(
         flip_text,
-        events.NewMessage(outgoing=True, pattern=r"\.флип"),
+        d.cmd(r"\.флип"),
     )
     client.add_event_handler(
         typing,
-        events.NewMessage(outgoing=True, pattern=r"\.т "),
+        d.cmd(r"\.т "),
     )
     client.add_event_handler(
         words,
-        events.NewMessage(outgoing=True, pattern=r"\.слов"),
+        d.cmd(r"\.слов"),
     )
     client.add_event_handler(
         ping,
-        events.NewMessage(outgoing=True, pattern=r"\.пинг"),
+        d.cmd(r"\.пинг"),
     )
 
     if await Settings.get("block.voice"):

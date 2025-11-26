@@ -33,7 +33,7 @@ class UBSettings:
             content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
             await f.write(content)
 
-    async def get(self, name_setting: str, if_none: Any = None, default=True) -> Any:
+    async def get(self, name_setting: str, if_none: Any = None) -> Any:
         await self._ensure_loaded()
         if if_none:
             return self._data.get(name_setting, if_none)
