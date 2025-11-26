@@ -43,14 +43,17 @@ else:
 
 
 async def get_current_speed():
-    start_counters = psutil.net_io_counters()
-    await asyncio.sleep(0.5)
-    end_counters = psutil.net_io_counters()
-    delta_bytes_sent = end_counters.bytes_sent - start_counters.bytes_sent
-    delta_bytes_recv = end_counters.bytes_recv - start_counters.bytes_recv
-    upload_speed_mbps = (delta_bytes_sent / 0.5 * 8) / (1000 * 1000)
-    download_speed_mbps = (delta_bytes_recv / 0.5 * 8) / (1000 * 1000)
-    return [round(download_speed_mbps, 2), round(upload_speed_mbps, 2)]
+    try:
+        start_counters = psutil.net_io_counters()
+        await asyncio.sleep(0.5)
+        end_counters = psutil.net_io_counters()
+        delta_bytes_sent = end_counters.bytes_sent - start_counters.bytes_sent
+        delta_bytes_recv = end_counters.bytes_recv - start_counters.bytes_recv
+        upload_speed_mbps = (delta_bytes_sent / 0.5 * 8) / (1000 * 1000)
+        download_speed_mbps = (delta_bytes_recv / 0.5 * 8) / (1000 * 1000)
+        return [round(download_speed_mbps, 2), round(upload_speed_mbps, 2)]
+    except PermissionError:
+        return ["Недоступно", "Недоступно"]
 
 
 def get_boottime() -> str:
