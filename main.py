@@ -51,6 +51,7 @@ from modules import (  # noqa: E402
     get_sys,
     task_gen,
     genpass,
+    config
 )
 from modules.flip_map import flip_map  # noqa: E402
 from modules.iterators import Counter  # noqa: E402
