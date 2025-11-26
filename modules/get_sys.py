@@ -78,6 +78,13 @@ def get_boottime() -> str:
         return "Неизвестно"
 
 
+def get_cpu_load() -> str:
+    try:
+        return f"{psutil.cpu_percent(0.5)} %"
+    except PermissionError:
+        return "Недоступно"
+        
+
 async def get_system_info() -> str:
     mem = psutil.virtual_memory()
     mem_total = mem.total / (1024 * 1024 * 1024)
@@ -90,7 +97,7 @@ async def get_system_info() -> str:
     Процессор:
         Частота: {int(psutil.cpu_freq().current)} МГц
         Ядра/Потоки: {psutil.cpu_count(logical=False)}/{psutil.cpu_count(logical=True)}
-        Загрузка: {psutil.cpu_percent(0.5)} %
+        Загрузка: {get_cpu_load()} 
         Температура ↑|≈|↓: {get_temperature()}
     Память:
         Объём: {mem_total:.1f} ГБ
