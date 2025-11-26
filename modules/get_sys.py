@@ -38,8 +38,8 @@ else:
 
             return f"{round(max(current_temps))} | {round(sum(current_temps) / len(current_temps))} | {round(min(current_temps))}"
 
-        except Exception as e:
-            return f"Ошибка получения: {e}"
+        except Exception:
+            return "Неизвестно"
 
 
 async def get_current_speed():
@@ -53,27 +53,36 @@ async def get_current_speed():
     return [round(download_speed_mbps, 2), round(upload_speed_mbps, 2)]
 
 
+def get_boottime() -> str:
+    try:
+        boot_time = psutil.boot_time()
+        current_time = time()
+        uptime_seconds = current_time - boot_time
+        days = int(uptime_seconds / (24 * 3600))
+        hours = int((uptime_seconds % (24 * 3600)) / 3600)
+        minutes = int((uptime_seconds % 3600) / 60)
+        result = ""
+        if days > 0:
+            result += f"{days} дн. "
+        if hours > 0:
+            result += f"{hours:02} ч. "
+        result += f"{minutes} мин."
+        return result
+    except PermissionError:
+        return "Нет доступа"
+    except Exception as e:
+        logger.error("Error when getting boot_time: {e}")
+        return "Неизвестно"
+
+
 async def get_system_info() -> str:
-    boot_time = psutil.boot_time()
-    current_time = time()
-    uptime_seconds = current_time - boot_time
-    days = int(uptime_seconds / (24 * 3600))
-    hours = int((uptime_seconds % (24 * 3600)) / 3600)
-    minutes = int((uptime_seconds % 3600) / 60)
-    result = ""
-    if days > 0:
-        result += f"{days} дн. "
-    if hours > 0:
-        result += f"{hours:02} ч. "
-    result += f"{minutes} мин."
     mem = psutil.virtual_memory()
     mem_total = mem.total / (1024 * 1024 * 1024)
     mem_avail = mem.available / (1024 * 1024 * 1024)
     mem_used = mem.used / (1024 * 1024 * 1024)
-
     network = await get_current_speed()
     return f"""⚙️ : Информация о хостинге:
-    Время работы: {result}
+    Время работы: {get_boottime()}
     ОС: {platform.system()} {platform.release()}
     Процессор:
         Частота: {int(psutil.cpu_freq().current)} МГц
