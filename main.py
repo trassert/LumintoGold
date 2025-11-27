@@ -17,6 +17,8 @@ logger.add(
     " <cyan>></cyan> {message}",
     level="INFO",
     colorize=True,
+    backtrace=False,
+    diagnose=False
 )
 
 
