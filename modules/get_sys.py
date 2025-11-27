@@ -1,6 +1,7 @@
 import asyncio
 import platform
 from time import time
+from typing import List
 
 import psutil
 from loguru import logger
@@ -8,97 +9,137 @@ from loguru import logger
 logger.info(f"Загружен модуль {__name__}!")
 
 if platform.system() == "Windows":
-    import WinTmp # type: ignore
+    try:
+        import WinTmp  # type: ignore
 
-    logger.info("Система - Windows, использую WinTMP")
+        logger.info("Система - Windows, использую WinTmp")
 
-    def get_temperature() -> str:
-        try:
-            temp = WinTmp.CPU_Temps()
-            return f"{round(max(temp))} | {round(sum(temp) / len(temp))} | {round(min(temp))}"
-        except Exception:
+        def get_temperature() -> str:
+            try:
+                temps = WinTmp.CPU_Temps()
+                if not temps:
+                    return "Нет данных"
+                mx, avg, mn = max(temps), sum(temps) / len(temps), min(temps)
+                return f"{round(mx)} | {round(avg)} | {round(mn)}"
+            except Exception:
+                logger.opt(exception=True).debug(
+                    "Ошибка при чтении температуры (WinTmp)"
+                )
+                return "Неизвестно"
+    except ImportError:
+        logger.warning(
+            "WinTmp не установлен, температура недоступна на Windows"
+        )
+
+        def get_temperature() -> str:
             return "Неизвестно"
 else:
     logger.info("Система - Linux, использую psutil")
 
-    def get_temperature() -> str | None:
+    def get_temperature() -> str:
         try:
             temps_data = psutil.sensors_temperatures()
-            current_temps = []
-
-            for name, entries in temps_data.items():
-                for entry in entries:
-                    temp = entry.current
-
-                    if temp is not None and temp >= 0:
-                        current_temps.append(temp)
-
+            current_temps = [
+                entry.current
+                for entries in temps_data.values()
+                for entry in entries
+                if entry.current is not None and entry.current >= 0
+            ]
             if not current_temps:
-                return "Нет данных о температуре"
-
-            return f"{round(max(current_temps))} | {round(sum(current_temps) / len(current_temps))} | {round(min(current_temps))}"
-
+                return "Нет данных"
+            mx, avg, mn = (
+                max(current_temps),
+                sum(current_temps) / len(current_temps),
+                min(current_temps),
+            )
+            return f"{round(mx)} | {round(avg)} | {round(mn)}"
         except Exception:
+            logger.opt(exception=True).debug(
+                "Ошибка при чтении температуры (Linux/psutil)"
+            )
             return "Неизвестно"
 
 
-async def get_current_speed():
+async def get_current_speed() -> List[str | float]:
     try:
-        start_counters = psutil.net_io_counters()
+        start = psutil.net_io_counters()
         await asyncio.sleep(0.5)
-        end_counters = psutil.net_io_counters()
-        delta_bytes_sent = end_counters.bytes_sent - start_counters.bytes_sent
-        delta_bytes_recv = end_counters.bytes_recv - start_counters.bytes_recv
-        upload_speed_mbps = (delta_bytes_sent / 0.5 * 8) / (1000 * 1000)
-        download_speed_mbps = (delta_bytes_recv / 0.5 * 8) / (1000 * 1000)
-        return [round(download_speed_mbps, 2), round(upload_speed_mbps, 2)]
+        end = psutil.net_io_counters()
+
+        upload_mbps = round(
+            (end.bytes_sent - start.bytes_sent) * 8 / 0.5 / 1_000_000, 2
+        )
+        download_mbps = round(
+            (end.bytes_recv - start.bytes_recv) * 8 / 0.5 / 1_000_000, 2
+        )
+        return [download_mbps, upload_mbps]
     except PermissionError:
         return ["Недоступно", "Недоступно"]
+    except Exception:
+        logger.opt(exception=True).error("Ошибка при измерении скорости сети")
+        return ["Ошибка", "Ошибка"]
 
 
 def get_boottime() -> str:
     try:
-        boot_time = psutil.boot_time()
-        current_time = time()
-        uptime_seconds = current_time - boot_time
-        days = int(uptime_seconds / (24 * 3600))
-        hours = int((uptime_seconds % (24 * 3600)) / 3600)
-        minutes = int((uptime_seconds % 3600) / 60)
-        result = ""
-        if days > 0:
-            result += f"{days} дн. "
-        if hours > 0:
-            result += f"{hours:02} ч. "
-        result += f"{minutes} мин."
-        return result
+        uptime_sec = time() - psutil.boot_time()
+        days, remainder = divmod(uptime_sec, 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes = int(remainder // 60)
+
+        parts = []
+        if days:
+            parts.append(f"{int(days)} дн.")
+        if hours:
+            parts.append(f"{int(hours):02} ч.")
+        parts.append(f"{minutes} мин.")
+        return " ".join(parts)
     except PermissionError:
         return "Нет доступа"
-    except Exception as e:
-        logger.error("Error when getting boot_time: {e}")
+    except Exception:
+        logger.opt(exception=True).error("Ошибка при получении времени работы")
         return "Неизвестно"
 
 
-def get_cpu_load() -> str:
+async def get_cpu_load() -> str:
     try:
-        return f"{psutil.cpu_percent(0.5)} %"
-    except PermissionError:
+        loop = asyncio.get_running_loop()
+        load = await loop.run_in_executor(None, psutil.cpu_percent, 0.5)
+        return f"{load} %"
+    except Exception:
         return "Недоступно"
-        
+
 
 async def get_system_info() -> str:
     mem = psutil.virtual_memory()
-    mem_total = mem.total / (1024 * 1024 * 1024)
-    mem_avail = mem.available / (1024 * 1024 * 1024)
-    mem_used = mem.used / (1024 * 1024 * 1024)
-    network = await get_current_speed()
+    cpu_freq = psutil.cpu_freq()
+    cpu_cores_phys = psutil.cpu_count(logical=False) or "?"
+    cpu_cores_logical = psutil.cpu_count(logical=True) or "?"
+
+    boottime_task = asyncio.create_task(
+        asyncio.to_thread(lambda: get_boottime())
+    )
+    cpu_load_task = asyncio.create_task(get_cpu_load())
+    network_task = asyncio.create_task(get_current_speed())
+    temp_task = asyncio.create_task(asyncio.to_thread(get_temperature))
+
+    boottime = await boottime_task
+    cpu_load = await cpu_load_task
+    network = await network_task
+    temp = await temp_task
+
+    mem_total = mem.total / (1024**3)
+    mem_avail = mem.available / (1024**3)
+    mem_used = mem.used / (1024**3)
+
     return f"""⚙️ : Информация о хостинге:
-    Время работы: {get_boottime()}
+    Время работы: {boottime}
     ОС: {platform.system()} {platform.release()}
     Процессор:
-        Частота: {int(psutil.cpu_freq().current)} МГц
-        Ядра/Потоки: {psutil.cpu_count(logical=False)}/{psutil.cpu_count(logical=True)}
-        Загрузка: {get_cpu_load()} 
-        Температура ↑|≈|↓: {get_temperature()}
+        Частота: {int(cpu_freq.current) if cpu_freq else "N/A"} МГц
+        Ядра/Потоки: {cpu_cores_phys}/{cpu_cores_logical}
+        Загрузка: {cpu_load} 
+        Температура ↑|≈|↓: {temp}
     Память:
         Объём: {mem_total:.1f} ГБ
         Доступно: {mem_avail:.1f} ГБ

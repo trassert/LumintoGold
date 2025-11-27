@@ -1,4 +1,7 @@
 from telethon import events
+from loguru import logger
+
+logger.info(f"Загружен модуль {__name__}!")
 
 # Wrapper for events.NewMessage
 

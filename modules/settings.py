@@ -1,8 +1,11 @@
 import os
 from typing import Any
+from loguru import logger
 
 import aiofiles
 import orjson
+
+logger.info(f"Загружен модуль {__name__}!")
 
 default = {
     "typings": "..",

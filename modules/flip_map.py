@@ -1,3 +1,7 @@
+from loguru import logger
+
+logger.info(f"Загружен модуль {__name__}!")
+
 flip_map = {
     "a": "ɐ",
     "b": "q",

@@ -8,7 +8,7 @@ logger.info(f"Загружен модуль {__name__}!")
 
 
 class Client:
-    def __init__(self, api_key: str, proxy_string: str=None) -> None:
+    def __init__(self, api_key: str, proxy_string: str = None) -> None:
         self.api_key = api_key
         self.proxy_string = proxy_string
         self._client_init()

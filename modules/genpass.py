@@ -1,5 +1,8 @@
 import random
 import string
+from loguru import logger
+
+logger.info(f"Загружен модуль {__name__}!")
 
 CHARSETS = {
     "letters": string.ascii_letters,

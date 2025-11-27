@@ -1,8 +1,14 @@
+from warnings import deprecated
+from loguru import logger
+
+logger.info(f"Загружен модуль {__name__}!")
+
 class Counter(dict):
     def __missing__(self, key):
         return 0
 
 
+@deprecated("Dont used in code")
 class StringIterator:
     def __init__(self, strings_list) -> None:
         self.strings_list = strings_list

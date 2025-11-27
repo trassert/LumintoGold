@@ -1,3 +1,6 @@
 import os
+from loguru import logger
+
+logger.info(f"Загружен модуль {__name__}!")
 
 tasks = os.path.join("db", "tasks.json")
