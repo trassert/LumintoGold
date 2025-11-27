@@ -52,7 +52,7 @@ from modules import (  # noqa: E402
     get_sys,
     task_gen,
     genpass,
-    phrase,
+    phrase
 )
 from modules.flip_map import flip_map  # noqa: E402
 from modules.iterators import Counter  # noqa: E402
@@ -65,10 +65,11 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         session=path.join("sessions", phone_number),
         api_id=api_id,
         api_hash=api_hash,
-        use_ipv6=False,
+        use_ipv6=await Settings.get("use.ipv6"),
         system_version="4.16.30-vxCUSTOM",
         device_model="LumintoGold",
         system_lang_code="ru",
+        lang_code="ru",
     )
     logger.info(f"Запускаю клиент ({phone_number})")
     await client.start(phone=phone_number)
