@@ -89,7 +89,7 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
                 msg_id=event.message.id,
                 big=True,
                 add_to_recent=True,
-                reaction=[types.ReactionEmoji(emoticon="❤️")],
+                reaction=[types.ReactionEmoji(emoticon=random.choice(["💘", "❤️", "👍"]))],
             ),
         )
 
