@@ -12,9 +12,8 @@ from loguru import logger
 logger.remove()
 logger.add(
     stderr,
-    format="<blue>{time:HH:mm:ss}</blue>"
-    " | <level>{level}</level>"
-    " | <green>{file}:{function}</green>"
+    format="[{time:HH:mm:ss} <level>{level}</level>]:"
+    " <green>{file}:{function}</green>"
     " <cyan>></cyan> {message}",
     level="INFO",
     colorize=True,
@@ -387,8 +386,8 @@ async def run_userbot(number, api_id, api_hash) -> None:
     """Обертка для запуска userbot с обработкой исключений."""
     try:
         await userbot(number, api_id, api_hash)
-    except Exception as e:
-        logger.error(f"Ошибка в userbot {number}: {e}")
+    except Exception:
+        logger.exception(f"Критическая ошибка в {number}")
 
 
 async def main() -> None:
