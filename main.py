@@ -59,6 +59,7 @@ from modules.settings import UBSettings  # noqa: E402
 
 async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
     Settings = UBSettings(phone_number, "clients")
+    n = 1/0
     client = TelegramClient(
         session=path.join("sessions", phone_number),
         api_id=api_id,
