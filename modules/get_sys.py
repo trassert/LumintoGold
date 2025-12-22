@@ -127,9 +127,9 @@ def default_path() -> Path:
         drive = os.environ.get("SystemDrive", "C:")
         return Path(drive + "\\")
     if "ANDROID_ROOT" in os.environ or "ANDROID_DATA" in os.environ:
-        for p in ("/storage/emulated/0", "/sdcard", str(Path.home())):
-            if os.path.exists(p):
-                return Path(p)
+        # for p in ("/storage/emulated/0", "/sdcard", str(Path.home())):
+        #     if os.path.exists(p):
+        #         return Path(p)
         return Path.cwd()
     return Path("/")
 
