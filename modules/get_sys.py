@@ -1,9 +1,12 @@
 import asyncio
+import shutil
+import os
 import platform
+import psutil
+
+from pathlib import Path
 from time import time
 from typing import List
-
-import psutil
 from loguru import logger
 
 logger.info(f"Загружен модуль {__name__}!")
@@ -110,6 +113,35 @@ async def get_cpu_load() -> str:
         return "Недоступно"
 
 
+def human(n: int) -> str:
+    units = ["б", "Кб", "Мб", "Гб", "Тб", "Пб"]
+    x = float(n)
+    for u in units:
+        if x < 1024 or u == units[-1]:
+            return f"{x:.2f} {u}"
+        x /= 1024
+
+
+def default_path() -> Path:
+    if os.name == "nt":
+        drive = os.environ.get("SystemDrive", "C:")
+        return Path(drive + "\\")
+    if "ANDROID_ROOT" in os.environ or "ANDROID_DATA" in os.environ:
+        for p in ("/storage/emulated/0", "/sdcard", str(Path.home())):
+            if os.path.exists(p):
+                return Path(p)
+        return Path.cwd()
+    return Path("/")
+
+
+def disk_free(path: str | None = None) -> None:
+    p = Path(path) if path else default_path()
+    p = p if p.exists() else Path.cwd()
+
+    total, used, free = shutil.disk_usage(p)
+    return [human(total), human(used), human(free)]
+
+
 async def get_system_info() -> str:
     mem = psutil.virtual_memory()
     cpu_freq = psutil.cpu_freq()
@@ -132,6 +164,8 @@ async def get_system_info() -> str:
     mem_avail = mem.available / (1024**3)
     mem_used = mem.used / (1024**3)
 
+    disk = disk_free()
+
     return f"""⚙️ : Информация о хостинге:
     Время работы: {boottime}
     ОС: {platform.system()} {platform.release()}
@@ -140,11 +174,15 @@ async def get_system_info() -> str:
         Ядра/Потоки: {cpu_cores_phys}/{cpu_cores_logical}
         Загрузка: {cpu_load} 
         Температура ↑|≈|↓: {temp}
-    Память:
+    ОЗУ:
         Объём: {mem_total:.1f} ГБ
         Доступно: {mem_avail:.1f} ГБ
         Используется: {mem_used:.1f} ГБ
         Загрузка: {mem.percent} %
+    Память:
+        Всего: {disk[0]}
+        Использовано: {disk[1]}
+        Свободно: {disk[2]}
     Сеть:
         Загрузка: {network[0]} Мбит/с
         Выгрузка: {network[1]} Мбит/с
