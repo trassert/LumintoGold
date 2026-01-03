@@ -4,340 +4,357 @@ import random
 import re
 import contextlib
 from sys import stderr
+from os import listdir, mkdir, path
+from time import time
 
 import aiofiles
 import orjson
 from loguru import logger
 
+from telethon import events, functions, types
+from telethon.sync import TelegramClient
+from telethon.tl.custom import Message
+from telethon.tl.types import MessageMediaDocument, PeerUser
+
+from modules import ai, d, formatter, get_sys, task_gen, genpass, phrase
+from modules.flip_map import flip_map
+from modules.iterators import Counter
+from modules.settings import UBSettings
+
 logger.remove()
 logger.add(
     stderr,
-    format="[{time:HH:mm:ss} <level>{level}</level>]:"
-    " <green>{file}:{function}</green>"
-    " <cyan>></cyan> {message}",
+    format=(
+        "[{time:HH:mm:ss} <level>{level}</level>]: "
+        "<green>{file}:{function}</green> <cyan>></cyan> {message}"
+    ),
     level="INFO",
     colorize=True,
     backtrace=False,
-    diagnose=False
+    diagnose=False,
 )
 
 
 class InterceptHandler(logging.Handler):
-    def emit(self, record) -> None:
+    def emit(self, record):
         level = "TRACE" if record.levelno == 5 else record.levelname
         logger.opt(depth=6, exception=record.exc_info).log(
-            level,
-            record.getMessage(),
+            level, record.getMessage()
         )
 
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
-from os import listdir, mkdir, path  # noqa: E402
-from time import time  # noqa: E402
 
-from telethon import (  # noqa: E402
-    events,
-    functions,
-    types,
-)
-from telethon.sync import TelegramClient  # noqa: E402
-from telethon.tl.custom import Message  # noqa: E402
-from telethon.tl.types import MessageMediaDocument, PeerUser  # noqa: E402
-
-from modules import (  # noqa: E402
-    ai,
-    d,
-    formatter,
-    get_sys,
-    task_gen,
-    genpass,
-    phrase
-)
-from modules.flip_map import flip_map  # noqa: E402
-from modules.iterators import Counter  # noqa: E402
-from modules.settings import UBSettings  # noqa: E402
+def get_args(text: str, skip_first: bool = True) -> list[str]:
+    parts = text.split()
+    return parts[1:] if skip_first and parts else parts
 
 
-async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
-    Settings = UBSettings(phone_number, "clients")
-    client = TelegramClient(
-        session=path.join("sessions", phone_number),
-        api_id=api_id,
-        api_hash=api_hash,
-        use_ipv6=await Settings.get("use.ipv6"),
-        system_version="4.16.30-vxCUSTOM",
-        device_model="LumintoGold",
-        system_lang_code="ru",
-        lang_code="ru",
-    )
-    logger.info(f"Запускаю клиент ({phone_number})")
-    await client.start(phone=phone_number)
+class UserbotManager:
+    def __init__(self, phone: str, api_id: int, api_hash: str):
+        self.phone = phone
+        self.settings = UBSettings(phone, "clients")
+        self.client = TelegramClient(
+            session=path.join("sessions", phone),
+            api_id=api_id,
+            api_hash=api_hash,
+            use_ipv6=None,
+            system_version="4.16.30-vxCUSTOM",
+            device_model="LumintoGold",
+            system_lang_code="ru",
+            lang_code="ru",
+        )
+        self.iris_task = task_gen.Generator(f"{phone}_iris")
+        self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
+        self.ai_client = ai.Client(None, None)
 
-    farm_task = task_gen.Generator(f"{phone_number}_iris")
-    ai_client = ai.Client(
-        await Settings.get("ai.token"),
-        await Settings.get("ai.proxy"),
-    )
+    async def init(self):
+        self.client.use_ipv6 = await self.settings.get("use.ipv6")
+        self.ai_client = ai.Client(
+            await self.settings.get("ai.token"),
+            await self.settings.get("ai.proxy"),
+        )
+        await self.client.start(phone=self.phone)
+        logger.info(f"Запущен клиент ({self.phone})")
 
-    async def reactions(event: Message):
+        self._register_handlers()
+
+        if await self.settings.get("block.voice"):
+            self.client.add_event_handler(self.block_voice, events.NewMessage())
+
+        if await self.settings.get("luminto.reactions"):
+            for chat in ("lumintoch", "trassert_ch"):
+                self.client.add_event_handler(
+                    self.reactions, events.NewMessage(chats=chat)
+                )
+
+        if await self.settings.get("iris.farm"):
+            await self.iris_task.create(
+                func=self.iris_farm, task_param=4, random_delay=(5, 360)
+            )
+
+        if await self.settings.get("iceyes.bonus"):
+            await self.iceyes_task.create(
+                func=self.iceyes_bonus, task_param=1, random_delay=(5, 120)
+            )
+
+    def _register_handlers(self):
+        self.client.on(d.cmd(r"(?i)^\.т"))(self.typing)
+        self.client.on(d.cmd(r"(?i)^\.слов"))(self.words)
+        self.client.on(d.cmd(r"(?i)^\.пинг$"))(self.ping)
+        self.client.on(d.cmd(r"(?i)^\.флип"))(self.flip_text)
+        self.client.on(d.cmd(r"(?i)^\.гс$"))(self.on_off_block_voice)
+        self.client.on(d.cmd(r"(?i)^\.читать$"))(self.on_off_mask_read)
+        self.client.on(d.cmd(r"(?i)^\.серв$"))(self.server_load)
+        self.client.on(d.cmd(r"(?i)^\.токен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"(?i)^\.прокси (.+)"))(self.ai_proxy)
+        self.client.on(d.cmd(r"(?i)^\.ии\s([\s\S]+)"))(self.ai_resp)
+        self.client.on(d.cmd(r"(?i)^\.релоадконфиг$"))(self.config_reload)
+        self.client.on(d.cmd(r"(?i)^\.автоферма$"))(self.on_off_farming)
+        self.client.on(d.cmd(r"(?i)^\.автобонус$"))(self.on_off_bonus)
+        self.client.on(
+            d.cmd(
+                r"(?i)^\.genpass(?:\s+(.+))?",
+            )
+        )(self.gen_pass)
+        self.client.on(
+            d.cmd(
+                r"(?i)^\.генпасс(?:\s+(.+))?",
+            )
+        )(self.gen_pass)
+        self.client.on(
+            d.cmd(
+                r"(?i)^\.пароль(?:\s+(.+))?",
+            )
+        )(self.gen_pass)
+
+        self.client.on(events.NewMessage())(self._dynamic_mask_reader)
+
+    async def reactions(self, event: Message):
         await asyncio.sleep(random.randint(0, 1000))
         logger.info("Отправил реакцию!")
-        return await client(
+        await self.client(
             functions.messages.SendReactionRequest(
                 peer=event.peer_id,
                 msg_id=event.message.id,
                 big=True,
                 add_to_recent=True,
-                reaction=[types.ReactionEmoji(emoticon=random.choice(["💘", "❤️", "👍"]))],
-            ),
+                reaction=[
+                    types.ReactionEmoji(
+                        emoticon=random.choice(["💘", "❤️", "👍"])
+                    )
+                ],
+            )
         )
 
-    async def iris_farm() -> None:
+    async def iris_farm(self):
+        target = -1002355128955
         try:
-            await client.send_message(
-                -1002355128955,
-                random.choice(["/ферма", "/фарма"]),
+            await self.client.send_message(
+                target, random.choice(["/ферма", "/фарма"])
             )
         except Exception:
-            await client.send_message(
-                "iris_cm_bot",
-                random.choice(["/ферма", "/фарма"]),
+            await self.client.send_message(
+                "iris_cm_bot", random.choice(["/ферма", "/фарма"])
             )
-        logger.info(f"{phone_number} - сработала автоферма")
+        logger.info(f"{self.phone} - сработала автоферма")
 
-    async def block_voice(event: Message) -> None:
+    async def iceyes_bonus(self):
+        target = "iceyes_bot"
+        await self.client.send_message(target, "💸 Бонус")
+        logger.info(f"{self.phone} - сработал автобонус")
+
+    async def block_voice(self, event: Message):
         if not isinstance(event.peer_id, PeerUser):
             return
-        me = await client.get_me()
+        me = await self.client.get_me()
         if me.id == event.sender_id:
             return
-        if not isinstance(event.media, MessageMediaDocument):
-            return
-        if event.media.voice:
+        if isinstance(event.media, MessageMediaDocument) and event.media.voice:
             await event.delete()
-            await event.respond(
-                await Settings.get(
-                    "voice.message",
-                    phrase.voice.default_message,
-                ),
+            msg = await self.settings.get(
+                "voice.message", phrase.voice.default_message
             )
+            await event.respond(msg)
 
-    @client.on(d.cmd(r"(?i)^\.т"))
-    async def typing(event: Message):
+    async def typing(self, event: Message):
         try:
-            original = event.text.split(" ", maxsplit=1)[1]
-        except Exception:
+            text = event.text.split(" ", maxsplit=1)[1]
+        except IndexError:
             return await event.edit(phrase.no_text)
-        text = original
         bep = ""
-        while bep != original:
-            await event.edit(bep + await Settings.get("typings"))
-            await asyncio.sleep(await Settings.get("typing.delay"))
-            bep = bep + text[0]
-            text = text[1:]
+        while bep != text:
+            await event.edit(bep + await self.settings.get("typings"))
+            await asyncio.sleep(await self.settings.get("typing.delay"))
+            bep += text[len(bep)]
             await event.edit(bep)
-            await asyncio.sleep(await Settings.get("typing.delay"))
-        return None
+            await asyncio.sleep(await self.settings.get("typing.delay"))
 
-    @client.on(d.cmd(r"(?i)^\.слов"))
-    async def words(event: Message) -> None:
-        arg = None
-        arg2 = None
-        try:
-            args = event.text.lower().split()
-            del args[0]
-            for x in args:
-                if "л" in x:
-                    arg = x.replace("л", "").strip()
-                    if arg.isdigit():
-                        arg = int(arg)
-                elif "в" in x:
-                    arg2 = x.replace("в", "").strip()
-                    if arg2.isdigit():
-                        arg2 = int(arg2)
-        except Exception:
-            pass
+    async def words(self, event: Message):
+        args = get_args(event.text.lower())
+        arg_len = None
+        arg_count = None
+
+        for x in args:
+            if "л" in x:
+                val = x.replace("л", "").strip()
+                if val.isdigit():
+                    arg_len = int(val)
+            elif "в" in x:
+                val = x.replace("в", "").strip()
+                if val.isdigit():
+                    arg_count = int(val)
+
         words = Counter()
         total = 0
         dots = ""
-        msg: Message = await event.edit(
-            phrase.words.all.format(words=total, dots=dots),
-        )
+        msg = await event.edit(phrase.words.all.format(words=total, dots=dots))
 
-        async for message in client.iter_messages(event.chat_id):
+        async for message in self.client.iter_messages(event.chat_id):
             total += 1
             if total % 200 == 0:
+                dots = dots + "." if len(dots) < 3 else ""
                 try:
-                    dots = dots + "." if len(dots) < 3 else ""
                     await msg.edit(
-                        phrase.words.all.format(words=total, dots=dots),
+                        phrase.words.all.format(words=total, dots=dots)
                     )
                 except Exception:
-                    await asyncio.sleep(await Settings.get("typing.delay"))
+                    await asyncio.sleep(await self.settings.get("typing.delay"))
                     with contextlib.suppress(Exception):
                         msg = await event.reply(
-                            phrase.words.except_all.format(total),
+                            phrase.words.except_all.format(total)
                         )
+
             if message.text:
                 for word in message.text.split():
-                    word = re.sub(r"\W+", "", word).strip()
-                    if word != "" and not word.isdigit():
-                        if arg is not None:
-                            if len(word) >= arg:
-                                words[word.lower()] += 1
-                        else:
-                            words[word.lower()] += 1
+                    clean = re.sub(r"\W+", "", word).strip()
+                    if clean and not clean.isdigit():
+                        if arg_len is None or len(clean) >= arg_len:
+                            words[clean.lower()] += 1
+
             if total % 1000 == 0:
-                await asyncio.sleep(await Settings.get("typing.delay"))
+                await asyncio.sleep(await self.settings.get("typing.delay"))
 
         freq = sorted(words, key=words.get, reverse=True)
         out = phrase.words.out
-        minsize = 50
-        maxsize = min(minsize, len(freq))
-        if arg2 is not None and arg2 < len(freq):
-            maxsize = arg2
+        maxsize = min(50, len(freq))
+        if arg_count is not None and arg_count < len(freq):
+            maxsize = arg_count
         for i in range(maxsize):
             out += f"{i + 1}. {words[freq[i]]}: {freq[i]}\n"
+
         try:
             await msg.edit(out)
         except Exception:
             await event.reply(out)
 
-    @client.on(d.cmd(r"(?i)^\.пинг$"))
-    async def ping(event: Message) -> None:
+    async def ping(self, event: Message):
         timestamp = event.date.timestamp()
         timedel = round(time() - timestamp, 2)
         t1 = time()
         await event.edit(phrase.ping.pong)
         pingtime = round(time() - t1, 2)
-        return await event.edit(
+        await event.edit(
             phrase.ping.ping.format(
-                timedel=f"{timedel} сек.",
-                ping=f"{pingtime} сек.",
+                timedel=f"{timedel} сек.", ping=f"{pingtime} сек."
             )
         )
 
-    async def mask_read_any(event: Message):
-        """Просматривает сообщение."""
-        return await event.mark_read()
-
-    @client.on(d.cmd(r"(?i)^\.флип"))
-    async def flip_text(event: Message):
+    async def flip_text(self, event: Message):
         try:
             text = event.text.split(" ", maxsplit=1)[1]
-        except Exception:
+        except IndexError:
             return await event.edit(phrase.no_text)
-        final_str = ""
-        for char in text:
-            new_char = flip_map.get(char, char)
-            final_str += new_char
-        return await event.edit("".join(reversed(list(final_str))))
+        flipped = "".join(flip_map.get(c, c) for c in reversed(text))
+        await event.edit(flipped)
 
-    @client.on(d.cmd(r"(?i)^\.гс$"))
-    async def on_off_block_voice(event: Message) -> None:
-        if await Settings.get("block.voice"):
-            await Settings.set("block.voice", False)
-            await event.edit(phrase.voice.unblock)
-            client.remove_event_handler(block_voice)
-        else:
-            await Settings.set("block.voice", True)
+    async def on_off_block_voice(self, event: Message):
+        enabled = not await self.settings.get("block.voice")
+        await self.settings.set("block.voice", enabled)
+        if enabled:
+            self.client.add_event_handler(self.block_voice, events.NewMessage())
             await event.edit(phrase.voice.block)
-            client.add_event_handler(block_voice, events.NewMessage())
+        else:
+            self.client.remove_event_handler(self.block_voice)
+            await event.edit(phrase.voice.unblock)
 
-    @client.on(d.cmd(r"(?i)^\.читать$"))
-    async def on_off_mask_read(event: Message):
-        all_chats = await Settings.get("mask.read")
-        if event.chat_id in all_chats:
-            all_chats.remove(event.chat_id)
-            await Settings.set("mask.read", all_chats)
-            event.client.remove_event_handler(
-                mask_read_any,
-                events.NewMessage(chats=event.chat_id),
-            )
-            return await event.client.edit_message(
-                event.sender_id,
-                event.message,
-                phrase.read.off,
-            )
-        all_chats.append(event.chat_id)
-        await Settings.set("mask.read", all_chats)
-        event.client.add_event_handler(
-            mask_read_any,
-            events.NewMessage(chats=event.chat_id),
-        )
-        return await event.client.edit_message(
-            event.sender_id,
-            event.message,
-            phrase.read.on,
-        )
+    async def _dynamic_mask_reader(self, event: Message):
+        mask_read_chats = await self.settings.get("mask.read") or []
+        if event.chat_id in mask_read_chats:
+            await event.mark_read()
 
-    @client.on(d.cmd(r"(?i)^\.серв$"))
-    async def server_load(event: Message):
-        return await event.edit(await get_sys.get_system_info())
+    async def on_off_mask_read(self, event: Message):
+        mask_read_chats = await self.settings.get("mask.read") or []
+        if event.chat_id in mask_read_chats:
+            mask_read_chats.remove(event.chat_id)
+            await event.edit(phrase.read.off)
+        else:
+            mask_read_chats.append(event.chat_id)
+            await event.edit(phrase.read.on)
+        await self.settings.set("mask.read", mask_read_chats)
 
-    @client.on(d.cmd(r"(?i)^\.токен (.+)"))
-    async def ai_token(event: Message) -> None:
-        token: str = event.pattern_match.group(1).strip()
-        await Settings.set("ai.token", token)
-        ai_client.change_api_key(token)
+    async def server_load(self, event: Message):
+        await event.edit(await get_sys.get_system_info())
+
+    async def ai_token(self, event: Message):
+        token = event.pattern_match.group(1).strip()
+        await self.settings.set("ai.token", token)
+        self.ai_client.change_api_key(token)
         await event.edit(phrase.ai.token_set)
 
-    @client.on(d.cmd(r"(?i)^\.прокси (.+)"))
-    async def ai_proxy(event: Message) -> None:
-        proxy: str = event.pattern_match.group(1).strip()
-        await Settings.set("ai.proxy", proxy)
-        ai_client.change_api_key(proxy)
+    async def ai_proxy(self, event: Message):
+        proxy = event.pattern_match.group(1).strip()
+        await self.settings.set("ai.proxy", proxy)
+        self.ai_client.change_proxy(proxy)
         await event.edit(phrase.ai.proxy_set)
 
-    @client.on(d.cmd(r"(?i)^\.ии\s([\s\S]+)"))
-    async def ai_resp(event: Message):
-        if await Settings.get("ai.token") is None:
+    async def ai_resp(self, event: Message):
+        if not await self.settings.get("ai.token"):
             return await event.edit(phrase.ai.no_token)
         text = event.pattern_match.group(1).strip()
         try:
-            response = await ai_client.generate(text)
+            response = await self.ai_client.generate(text)
         except Exception as e:
             return await event.edit(phrase.error.format(e))
-        try:
-            if len(response) > 4096:
-                response = formatter.splitter(response)
-                await event.edit(response.pop(0))
-                for chunk in response:
-                    await event.reply(chunk)
-            else:
-                return await event.edit(response)
-        except Exception as e:
-            return await event.edit(phrase.error.format(e))
+        if len(response) > 4096:
+            chunks = formatter.splitter(response)
+            await event.edit(chunks[0])
+            for chunk in chunks[1:]:
+                await event.reply(chunk)
+        else:
+            await event.edit(response)
 
-    @client.on(d.cmd(r"(?i)^\.релоадконфиг$"))
-    async def config_reload(event: Message) -> None:
-        await Settings._ensure_loaded(forced=True)
-        return await event.edit(phrase.config.reload)
+    async def config_reload(self, event: Message):
+        await self.settings._ensure_loaded(forced=True)
+        await event.edit(phrase.config.reload)
 
-    @client.on(d.cmd(r"(?i)^\.автофарм$"))
-    @client.on(d.cmd(r"(?i)^\.автоферма$"))
-    async def on_off_farming(event: Message):
-        nonlocal farm_task
-        if await Settings.get("iris.farm"):
-            await Settings.set("iris.farm", False)
-            farm_task.stop()
-            return await event.edit(phrase.farm.off)
-        await Settings.set("iris.farm", True)
-        await event.edit(phrase.farm.on)
-        await farm_task.create(
-            func=iris_farm,
-            task_param=4,
-            random_delay=(5, 360),
-        )
-        return None
+    async def on_off_farming(self, event: Message):
+        enabled = not await self.settings.get("iris.farm")
+        await self.settings.set("iris.farm", enabled)
+        if enabled:
+            await event.edit(phrase.farm.on)
+            await self.iris_task.create(
+                func=self.iris_farm, task_param=4, random_delay=(5, 360)
+            )
+        else:
+            self.iris_task.stop()
+            await event.edit(phrase.farm.off)
 
-    @client.on(d.cmd(r"(?i)^\.genpass(?:\s+(.+))?"))
-    @client.on(d.cmd(r"(?i)^\.генпасс(?:\s+(.+))?"))
-    @client.on(d.cmd(r"(?i)^\.пароль(?:\s+(.+))?"))
-    async def generate_password(event: Message):
+    async def on_off_bonus(self, event: Message):
+        enabled = not await self.settings.get("iceyes.bonus")
+        await self.settings.set("iceyes.bonus", enabled)
+        if enabled:
+            await event.edit(phrase.bonus.on)
+            await self.iris_task.create(
+                func=self.iceyes_bonus, task_param=1, random_delay=(5, 120)
+            )
+        else:
+            self.iris_task.stop()
+            await event.edit(phrase.bonus.off)
+
+    async def gen_pass(self, event: Message):
         args = (event.pattern_match.group(1) or "").strip()
-
         length = genpass.Default.length
         letters = genpass.Default.letters
         digits = genpass.Default.digits
@@ -364,63 +381,34 @@ async def userbot(phone_number: str, api_id: int, api_hash: str) -> None:
         except Exception as ex:
             await event.edit(phrase.error.format(ex))
 
-    if await Settings.get("block.voice"):
-        client.add_event_handler(block_voice, events.NewMessage())
-    if await Settings.get("luminto.reactions"):
-        client.add_event_handler(
-            reactions,
-            events.NewMessage(chats="lumintoch"),
-        )
-        client.add_event_handler(
-            reactions,
-            events.NewMessage(chats="trassert_ch"),
-        )
-    if await Settings.get("iris.farm"):
-        await farm_task.create(
-            func=iris_farm,
-            task_param=4,
-            random_delay=(5, 360),
-        )
-
-    await client.run_until_disconnected()
+    async def run(self):
+        await self.init()
+        await self.client.run_until_disconnected()
 
 
-async def run_userbot(number, api_id, api_hash) -> None:
-    """Обертка для запуска userbot с обработкой исключений."""
+async def run_userbot(number: str, api_id: int, api_hash: str):
     try:
-        await userbot(number, api_id, api_hash)
+        bot = UserbotManager(number, api_id, api_hash)
+        await bot.run()
     except Exception:
         logger.exception(f"Критическая ошибка в {number}")
 
 
-async def main() -> None:
+async def main():
+    clients_dir = "clients"
     try:
-        clients = listdir("clients")
-        logger.info(f"Клиенты: {clients}")
-        if clients == []:
-            raise FileNotFoundError
-        tasks = []
-        for client in clients:
-            async with aiofiles.open(path.join("clients", client), "rb") as f:
-                data = orjson.loads(await f.read())
-            task = run_userbot(
-                client.replace(".json", ""),
-                data["api_id"],
-                data["api_hash"],
-            )
-            tasks.append(task)
-        await asyncio.gather(*tasks)
+        clients = listdir(clients_dir)
     except FileNotFoundError:
-        try:
-            mkdir("clients")
-        except Exception:
-            pass
+        mkdir(clients_dir)
+        clients = []
+
+    if not clients:
         logger.warning("Нет ни одного клиента! Создаём нового..")
         number = input("Введи номер: ")
         api_id = int(input("Введи api_id: "))
         api_hash = input("Введи api_hash: ")
         async with aiofiles.open(
-            path.join("clients", f"{number}.json"), "wb"
+            path.join(clients_dir, f"{number}.json"), "wb"
         ) as f:
             await f.write(
                 orjson.dumps(
@@ -428,21 +416,27 @@ async def main() -> None:
                     option=orjson.OPT_INDENT_2,
                 )
             )
-        await main()
+        return await main()
+
+    logger.info(f"Клиенты: {clients}")
+    tasks = []
+    for client_file in clients:
+        async with aiofiles.open(
+            path.join(clients_dir, client_file), "rb"
+        ) as f:
+            data = orjson.loads(await f.read())
+        phone = client_file.replace(".json", "")
+        tasks.append(run_userbot(phone, data["api_id"], data["api_hash"]))
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
     try:
-        try:
-            import uvloop
+        import uvloop
 
-            uvloop.run(main())
-        except ModuleNotFoundError:
-            logger.warning(
-                "Uvloop не найден!\n"
-                "Установите его для большей производительности\n"
-                "> pip install uvloop"
-            )
-            asyncio.run(main())
+        uvloop.run(main())
+    except ModuleNotFoundError:
+        logger.warning("Uvloop не найден! Установите его: pip install uvloop")
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.warning("Закрываю бота...")

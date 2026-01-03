@@ -11,12 +11,13 @@ default = {
     "typings": "..",
     "typing.delay": 0.05,
     "iris.farm": False,
+    "iceyes.bonus": False,
     "block.voice": False,
     "mask.read": [],
     "luminto.reactions": True,
     "ai.token": None,
     "ai.proxy": None,
-    "use.ipv6": False
+    "use.ipv6": False,
 }
 
 
