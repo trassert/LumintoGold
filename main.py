@@ -105,7 +105,7 @@ class UserbotManager:
 
         if await self.settings.get("iceyes.bonus"):
             await self.iceyes_task.create(
-                func=self.iceyes_bonus, task_param=1, random_delay=(5, 120)
+                func=self.iceyes_bonus, task_param=1, random_delay=(1, 60)
             )
 
     def _register_handlers(self):
@@ -356,7 +356,7 @@ class UserbotManager:
         if enabled:
             await event.edit(phrase.bonus.on)
             await self.iris_task.create(
-                func=self.iceyes_bonus, task_param=1, random_delay=(5, 120)
+                func=self.iceyes_bonus, task_param=1, random_delay=(1, 60)
             )
         else:
             self.iris_task.stop()
