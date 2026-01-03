@@ -16,11 +16,6 @@ from telethon.sync import TelegramClient
 from telethon.tl.custom import Message
 from telethon.tl.types import MessageMediaDocument, PeerUser
 
-from modules import ai, d, formatter, get_sys, task_gen, genpass, phrase
-from modules.flip_map import flip_map
-from modules.iterators import Counter
-from modules.settings import UBSettings
-
 logger.remove()
 logger.add(
     stderr,
@@ -46,6 +41,20 @@ class InterceptHandler(logging.Handler):
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
 
+from modules import (  # noqa: E402
+    ai,
+    d,
+    formatter,
+    get_sys,
+    task_gen,
+    genpass,
+    phrase,
+    flip_map,
+    iterators,
+    settings,
+)
+
+
 def get_args(text: str, skip_first: bool = True) -> list[str]:
     parts = text.split()
     return parts[1:] if skip_first and parts else parts
@@ -54,7 +63,7 @@ def get_args(text: str, skip_first: bool = True) -> list[str]:
 class UserbotManager:
     def __init__(self, phone: str, api_id: int, api_hash: str):
         self.phone = phone
-        self.settings = UBSettings(phone, "clients")
+        self.settings = settings.UBSettings(phone, "clients")
         self.client = TelegramClient(
             session=path.join("sessions", phone),
             api_id=api_id,
@@ -206,7 +215,7 @@ class UserbotManager:
                 if val.isdigit():
                     arg_count = int(val)
 
-        words = Counter()
+        words = iterators.Counter()
         total = 0
         dots = ""
         msg = await event.edit(phrase.words.all.format(words=total, dots=dots))
@@ -266,7 +275,7 @@ class UserbotManager:
             text = event.text.split(" ", maxsplit=1)[1]
         except IndexError:
             return await event.edit(phrase.no_text)
-        flipped = "".join(flip_map.get(c, c) for c in reversed(text))
+        flipped = "".join(flip_map.flip_map.get(c, c) for c in reversed(text))
         await event.edit(flipped)
 
     async def on_off_block_voice(self, event: Message):
