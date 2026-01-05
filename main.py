@@ -15,6 +15,7 @@ from telethon import events, functions, types
 from telethon.sync import TelegramClient
 from telethon.tl.custom import Message
 from telethon.tl.types import MessageMediaDocument, PeerUser
+from telethon.tl.functions.account import UpdateStatusRequest
 
 logger.remove()
 logger.add(
@@ -75,6 +76,7 @@ class UserbotManager:
             lang_code="ru",
         )
         self.iris_task = task_gen.Generator(f"{phone}_iris")
+        self.online_task = task_gen.Generator(f"{phone}_online")
         self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
         self.ai_client = ai.Client(None, None)
 
@@ -108,6 +110,11 @@ class UserbotManager:
                 func=self.iceyes_bonus, task_param=1, random_delay=(1, 60)
             )
 
+        if await self.settings.get("auto.online"):
+            await self.online_task.create(
+                func=self.auto_online, task_param=30, unit="seconds"
+            )
+
     def _register_handlers(self):
         self.client.on(d.cmd(r"(?i)^\.т"))(self.typing)
         self.client.on(d.cmd(r"(?i)^\.слов"))(self.words)
@@ -121,6 +128,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"(?i)^\.ии\s([\s\S]+)"))(self.ai_resp)
         self.client.on(d.cmd(r"(?i)^\.релоадконфиг$"))(self.config_reload)
         self.client.on(d.cmd(r"(?i)^\.автоферма$"))(self.on_off_farming)
+        self.client.on(d.cmd(r"(?i)^\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"(?i)^\.автобонус$"))(self.on_off_bonus)
         self.client.on(
             d.cmd(
@@ -173,6 +181,10 @@ class UserbotManager:
         target = "iceyes_bot"
         await self.client.send_message(target, "💸 Бонус")
         logger.info(f"{self.phone} - сработал автобонус")
+
+    async def auto_online(self):
+        await self.client(UpdateStatusRequest(offline=False))
+        logging.info("Сработал автоонлайн")
 
     async def block_voice(self, event: Message):
         if not isinstance(event.peer_id, PeerUser):
@@ -389,6 +401,18 @@ class UserbotManager:
             await event.edit(phrase.password.done.format(pwd))
         except Exception as ex:
             await event.edit(phrase.error.format(ex))
+
+    async def toggle_online(self, event: Message):
+        enabled = not await self.settings.get("auto.online")
+        await self.settings.set("auto.online", enabled)
+        if enabled:
+            await event.edit(phrase.online.on)
+            await self.online_task.create(
+                func=self.auto_online, task_param=30, unit="seconds"
+            )
+        else:
+            self.online_task.stop()
+            await event.edit(phrase.online.off)
 
     async def run(self):
         await self.init()

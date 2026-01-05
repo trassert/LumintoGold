@@ -18,6 +18,7 @@ default = {
     "ai.token": None,
     "ai.proxy": None,
     "use.ipv6": False,
+    "auto.online": False
 }
 
 

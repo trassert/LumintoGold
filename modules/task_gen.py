@@ -3,7 +3,6 @@ import random
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from datetime import time as dt_time
 from typing import Any, Literal, Optional, Union
 
 import aiofiles
@@ -15,6 +14,7 @@ from . import pathes
 logger.info(f"Загружен модуль {__name__}!")
 
 TaskType = Literal["interval", "daily"]
+TaskUnit = Literal["hours", "seconds"]
 TaskParam = Union[int, str]
 RandomDelay = Optional[tuple[int, int]]
 
@@ -36,10 +36,7 @@ class Generator:
     def _get_random_delay(self) -> float:
         if self._random_delay is None:
             return 0.0
-        a, b = self._random_delay
-
-        if a > b:
-            a, b = b, a
+        a, b = sorted(self._random_delay)
         return random.uniform(a, b)
 
     async def create(
@@ -47,98 +44,76 @@ class Generator:
         func: Callable,
         task_param: TaskParam,
         random_delay: RandomDelay = None,
+        unit: TaskUnit = "hours",
     ) -> None:
         self.stop()
         self._random_delay = random_delay
 
         if isinstance(task_param, int):
+            if unit == "hours":
+                interval = task_param * 3600
+            elif unit == "seconds":
+                interval = task_param
+            else:
+                raise ValueError("unit must be 'hours' or 'seconds'")
             self._task_type = "interval"
             self._task_param = task_param
-            await self._create_interval_task(func, task_param)
+            await self._schedule_task(func, interval)
         elif isinstance(task_param, str):
             self._task_type = "daily"
             self._task_param = task_param
-            await self._create_daily_task(func, task_param)
+            await self._schedule_daily_task(func, task_param)
         else:
-            self._task_type = None
-            self._task_param = None
-            self._random_delay = None
-            msg = "Параметр времени должен быть int (часы) или str (HH:MM)"
-            raise ValueError(
-                msg,
-            )
+            raise ValueError("task_param must be int (interval) or str (HH:MM)")
 
-    async def _create_interval_task(self, func: Callable, hours: int) -> None:
-        """Создает задачу с интервальным выполнением."""
-        interval_seconds = hours * 3600
+    async def _schedule_task(self, func: Callable, interval: float) -> None:
+        data = await self._get_task_data()
+        now = time.time()
+        last_run = data.get("last_run")
 
-        task_data = await self._get_task_data()
-        last_run = task_data.get("last_run")
-        current_time = time.time()
-
-        if last_run is None or (current_time - last_run) >= interval_seconds:
+        if last_run is None or (now - last_run) >= interval:
             asyncio.create_task(self._safe_execute_with_delay(func))
-            self._next_run_timestamp = current_time + interval_seconds
+            self._next_run_timestamp = now + interval
         else:
-            self._next_run_timestamp = last_run + interval_seconds
+            self._next_run_timestamp = last_run + interval
 
-        self._task = asyncio.create_task(
-            self._interval_worker(func, interval_seconds),
-        )
+        self._task = asyncio.create_task(self._worker(func, interval))
 
-    async def _create_daily_task(self, func: Callable, time_str: str) -> None:
-        """Создает задачу с ежедневным выполнением."""
+    async def _schedule_daily_task(self, func: Callable, time_str: str) -> None:
         try:
             target_time = datetime.strptime(time_str, "%H:%M").time()
         except ValueError:
-            msg = "Неверный формат времени. Используйте 'HH:MM'."
-            raise ValueError(msg)
+            raise ValueError("Неверный формат времени. Используйте 'HH:MM'.")
 
         self._next_run_timestamp = self._get_next_daily_run(target_time)
-
-        task_data = await self._get_task_data()
-        last_run = task_data.get("last_run")
+        data = await self._get_task_data()
+        last_run = data.get("last_run")
 
         if last_run is None or last_run < self._next_run_timestamp - 86400:
             asyncio.create_task(self._safe_execute_with_delay(func))
 
         self._task = asyncio.create_task(self._daily_worker(func, target_time))
 
-    async def _interval_worker(self, func: Callable, interval: int) -> None:
+    async def _worker(self, func: Callable, interval: float) -> None:
         while True:
-            current_time = time.time()
-            wait_time = self._next_run_timestamp - current_time
-
-            if wait_time > 0:
-                await asyncio.sleep(wait_time)
-
+            await asyncio.sleep(max(0, self._next_run_timestamp - time.time()))
             await self._safe_execute_with_delay(func)
-
             self._next_run_timestamp = time.time() + interval
 
-    async def _daily_worker(self, func: Callable, target_time: dt_time) -> None:
-        """Рабочий для ежедневных задач."""
+    async def _daily_worker(self, func: Callable, target_time) -> None:
         while True:
-            current_time = time.time()
-            wait_time = self._next_run_timestamp - current_time
-
-            if wait_time > 0:
-                logger.info("{self.key_name} - жду {wait_time} с. до запуска..")
-                await asyncio.sleep(wait_time)
-
+            await asyncio.sleep(max(0, self._next_run_timestamp - time.time()))
             await self._safe_execute_with_delay(func)
-
             self._next_run_timestamp = self._get_next_daily_run(target_time)
 
     async def _safe_execute_with_delay(self, func: Callable) -> None:
         delay = self._get_random_delay()
         if delay > 0:
             await asyncio.sleep(delay)
-
         await self._safe_execute(func)
 
     async def _safe_execute(self, func: Callable) -> None:
-        start_time = time.time()
+        start = time.time()
         try:
             if asyncio.iscoroutinefunction(func):
                 await func()
@@ -147,75 +122,56 @@ class Generator:
         except Exception:
             pass
         finally:
-            await self._update_task_data(start_time)
+            await self._update_task_data(start)
 
-    def _get_next_daily_run(self, target_time: dt_time) -> float:
-        """Вычисляет временную метку следующего запуска для ежедневной задачи."""
+    def _get_next_daily_run(self, target_time) -> float:
         now = datetime.now()
-        target_datetime = datetime.combine(now.date(), target_time)
-
-        if target_datetime <= now:
-            target_datetime += timedelta(days=1)
-
-        return target_datetime.timestamp()
+        target = datetime.combine(now.date(), target_time)
+        if target <= now:
+            target += timedelta(days=1)
+        return target.timestamp()
 
     async def _get_all_data(self) -> dict[str, Any]:
-        """Получает все данные из файла."""
         try:
             async with aiofiles.open(self.filename, "rb") as f:
-                content = await f.read()
-                return orjson.loads(content)
+                return orjson.loads(await f.read())
         except (FileNotFoundError, orjson.JSONDecodeError):
             return {}
 
     async def _get_task_data(self) -> dict[str, Any]:
-        all_data = await self._get_all_data()
-        return all_data.get(self.key_name, {})
+        return (await self._get_all_data()).get(self.key_name, {})
 
-    async def _update_task_data(self, last_run_time: float) -> None:
-        all_data = await self._get_all_data()
-
-        all_data[self.key_name] = {
-            "last_run": last_run_time,
+    async def _update_task_data(self, last_run: float) -> None:
+        data = await self._get_all_data()
+        data[self.key_name] = {
+            "last_run": last_run,
             "task_type": self._task_type,
             "task_param": self._task_param,
             "random_delay": self._random_delay,
         }
-
         async with aiofiles.open(self.filename, "wb") as f:
-            await f.write(orjson.dumps(all_data))
+            await f.write(orjson.dumps(data))
 
     async def info(self) -> float | None:
+        data = await self._get_task_data()
         if not self._task or not self._next_run_timestamp:
-            task_data = await self._get_task_data()
-            if not task_data:
+            if not data:
                 return None
-
-            task_type = task_data.get("task_type")
-            task_param = task_data.get("task_param")
-            last_run = task_data.get("last_run")
-
-            if not last_run or not task_type or not task_param:
+            task_type = data.get("task_type")
+            task_param = data.get("task_param")
+            last_run = data.get("last_run")
+            if not all((task_type, task_param, last_run)):
                 return None
-
-            next_run = 0.0
-            if task_type == "interval" and isinstance(task_param, int):
-                interval_seconds = task_param * 3600
-                next_run = last_run + interval_seconds
-            elif task_type == "daily" and isinstance(task_param, str):
+            if task_type == "interval":
+                next_run = last_run + (task_param * 3600)
+            else:
                 try:
-                    target_time = datetime.strptime(task_param, "%H:%M").time()
-                    next_run = self._get_next_daily_run(target_time)
+                    tm = datetime.strptime(task_param, "%H:%M").time()
+                    next_run = self._get_next_daily_run(tm)
                 except ValueError:
                     return None
-            else:
-                return None
-
-            time_until_next = next_run - time.time()
-            return max(0, time_until_next)
-
-        time_until_next = self._next_run_timestamp - time.time()
-        return max(0, time_until_next)
+            return max(0, next_run - time.time())
+        return max(0, self._next_run_timestamp - time.time())
 
     def stop(self) -> None:
         if self._task and not self._task.done():
@@ -225,6 +181,6 @@ class Generator:
 
     @classmethod
     async def cleanup(cls) -> None:
-        for instance in list(cls._instances.values()):
-            instance.stop()
-            del cls._instances[instance.key_name]
+        for key in list(cls._instances):
+            cls._instances[key].stop()
+            del cls._instances[key]
