@@ -184,7 +184,6 @@ class UserbotManager:
 
     async def auto_online(self):
         await self.client(UpdateStatusRequest(offline=False))
-        logging.info("Сработал автоонлайн")
 
     async def block_voice(self, event: Message):
         if not isinstance(event.peer_id, PeerUser):
