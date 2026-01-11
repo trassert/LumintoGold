@@ -200,7 +200,7 @@ class UserbotManager:
             )
             await event.respond(msg)
 
-    async def time_by_city(event: Message):
+    async def time_by_city(self, event: Message):
         city_name: str = event.pattern_match.group(1)
         location = tz.geolocator.geocode(city_name)
         if not location:
