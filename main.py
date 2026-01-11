@@ -53,6 +53,7 @@ from modules import (  # noqa: E402
     flip_map,
     iterators,
     settings,
+    tz,
 )
 
 
@@ -130,6 +131,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"(?i)^\.автоферма$"))(self.on_off_farming)
         self.client.on(d.cmd(r"(?i)^\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"(?i)^\.автобонус$"))(self.on_off_bonus)
+        self.client.on(d.cmd(r"(?i)^\.время (.+)"))(self.time_by_city)
         self.client.on(
             d.cmd(
                 r"(?i)^\.genpass(?:\s+(.+))?",
@@ -197,6 +199,29 @@ class UserbotManager:
                 "voice.message", phrase.voice.default_message
             )
             await event.respond(msg)
+
+    async def time_by_city(event: Message):
+        city_name: str = event.pattern_match.group(1)
+        location = tz.geolocator.geocode(city_name)
+        if not location:
+            return await event.edit(phrase.time.not_found.format(city_name))
+
+        tz_name = tz.tf.timezone_at(
+            lng=location.longitude, lat=location.latitude
+        )
+        if not tz_name:
+            return await event.edit(phrase.time.not_timezone.format(city_name))
+
+        tzz = tz.pytz.timezone(tz_name)
+        city_time = tz.datetime.now(tzz)
+        return await event.edit(
+            (
+                f"📍 {location.address}\n"
+                f"🕒 Время: {city_time.strftime('%H:%M:%S')}\n"
+                f"📅 Дата: {city_time.strftime('%d.%m.%Y')}\n"
+                f"🌐 Пояс: {tz_name}"
+            )
+        )
 
     async def typing(self, event: Message):
         try:

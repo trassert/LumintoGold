@@ -4,6 +4,9 @@ loguru
 psutil
 bestconfig
 cryptg
+geopy
+pytz
+timezonefinder
 
 google-genai[aiohttp]==1.20
 httpx[socks]
