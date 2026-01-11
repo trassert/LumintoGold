@@ -2,10 +2,14 @@ import pytz
 
 from geopy.geocoders import Nominatim
 from datetime import datetime
-from timezonefinder import TimezoneFinder
 
 geolocator = Nominatim(user_agent="geo_assistant")
-tf = TimezoneFinder()
+
+
+def get_timezone(lat, lon):
+    return geolocator.reverse(
+        f"{lat}, {lon}", addressdetails=True, language="en"
+    ).raw.get("timezone")
 
 
 def time(timezone_name):

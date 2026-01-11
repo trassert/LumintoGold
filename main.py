@@ -206,9 +206,7 @@ class UserbotManager:
         if not location:
             return await event.edit(phrase.time.not_found.format(city_name))
 
-        tz_name = tz.tf.timezone_at(
-            lng=location.longitude, lat=location.latitude
-        )
+        tz_name = tz.get_timezone(location.latitude, location.longitude)
         if not tz_name:
             return await event.edit(phrase.time.not_timezone.format(city_name))
 

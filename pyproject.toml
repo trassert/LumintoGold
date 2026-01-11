@@ -16,7 +16,6 @@ dependencies = [
     "psutil>=7.1.3",
     "pytz>=2025.2",
     "telethon>=1.42.0",
-    "timezonefinder>=8.2.1",
     "uvloop>=0.22.1",
 ]
 
