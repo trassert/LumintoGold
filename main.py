@@ -131,6 +131,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"(?i)^\.автоферма$"))(self.on_off_farming)
         self.client.on(d.cmd(r"(?i)^\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"(?i)^\.автобонус$"))(self.on_off_bonus)
+        self.client.on(d.cmd(r"(?i)^\.set (.+)"))(self.set_setting)
         self.client.on(d.cmd(r"(?i)^\.время (.+)"))(self.time_by_city)
         self.client.on(
             d.cmd(
@@ -202,7 +203,10 @@ class UserbotManager:
 
     async def set_setting(self, event: Message):
         arg: str = event.pattern_match.group(1)
-        
+        key, value = arg.split(" ", maxsplit=1)
+        await self.settings.set(key, value)
+        return await event.edit(phrase.setting.set.format(key=key, value=value))
+
     async def time_by_city(self, event: Message):
         city_name: str = event.pattern_match.group(1)
         location = tz.geolocator.geocode(city_name)
@@ -499,7 +503,9 @@ if __name__ == "__main__":
 
             uvloop.run(main())
         except ModuleNotFoundError:
-            logger.warning("Uvloop не найден! Установите его: pip install uvloop")
+            logger.warning(
+                "Uvloop не найден! Установите его: pip install uvloop"
+            )
             asyncio.run(main())
     except KeyboardInterrupt:
         logger.warning("Закрываю бота...")
