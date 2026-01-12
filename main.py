@@ -14,7 +14,7 @@ from loguru import logger
 from telethon import events, functions, types
 from telethon.sync import TelegramClient
 from telethon.tl.custom import Message
-from telethon.tl.types import MessageMediaDocument, PeerUser
+from telethon.tl.types import MessageMediaDocument, PeerUser, User
 from telethon.tl.functions.account import UpdateStatusRequest
 
 logger.remove()
@@ -117,6 +117,7 @@ class UserbotManager:
             )
 
     def _register_handlers(self):
+        self.client.on(d.cmd(r"(?i)^\.чистка"))(self.clear_pm)
         self.client.on(d.cmd(r"(?i)^\.т"))(self.typing)
         self.client.on(d.cmd(r"(?i)^\.слов"))(self.words)
         self.client.on(d.cmd(r"(?i)^\.пинг$"))(self.ping)
@@ -200,6 +201,22 @@ class UserbotManager:
                 "voice.message", phrase.voice.default_message
             )
             await event.respond(msg)
+
+    async def clear_pm(self, event: Message):
+        dialogs = await self.client.get_dialogs()
+        deleted_count = 0
+
+        message: Message = await event.edit(phrase.pm.wait.format(0))
+        for dialog in dialogs:
+            user = dialog.entity
+            if isinstance(user, User) and user.deleted:
+                await self.client.delete_dialog(dialog.id)
+                await asyncio.sleep(await self.settings.get("typing.delay"))
+                deleted_count += 1
+                if deleted_count % 5 == 0:
+                    await message.edit(phrase.pm.wait.format(deleted_count))
+
+        return await event.edit(phrase.pm.cleared.format(deleted_count))
 
     async def set_setting(self, event: Message):
         arg: str = event.pattern_match.group(1)
