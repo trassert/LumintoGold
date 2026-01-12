@@ -17,22 +17,29 @@ try:
 
     def get_timezone(lat, lon, api_key) -> str:
         return tf.timezone_at(
-            lon,
-            lat,
+            lng=lon,
+            lat=lat,
         )
 
     logger.info("Использую timezonefinder")
 except ModuleNotFoundError:
     logger.warning("Использую geoapify, так как timezonefinder не установлен.")
+
     def get_timezone(lat, lon, api_key) -> str | None:
         r = requests.get(
             config.config.geoapify_url,
-            params={"lat": lat, "lon": lon, "format": "json", "apiKey": api_key},
+            params={
+                "lat": lat,
+                "lon": lon,
+                "format": "json",
+                "apiKey": api_key,
+            },
             timeout=5,
         )
         if not r.status_code == 200:
             return None
-        return r.json()['results'][0]['timezone']['name']
+        return r.json()["results"][0]["timezone"]["name"]
+
 
 geolocator = Nominatim(user_agent="geo_assistant")
 
