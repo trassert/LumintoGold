@@ -200,6 +200,9 @@ class UserbotManager:
             )
             await event.respond(msg)
 
+    async def set_setting(self, event: Message):
+        arg: str = event.pattern_match.group(1)
+        
     async def time_by_city(self, event: Message):
         city_name: str = event.pattern_match.group(1)
         location = tz.geolocator.geocode(city_name)
@@ -491,11 +494,12 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        import uvloop
+        try:
+            import uvloop
 
-        uvloop.run(main())
-    except ModuleNotFoundError:
-        logger.warning("Uvloop не найден! Установите его: pip install uvloop")
-        asyncio.run(main())
+            uvloop.run(main())
+        except ModuleNotFoundError:
+            logger.warning("Uvloop не найден! Установите его: pip install uvloop")
+            asyncio.run(main())
     except KeyboardInterrupt:
         logger.warning("Закрываю бота...")

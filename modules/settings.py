@@ -19,7 +19,7 @@ default = {
     "ai.proxy": None,
     "use.ipv6": False,
     "auto.online": False,
-    "geoapify.token": "c8082fa059d3454cab2e7f1c5e9dacc4"
+    "geoapify.token": ""
 }
 
 
