@@ -1,2 +1,2 @@
 ai_model: "gemini-2.5-flash-lite"
-geoapify_url: "https://api.geoapify.com/v1/timezone"
+geoapify_url: "https://api.geoapify.com/v1/geocode/reverse"

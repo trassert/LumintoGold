@@ -28,13 +28,12 @@ except ModuleNotFoundError:
         # try:
         r = requests.get(
             config.config.geoapify_url,
-            params={"lat": lat, "lon": lon, "apiKey": api_key},
+            params={"lat": lat, "lon": lon, "format": "json", "apiKey": api_key},
             timeout=5,
         )
         # if not r.status_code == 200:
         #     return None
-        logger.info(r.json())
-        return r.json().get("timezone", {}).get("name")
+        return r.json()["results"]["timezone"]["name"]
         # except Exception:
         #     logger.trace("Ошибка при получении timezone")
         # return None
