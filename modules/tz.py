@@ -33,6 +33,7 @@ except ModuleNotFoundError:
         )
         # if not r.status_code == 200:
         #     return None
+        logger.info(r.json())
         return r.json().get("timezone", {}).get("name")
         # except Exception:
         #     logger.trace("Ошибка при получении timezone")
