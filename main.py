@@ -54,6 +54,7 @@ from modules import (  # noqa: E402
     iterators,
     settings,
     tz,
+    db,
 )
 
 
@@ -125,15 +126,18 @@ class UserbotManager:
         self.client.on(d.cmd(r"(?i)^\.гс$"))(self.on_off_block_voice)
         self.client.on(d.cmd(r"(?i)^\.читать$"))(self.on_off_mask_read)
         self.client.on(d.cmd(r"(?i)^\.серв$"))(self.server_load)
-        self.client.on(d.cmd(r"(?i)^\.токен (.+)"))(self.ai_token)
-        self.client.on(d.cmd(r"(?i)^\.прокси (.+)"))(self.ai_proxy)
-        self.client.on(d.cmd(r"(?i)^\.ии\s([\s\S]+)"))(self.ai_resp)
         self.client.on(d.cmd(r"(?i)^\.релоадконфиг$"))(self.config_reload)
         self.client.on(d.cmd(r"(?i)^\.автоферма$"))(self.on_off_farming)
         self.client.on(d.cmd(r"(?i)^\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"(?i)^\.автобонус$"))(self.on_off_bonus)
+
+        self.client.on(d.cmd(r"(?i)^\.токен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"(?i)^\.аним (.+)"))(self.anim)
+        self.client.on(d.cmd(r"(?i)^\.прокси (.+)"))(self.ai_proxy)
+        self.client.on(d.cmd(r"(?i)^\.ии\s([\s\S]+)"))(self.ai_resp)
         self.client.on(d.cmd(r"(?i)^\.set (.+)"))(self.set_setting)
         self.client.on(d.cmd(r"(?i)^\.время (.+)"))(self.time_by_city)
+
         self.client.on(
             d.cmd(
                 r"(?i)^\.genpass(?:\s+(.+))?",
@@ -201,6 +205,15 @@ class UserbotManager:
                 "voice.message", phrase.voice.default_message
             )
             await event.respond(msg)
+
+    async def anim(self, event: Message):
+        animation_name = event.text.split(" ", maxsplit=1)[1]
+        animation = await db.get_animation(animation_name)
+        if animation is None:
+            return await event.edit(phrase.anim.no)
+        for title in animation["text"]:
+            await event.edit(title)
+            await asyncio.sleep(animation["delay"])
 
     async def clear_pm(self, event: Message):
         dialogs = await self.client.get_dialogs()
