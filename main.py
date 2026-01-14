@@ -55,6 +55,7 @@ from modules import (  # noqa: E402
     settings,
     tz,
     db,
+    ipman,
 )
 
 
@@ -132,6 +133,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"(?i)^\.автобонус$"))(self.on_off_bonus)
 
         self.client.on(d.cmd(r"(?i)^\.токен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"(?i)^\.ip (.+)"))(self.ipman)
         self.client.on(d.cmd(r"(?i)^\.аним (.+)"))(self.anim)
         self.client.on(d.cmd(r"(?i)^\.прокси (.+)"))(self.ai_proxy)
         self.client.on(d.cmd(r"(?i)^\.ии\s([\s\S]+)"))(self.ai_resp)
@@ -205,6 +207,22 @@ class UserbotManager:
                 "voice.message", phrase.voice.default_message
             )
             await event.respond(msg)
+
+    async def ipman(self, event: Message):
+        arg: str = event.pattern_match.group(1)
+        if ipman.is_valid_ip(arg) is False:
+            return await event.edit(phrase.ip.dont_match)
+        response = ipman.get_ip_info(arg)
+        return await event.edit(
+            (
+                f"🌐 : IP: `{response.get('query')}`\n\n"
+                f"Страна: {response.get('country')}\n"
+                f"Регион: {response.get('regionName')}\n"
+                f"Город: {response.get('city')}\n"
+                f"Провайдер: {response.get('isp')}\n"
+                f"Координаты: {response.get('lat')}/{response.get('lon')}"
+            )
+        )
 
     async def anim(self, event: Message):
         animation_name = event.text.split(" ", maxsplit=1)[1]
