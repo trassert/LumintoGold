@@ -1,2 +1,4 @@
 ai_model: "gemini-2.5-flash-lite"
+
 geoapify_url: "https://api.geoapify.com/v1/geocode/reverse"
+openweathermap_url: "https://api.openweathermap.org/data/2.5/weather?q={city}&appid={apikey}&units=metric&lang=ru"

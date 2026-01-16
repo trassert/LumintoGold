@@ -7,6 +7,6 @@ cryptg
 geopy
 pytz
 
-google-genai[aiohttp]==1.20
-httpx[socks]
+google-genai
+aiohttp
 aiofiles==24.1.0

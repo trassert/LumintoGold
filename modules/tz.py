@@ -1,5 +1,5 @@
 import pytz
-import requests
+import aiohttp
 
 from loguru import logger
 from geopy.geocoders import Nominatim
@@ -15,7 +15,7 @@ try:
 
     tf = TimezoneFinder()
 
-    def get_timezone(lat, lon, api_key) -> str:
+    async def get_timezone(lat, lon, api_key) -> str:
         return tf.timezone_at(
             lng=lon,
             lat=lat,
@@ -25,20 +25,22 @@ try:
 except ModuleNotFoundError:
     logger.warning("Использую geoapify, так как timezonefinder не установлен.")
 
-    def get_timezone(lat, lon, api_key) -> str | None:
-        r = requests.get(
-            config.config.geoapify_url,
-            params={
-                "lat": lat,
-                "lon": lon,
-                "format": "json",
-                "apiKey": api_key,
-            },
-            timeout=5,
-        )
-        if not r.status_code == 200:
-            return None
-        return r.json()["results"][0]["timezone"]["name"]
+    async def get_timezone(lat, lon, api_key) -> str | None:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                config.config.geoapify_url,
+                params={
+                    "lat": lat,
+                    "lon": lon,
+                    "format": "json",
+                    "apiKey": api_key,
+                },
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as r:
+                if r.status != 200:
+                    return None
+                data = await r.json()
+                return data["results"][0]["timezone"]["name"]
 
 
 geolocator = Nominatim(user_agent="geo_assistant")

@@ -56,6 +56,7 @@ from modules import (  # noqa: E402
     tz,
     db,
     ipman,
+    apis,
 )
 
 
@@ -133,6 +134,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"(?i)^\.автобонус$"))(self.on_off_bonus)
 
         self.client.on(d.cmd(r"(?i)^\.токен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"(?i)^\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"(?i)^\.ip (.+)"))(self.ipman)
         self.client.on(d.cmd(r"(?i)^\.аним (.+)"))(self.anim)
         self.client.on(d.cmd(r"(?i)^\.прокси (.+)"))(self.ai_proxy)
@@ -212,7 +214,7 @@ class UserbotManager:
         arg: str = event.pattern_match.group(1)
         if ipman.is_valid_ip(arg) is False:
             return await event.edit(phrase.ip.dont_match)
-        response = ipman.get_ip_info(arg)
+        response = await ipman.get_ip_info(arg)
         return await event.edit(
             (
                 f"🌐 : IP: `{response.get('query')}`\n\n"
@@ -221,6 +223,15 @@ class UserbotManager:
                 f"Город: {response.get('city')}\n"
                 f"Провайдер: {response.get('isp')}\n"
                 f"Координаты: {response.get('lat')}/{response.get('lon')}"
+            )
+        )
+
+    async def get_weather(self, event: Message):
+        await event.edit(phrase.weather.wait)
+        return await event.edit(
+            await apis.get_weather(
+                event.pattern_match.group(1),
+                await self.settings.get("token.openweathermap"),
             )
         )
 
@@ -261,10 +272,10 @@ class UserbotManager:
         if not location:
             return await event.edit(phrase.time.not_found.format(city_name))
 
-        tz_name = tz.get_timezone(
+        tz_name = await tz.get_timezone(
             location.latitude,
             location.longitude,
-            await self.settings.get("geoapify.token"),
+            await self.settings.get("token.geoapify"),
         )
         if not tz_name:
             return await event.edit(phrase.time.not_timezone.format(city_name))

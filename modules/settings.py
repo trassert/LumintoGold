@@ -19,7 +19,8 @@ default = {
     "ai.proxy": None,
     "use.ipv6": False,
     "auto.online": False,
-    "geoapify.token": ""
+    "token.geoapify": "",
+    "token.openweathermap": "",
 }
 
 

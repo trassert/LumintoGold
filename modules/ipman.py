@@ -1,5 +1,5 @@
-import httpx
 import re
+import aiohttp
 
 from loguru import logger
 
@@ -14,7 +14,7 @@ def is_valid_ip(ip: str) -> bool:
     return all(0 <= int(part) <= 255 for part in match.groups())
 
 
-def get_ip_info(ip: str) -> dict:
+async def get_ip_info(ip: str) -> dict:
     """
     return: {
         "status": "success",
@@ -34,10 +34,13 @@ def get_ip_info(ip: str) -> dict:
     }
     """
     try:
-        response = httpx.get(
-            f"http://ip-api.com/json/{ip}", params={"lang": "ru"}, timeout=5
-        )
-        response.raise_for_status()
-        return response.json()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"http://ip-api.com/json/{ip}",
+                params={"lang": "ru"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as response:
+                response.raise_for_status()
+                return await response.json()
     except Exception:
         logger.trace("Ошибка при получении информации об IP")
