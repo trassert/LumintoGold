@@ -6,7 +6,6 @@ bestconfig
 cryptg
 geopy
 pytz
-
 google-genai
 aiohttp
 aiofiles==24.1.0
