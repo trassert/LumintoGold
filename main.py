@@ -41,7 +41,6 @@ class InterceptHandler(logging.Handler):
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
-
 from modules import (  # noqa: E402
     ai,
     d,
@@ -177,6 +176,21 @@ class UserbotManager:
             )
         )
 
+    async def _start_iris_farm(self):
+        await self.iris_task.create(
+            func=self.iris_farm, task_param=4, random_delay=(5, 360)
+        )
+
+    async def _start_iceyes_bonus(self):
+        await self.iceyes_task.create(
+            func=self.iceyes_bonus, task_param=1, random_delay=(1, 60)
+        )
+
+    async def _start_auto_online(self):
+        await self.online_task.create(
+            func=self.auto_online, task_param=30, unit="seconds"
+        )
+
     async def iris_farm(self):
         target = -1002355128955
         try:
@@ -190,12 +204,86 @@ class UserbotManager:
         logger.info(f"{self.phone} - сработала автоферма")
 
     async def iceyes_bonus(self):
-        target = "iceyes_bot"
-        await self.client.send_message(target, "💸 Бонус")
+        await self.client.send_message("iceyes_bot", "💸 Бонус")
         logger.info(f"{self.phone} - сработал автобонус")
 
     async def auto_online(self):
         await self.client(UpdateStatusRequest(offline=False))
+
+    async def _toggle_setting_and_task(
+        self,
+        setting_key: str,
+        task_attr: str,
+        on_phrase,
+        off_phrase,
+        start_func,
+        event: Message,
+    ):
+        enabled = not await self.settings.get(setting_key)
+        await self.settings.set(setting_key, enabled)
+
+        task = getattr(self, task_attr)
+        if enabled:
+            await start_func()
+            await event.edit(on_phrase)
+        else:
+            task.stop()
+            await event.edit(off_phrase)
+
+    async def on_off_farming(self, event: Message):
+        await self._toggle_setting_and_task(
+            "iris.farm",
+            "iris_task",
+            phrase.farm.on,
+            phrase.farm.off,
+            self._start_iris_farm,
+            event,
+        )
+
+    async def on_off_bonus(self, event: Message):
+        await self._toggle_setting_and_task(
+            "iceyes.bonus",
+            "iceyes_task",
+            phrase.bonus.on,
+            phrase.bonus.off,
+            self._start_iceyes_bonus,
+            event,
+        )
+
+    async def toggle_online(self, event: Message):
+        await self._toggle_setting_and_task(
+            "auto.online",
+            "online_task",
+            phrase.online.on,
+            phrase.online.off,
+            self._start_auto_online,
+            event,
+        )
+
+    async def on_off_block_voice(self, event: Message):
+        enabled = not await self.settings.get("block.voice")
+        await self.settings.set("block.voice", enabled)
+        if enabled:
+            self.client.add_event_handler(self.block_voice, events.NewMessage())
+            await event.edit(phrase.voice.block)
+        else:
+            self.client.remove_event_handler(self.block_voice)
+            await event.edit(phrase.voice.unblock)
+
+    async def on_off_mask_read(self, event: Message):
+        mask_read_chats = await self.settings.get("mask.read") or []
+        if event.chat_id in mask_read_chats:
+            mask_read_chats.remove(event.chat_id)
+            await event.edit(phrase.read.off)
+        else:
+            mask_read_chats.append(event.chat_id)
+            await event.edit(phrase.read.on)
+        await self.settings.set("mask.read", mask_read_chats)
+
+    async def _dynamic_mask_reader(self, event: Message):
+        mask_read_chats = await self.settings.get("mask.read") or []
+        if event.chat_id in mask_read_chats:
+            await event.mark_read()
 
     async def block_voice(self, event: Message):
         if not isinstance(event.peer_id, PeerUser):
@@ -211,34 +299,31 @@ class UserbotManager:
             await event.respond(msg)
 
     async def ipman(self, event: Message):
-        arg: str = event.pattern_match.group(1)
-        if ipman.is_valid_ip(arg) is False:
+        arg = event.pattern_match.group(1)
+        if not ipman.is_valid_ip(arg):
             return await event.edit(phrase.ip.dont_match)
         response = await ipman.get_ip_info(arg)
-        return await event.edit(
-            (
-                f"🌐 : IP: `{response.get('query')}`\n\n"
-                f"Страна: {response.get('country')}\n"
-                f"Регион: {response.get('regionName')}\n"
-                f"Город: {response.get('city')}\n"
-                f"Провайдер: {response.get('isp')}\n"
-                f"Координаты: {response.get('lat')}/{response.get('lon')}"
-            )
+        await event.edit(
+            f"🌐 : IP: `{response.get('query')}`\n\n"
+            f"Страна: {response.get('country')}\n"
+            f"Регион: {response.get('regionName')}\n"
+            f"Город: {response.get('city')}\n"
+            f"Провайдер: {response.get('isp')}\n"
+            f"Координаты: {response.get('lat')}/{response.get('lon')}"
         )
 
     async def get_weather(self, event: Message):
         await event.edit(phrase.weather.wait)
-        return await event.edit(
-            await apis.get_weather(
-                event.pattern_match.group(1),
-                await self.settings.get("token.openweathermap"),
-            )
+        result = await apis.get_weather(
+            event.pattern_match.group(1),
+            await self.settings.get("token.openweathermap"),
         )
+        await event.edit(result)
 
     async def anim(self, event: Message):
-        animation_name = event.text.split(" ", maxsplit=1)[1]
-        animation = await db.get_animation(animation_name)
-        if animation is None:
+        name = event.text.split(" ", maxsplit=1)[1]
+        animation = await db.get_animation(name)
+        if not animation:
             return await event.edit(phrase.anim.no)
         for title in animation["text"]:
             await event.edit(title)
@@ -247,8 +332,7 @@ class UserbotManager:
     async def clear_pm(self, event: Message):
         dialogs = await self.client.get_dialogs()
         deleted_count = 0
-
-        message: Message = await event.edit(phrase.pm.wait.format(0))
+        msg = await event.edit(phrase.pm.wait.format(0))
         for dialog in dialogs:
             user = dialog.entity
             if isinstance(user, User) and user.deleted:
@@ -256,39 +340,33 @@ class UserbotManager:
                 await asyncio.sleep(await self.settings.get("typing.delay"))
                 deleted_count += 1
                 if deleted_count % 5 == 0:
-                    await message.edit(phrase.pm.wait.format(deleted_count))
-
-        return await event.edit(phrase.pm.cleared.format(deleted_count))
+                    await msg.edit(phrase.pm.wait.format(deleted_count))
+        await event.edit(phrase.pm.cleared.format(deleted_count))
 
     async def set_setting(self, event: Message):
-        arg: str = event.pattern_match.group(1)
-        key, value = arg.split(" ", maxsplit=1)
+        key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
         await self.settings.set(key, value)
-        return await event.edit(phrase.setting.set.format(key=key, value=value))
+        await event.edit(phrase.setting.set.format(key=key, value=value))
 
     async def time_by_city(self, event: Message):
-        city_name: str = event.pattern_match.group(1)
-        location = tz.geolocator.geocode(city_name)
+        city = event.pattern_match.group(1)
+        location = tz.geolocator.geocode(city)
         if not location:
-            return await event.edit(phrase.time.not_found.format(city_name))
-
+            return await event.edit(phrase.time.not_found.format(city))
         tz_name = await tz.get_timezone(
             location.latitude,
             location.longitude,
             await self.settings.get("token.geoapify"),
         )
         if not tz_name:
-            return await event.edit(phrase.time.not_timezone.format(city_name))
-
+            return await event.edit(phrase.time.not_timezone.format(city))
         tzz = tz.pytz.timezone(tz_name)
         city_time = tz.datetime.now(tzz)
-        return await event.edit(
-            (
-                f"📍 {location.address}\n"
-                f"🕒 Время: {city_time.strftime('%H:%M:%S')}\n"
-                f"📅 Дата: {city_time.strftime('%d.%m.%Y')}\n"
-                f"🌐 Пояс: {tz_name}"
-            )
+        await event.edit(
+            f"📍 {location.address}\n"
+            f"🕒 Время: {city_time.strftime('%H:%M:%S')}\n"
+            f"📅 Дата: {city_time.strftime('%d.%m.%Y')}\n"
+            f"🌐 Пояс: {tz_name}"
         )
 
     async def typing(self, event: Message):
@@ -306,18 +384,22 @@ class UserbotManager:
 
     async def words(self, event: Message):
         args = get_args(event.text.lower())
-        arg_len = None
-        arg_count = None
-
-        for x in args:
-            if "л" in x:
-                val = x.replace("л", "").strip()
-                if val.isdigit():
-                    arg_len = int(val)
-            elif "в" in x:
-                val = x.replace("в", "").strip()
-                if val.isdigit():
-                    arg_count = int(val)
+        arg_len = next(
+            (
+                int(x.replace("л", ""))
+                for x in args
+                if "л" in x and x.replace("л", "").isdigit()
+            ),
+            None,
+        )
+        arg_count = next(
+            (
+                int(x.replace("в", ""))
+                for x in args
+                if "в" in x and x.replace("в", "").isdigit()
+            ),
+            None,
+        )
 
         words = iterators.Counter()
         total = 0
@@ -352,8 +434,8 @@ class UserbotManager:
         freq = sorted(words, key=words.get, reverse=True)
         out = phrase.words.out
         maxsize = min(50, len(freq))
-        if arg_count is not None and arg_count < len(freq):
-            maxsize = arg_count
+        if arg_count is not None:
+            maxsize = min(arg_count, len(freq))
         for i in range(maxsize):
             out += f"{i + 1}. {words[freq[i]]}: {freq[i]}\n"
 
@@ -381,31 +463,6 @@ class UserbotManager:
             return await event.edit(phrase.no_text)
         flipped = "".join(flip_map.flip_map.get(c, c) for c in reversed(text))
         await event.edit(flipped)
-
-    async def on_off_block_voice(self, event: Message):
-        enabled = not await self.settings.get("block.voice")
-        await self.settings.set("block.voice", enabled)
-        if enabled:
-            self.client.add_event_handler(self.block_voice, events.NewMessage())
-            await event.edit(phrase.voice.block)
-        else:
-            self.client.remove_event_handler(self.block_voice)
-            await event.edit(phrase.voice.unblock)
-
-    async def _dynamic_mask_reader(self, event: Message):
-        mask_read_chats = await self.settings.get("mask.read") or []
-        if event.chat_id in mask_read_chats:
-            await event.mark_read()
-
-    async def on_off_mask_read(self, event: Message):
-        mask_read_chats = await self.settings.get("mask.read") or []
-        if event.chat_id in mask_read_chats:
-            mask_read_chats.remove(event.chat_id)
-            await event.edit(phrase.read.off)
-        else:
-            mask_read_chats.append(event.chat_id)
-            await event.edit(phrase.read.on)
-        await self.settings.set("mask.read", mask_read_chats)
 
     async def server_load(self, event: Message):
         await event.edit(await get_sys.get_system_info())
@@ -442,30 +499,6 @@ class UserbotManager:
         await self.settings._ensure_loaded(forced=True)
         await event.edit(phrase.config.reload)
 
-    async def on_off_farming(self, event: Message):
-        enabled = not await self.settings.get("iris.farm")
-        await self.settings.set("iris.farm", enabled)
-        if enabled:
-            await event.edit(phrase.farm.on)
-            await self.iris_task.create(
-                func=self.iris_farm, task_param=4, random_delay=(5, 360)
-            )
-        else:
-            self.iris_task.stop()
-            await event.edit(phrase.farm.off)
-
-    async def on_off_bonus(self, event: Message):
-        enabled = not await self.settings.get("iceyes.bonus")
-        await self.settings.set("iceyes.bonus", enabled)
-        if enabled:
-            await event.edit(phrase.bonus.on)
-            await self.iris_task.create(
-                func=self.iceyes_bonus, task_param=1, random_delay=(1, 60)
-            )
-        else:
-            self.iris_task.stop()
-            await event.edit(phrase.bonus.off)
-
     async def gen_pass(self, event: Message):
         args = (event.pattern_match.group(1) or "").strip()
         length = genpass.Default.length
@@ -473,38 +506,29 @@ class UserbotManager:
         digits = genpass.Default.digits
         special = genpass.Default.special
 
-        if d_match := re.search(r"д(\d+)", args):
-            length = int(d_match[1])
-        if re.search(r"\+б", args):
-            letters = True
-        elif re.search(r"-б", args):
-            letters = False
-        if re.search(r"\+ц", args):
-            digits = True
-        elif re.search(r"-ц", args):
-            digits = False
-        if re.search(r"\+с", args):
-            special = True
-        elif re.search(r"-с", args):
-            special = False
+        if match := re.search(r"д(\d+)", args):
+            length = int(match[1])
+        letters = (
+            True
+            if re.search(r"\+б", args)
+            else (False if re.search(r"-б", args) else letters)
+        )
+        digits = (
+            True
+            if re.search(r"\+ц", args)
+            else (False if re.search(r"-ц", args) else digits)
+        )
+        special = (
+            True
+            if re.search(r"\+с", args)
+            else (False if re.search(r"-с", args) else special)
+        )
 
         try:
             pwd = genpass.gen_pass(length, letters, digits, special)
             await event.edit(phrase.password.done.format(pwd))
         except Exception as ex:
             await event.edit(phrase.error.format(ex))
-
-    async def toggle_online(self, event: Message):
-        enabled = not await self.settings.get("auto.online")
-        await self.settings.set("auto.online", enabled)
-        if enabled:
-            await event.edit(phrase.online.on)
-            await self.online_task.create(
-                func=self.auto_online, task_param=30, unit="seconds"
-            )
-        else:
-            self.online_task.stop()
-            await event.edit(phrase.online.off)
 
     async def run(self):
         await self.init()
