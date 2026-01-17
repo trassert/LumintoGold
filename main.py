@@ -56,6 +56,7 @@ from modules import (  # noqa: E402
     db,
     ipman,
     apis,
+    notes,
 )
 
 
@@ -82,6 +83,7 @@ class UserbotManager:
         self.online_task = task_gen.Generator(f"{phone}_online")
         self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
         self.ai_client = ai.Client(None, None)
+        self.notes = notes.Notes(phone)
 
     async def init(self):
         self.client.use_ipv6 = await self.settings.get("use.ipv6")
@@ -119,8 +121,12 @@ class UserbotManager:
             )
 
     def _register_handlers(self):
+        self.client.on(d.cmd(r"(?i)^\+нот (.+)\n([\s\S]+)"))(self.add_note)
+        self.client.on(d.cmd(r"(?i)^\-нот (.+)"))(self.rm_note)
+        self.client.on(d.cmd(r"(?i)^\!(.+)"))(self.chk_note)
+        self.client.on(d.cmd(r"(?i)^\.ноты$"))(self.list_notes)
+
         self.client.on(d.cmd(r"(?i)^\.чистка"))(self.clear_pm)
-        self.client.on(d.cmd(r"(?i)^\.т"))(self.typing)
         self.client.on(d.cmd(r"(?i)^\.слов"))(self.words)
         self.client.on(d.cmd(r"(?i)^\.пинг$"))(self.ping)
         self.client.on(d.cmd(r"(?i)^\.флип"))(self.flip_text)
@@ -137,7 +143,8 @@ class UserbotManager:
         self.client.on(d.cmd(r"(?i)^\.ip (.+)"))(self.ipman)
         self.client.on(d.cmd(r"(?i)^\.аним (.+)"))(self.anim)
         self.client.on(d.cmd(r"(?i)^\.прокси (.+)"))(self.ai_proxy)
-        self.client.on(d.cmd(r"(?i)^\.ии\s([\s\S]+)"))(self.ai_resp)
+        self.client.on(d.cmd(r"(?i)^\.ии ([\s\S]+)"))(self.ai_resp)
+        self.client.on(d.cmd(r"(?i)^\.т ([\s\S]+)"))(self.typing)
         self.client.on(d.cmd(r"(?i)^\.set (.+)"))(self.set_setting)
         self.client.on(d.cmd(r"(?i)^\.время (.+)"))(self.time_by_city)
 
@@ -206,6 +213,52 @@ class UserbotManager:
     async def iceyes_bonus(self):
         await self.client.send_message("iceyes_bot", "💸 Бонус")
         logger.info(f"{self.phone} - сработал автобонус")
+
+    async def add_note(self, event: Message):
+        name = event.pattern_match.group(1).strip().lower()
+        result = await self.notes.add(
+            name,
+            event.text.split("\n", maxsplit=1)[1],
+        )
+        if result is False:
+            return await event.edit(
+                phrase.notes.error.format(phrase.notes.err_cr)
+            )
+        return await event.edit(phrase.notes.new.format(name))
+
+    async def rm_note(self, event: Message):
+        if (
+            await self.notes.delete(
+                event.pattern_match.group(1).strip().lower()
+            )
+        ) is False:
+            return await event.edit(
+                phrase.notes.error.format(phrase.notes.err_rm)
+            )
+        return await event.edit(phrase.notes.deleted)
+
+    async def chk_note(self, event: Message):
+        arg: str = event.pattern_match.group(1)
+        if arg.isdigit():
+            arg = int(arg)
+            if arg < 1:
+                return await event.edit(phrase.notes.index)
+            note = self.notes.get_by_index(arg)
+        else:
+            note = self.notes.get(arg)
+        if note is None:
+            return await event.edit(phrase.notes.not_found)
+        return await event.edit(note)
+
+    async def list_notes(self, event: Message):
+        list_notes = await self.notes.get_list()
+        if list_notes == []:
+            return event.edit(phrase.notes.allnotext)
+        text = []
+        n = 1
+        for note in list_notes:
+            text.append(f"{n}. {note.capitalize()}")
+        return await event.edit(phrase.notes.alltext.format("\n".join(text)))
 
     async def auto_online(self):
         await self.client(UpdateStatusRequest(offline=False))
@@ -370,10 +423,7 @@ class UserbotManager:
         )
 
     async def typing(self, event: Message):
-        try:
-            text = event.text.split(" ", maxsplit=1)[1]
-        except IndexError:
-            return await event.edit(phrase.no_text)
+        text = event.pattern_match.group(1).strip()
         bep = ""
         while bep != text:
             await event.edit(bep + await self.settings.get("typings"))
