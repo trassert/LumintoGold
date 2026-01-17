@@ -258,6 +258,7 @@ class UserbotManager:
         n = 1
         for note in list_notes:
             text.append(f"{n}. {note.capitalize()}")
+            n += 1
         return await event.edit(phrase.notes.alltext.format("\n".join(text)))
 
     async def auto_online(self):
