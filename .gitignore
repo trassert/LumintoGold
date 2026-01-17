@@ -1,6 +1,7 @@
 clients/*
 sessions/*
 db/*
+notes/*
 
 tokens.yml
 
