@@ -243,9 +243,9 @@ class UserbotManager:
             arg = int(arg)
             if arg < 1:
                 return await event.edit(phrase.notes.index)
-            note = self.notes.get_by_index(arg)
+            note = await self.notes.get_by_index(arg)
         else:
-            note = self.notes.get(arg)
+            note = await self.notes.get(arg)
         if note is None:
             return await event.edit(phrase.notes.not_found)
         return await event.edit(note)
