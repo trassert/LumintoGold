@@ -12,7 +12,7 @@ import orjson
 from loguru import logger
 
 from telethon import events, functions, types
-from telethon.sync import TelegramClient
+from telethon import TelegramClient
 from telethon.tl.custom import Message
 from telethon.tl.types import MessageMediaDocument, PeerUser, User
 from telethon.tl.functions.account import UpdateStatusRequest
@@ -215,11 +215,25 @@ class UserbotManager:
         logger.info(f"{self.phone} - сработал автобонус")
 
     async def add_note(self, event: Message):
+        full_text = event.message.message or ""
         name = event.pattern_match.group(1).strip().lower()
+
+        note_text = ""
+        if "\n" in full_text:
+            note_text = full_text.split("\n", maxsplit=1)[1]
+
+        media = None
+        if event.photo:
+            media = event.photo
+        elif event.is_reply:
+            reply = await event.get_reply_message()
+            if reply and reply.photo:
+                media = reply.photo
+
         result = await self.notes.add(
-            name,
-            event.text.split("\n", maxsplit=1)[1],
+            name, note_text, media=media, client=event.client
         )
+
         if result is False:
             return await event.edit(
                 phrase.notes.error.format(phrase.notes.err_cr)
@@ -227,11 +241,8 @@ class UserbotManager:
         return await event.edit(phrase.notes.new.format(name))
 
     async def rm_note(self, event: Message):
-        if (
-            await self.notes.delete(
-                event.pattern_match.group(1).strip().lower()
-            )
-        ) is False:
+        name = event.pattern_match.group(1).strip().lower()
+        if (await self.notes.delete(name)) is False:
             return await event.edit(
                 phrase.notes.error.format(phrase.notes.err_rm)
             )
@@ -239,26 +250,27 @@ class UserbotManager:
 
     async def chk_note(self, event: Message):
         arg: str = event.pattern_match.group(1)
+
         if arg.isdigit():
-            arg = int(arg)
-            if arg < 1:
-                return await event.edit(phrase.notes.index)
-            note = await self.notes.get_by_index(arg)
+            note = await self.notes.get_by_index(int(arg))
         else:
             note = await self.notes.get(arg)
-        if note is None:
+
+        if not note:
             return await event.edit(phrase.notes.not_found)
-        return await event.edit(note)
+
+        if note.get("media"):
+            return await event.edit(note["text"], file=note["media"])
+        return await event.edit(note["text"])
 
     async def list_notes(self, event: Message):
         list_notes = await self.notes.get_list()
-        if list_notes == []:
-            return event.edit(phrase.notes.allnotext)
-        text = []
-        n = 1
-        for note in list_notes:
-            text.append(f"{n}. {note.capitalize()}")
-            n += 1
+        if not list_notes:
+            return await event.edit(phrase.notes.allnotext)
+
+        text = [
+            f"{i + 1}. {name.capitalize()}" for i, name in enumerate(list_notes)
+        ]
         return await event.edit(phrase.notes.alltext.format("\n".join(text)))
 
     async def auto_online(self):
