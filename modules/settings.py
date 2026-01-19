@@ -38,6 +38,14 @@ class UBSettings:
             else:
                 self._data = {}
 
+    def _sync_ensure_loaded(self, forced=False) -> None:
+        if self._data is None or forced:
+            if os.path.exists(self.filename):
+                with open(self.filename, "rb") as f:
+                    self._data = orjson.loads(f.read())
+            else:
+                self._data = {}
+
     async def make(self, api_id: int, api_hash: str) -> None:
         self._data = {"api_id": api_id, "api_hash": api_hash}
         async with aiofiles.open(self.filename, "wb") as f:
@@ -46,6 +54,12 @@ class UBSettings:
 
     async def get(self, name_setting: str, if_none: Any = None) -> Any:
         await self._ensure_loaded()
+        if if_none is not None:
+            return self._data.get(name_setting, if_none)
+        return self._data.get(name_setting, default[name_setting])
+
+    def sync_get(self, name_setting: str, if_none: Any = None) -> Any:
+        self._sync_ensure_loaded()
         if if_none is not None:
             return self._data.get(name_setting, if_none)
         return self._data.get(name_setting, default[name_setting])

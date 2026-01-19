@@ -73,11 +73,13 @@ class UserbotManager:
             session=path.join("sessions", phone),
             api_id=api_id,
             api_hash=api_hash,
-            use_ipv6=None,
+            use_ipv6=self.settings.sync_get("use.ipv6", False),
             system_version="4.16.30-vxCUSTOM",
             device_model="LumintoGold",
             system_lang_code="ru",
             lang_code="ru",
+            connection_retries=-1,
+            retry_delay=3
         )
         self.iris_task = task_gen.Generator(f"{phone}_iris")
         self.online_task = task_gen.Generator(f"{phone}_online")
