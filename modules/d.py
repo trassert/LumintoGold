@@ -10,5 +10,8 @@ def cmd(
     "Wrapper for events.NewMessage"
 
     return events.NewMessage(
-        pattern=pattern, incoming=incoming, outgoing=outgoing, **kwargs
+        pattern=rf"(?i)^{pattern}",
+        incoming=incoming,
+        outgoing=outgoing,
+        **kwargs,
     )

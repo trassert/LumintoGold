@@ -79,13 +79,15 @@ class UserbotManager:
             system_lang_code="ru",
             lang_code="ru",
             connection_retries=-1,
-            retry_delay=3
+            retry_delay=3,
         )
         self.iris_task = task_gen.Generator(f"{phone}_iris")
         self.online_task = task_gen.Generator(f"{phone}_online")
         self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
         self.ai_client = ai.Client(None, None)
         self.notes = notes.Notes(phone)
+        self._flood_state: dict[str, list[float]] = {}
+        self._flood_rules: dict[int, dict[str, dict]] = {}
 
     async def init(self):
         self.client.use_ipv6 = await self.settings.get("use.ipv6")
@@ -123,49 +125,62 @@ class UserbotManager:
             )
 
     def _register_handlers(self):
-        self.client.on(d.cmd(r"(?i)^\+нот (.+)\n([\s\S]+)"))(self.add_note)
-        self.client.on(d.cmd(r"(?i)^\-нот (.+)"))(self.rm_note)
-        self.client.on(d.cmd(r"(?i)^\!(.+)"))(self.chk_note)
-        self.client.on(d.cmd(r"(?i)^\.ноты$"))(self.list_notes)
+        self.client.on(d.cmd(r"\+нот (.+)\n([\s\S]+)"))(self.add_note)
+        self.client.on(d.cmd(r"\-нот (.+)"))(self.rm_note)
+        self.client.on(d.cmd(r"\!(.+)"))(self.chk_note)
+        self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
 
-        self.client.on(d.cmd(r"(?i)^\.чистка"))(self.clear_pm)
-        self.client.on(d.cmd(r"(?i)^\.слов"))(self.words)
-        self.client.on(d.cmd(r"(?i)^\.пинг$"))(self.ping)
-        self.client.on(d.cmd(r"(?i)^\.флип"))(self.flip_text)
-        self.client.on(d.cmd(r"(?i)^\.гс$"))(self.on_off_block_voice)
-        self.client.on(d.cmd(r"(?i)^\.читать$"))(self.on_off_mask_read)
-        self.client.on(d.cmd(r"(?i)^\.серв$"))(self.server_load)
-        self.client.on(d.cmd(r"(?i)^\.релоадконфиг$"))(self.config_reload)
-        self.client.on(d.cmd(r"(?i)^\.автоферма$"))(self.on_off_farming)
-        self.client.on(d.cmd(r"(?i)^\.онлайн$"))(self.toggle_online)
-        self.client.on(d.cmd(r"(?i)^\.автобонус$"))(self.on_off_bonus)
+        self.client.on(d.cmd(r"\.чистка"))(self.clear_pm)
+        self.client.on(d.cmd(r"\.слов"))(self.words)
+        self.client.on(d.cmd(r"\.пинг$"))(self.ping)
+        self.client.on(d.cmd(r"\.флип"))(self.flip_text)
+        self.client.on(d.cmd(r"\.гс$"))(self.on_off_block_voice)
+        self.client.on(d.cmd(r"\.читать$"))(self.on_off_mask_read)
+        self.client.on(d.cmd(r"\.серв$"))(self.server_load)
+        self.client.on(d.cmd(r"\.релоадконфиг$"))(self.config_reload)
+        self.client.on(d.cmd(r"\.автоферма$"))(self.on_off_farming)
+        self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
+        self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
 
-        self.client.on(d.cmd(r"(?i)^\.токен (.+)"))(self.ai_token)
-        self.client.on(d.cmd(r"(?i)^\.погода (.+)"))(self.get_weather)
-        self.client.on(d.cmd(r"(?i)^\.ip (.+)"))(self.ipman)
-        self.client.on(d.cmd(r"(?i)^\.аним (.+)"))(self.anim)
-        self.client.on(d.cmd(r"(?i)^\.прокси (.+)"))(self.ai_proxy)
-        self.client.on(d.cmd(r"(?i)^\.ии ([\s\S]+)"))(self.ai_resp)
-        self.client.on(d.cmd(r"(?i)^\.т ([\s\S]+)"))(self.typing)
-        self.client.on(d.cmd(r"(?i)^\.set (.+)"))(self.set_setting)
-        self.client.on(d.cmd(r"(?i)^\.время (.+)"))(self.time_by_city)
+        self.client.on(d.cmd(r"\.токен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
+        self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
+        self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
+        self.client.on(d.cmd(r"\.прокси (.+)"))(self.ai_proxy)
+        self.client.on(d.cmd(r"\.ии ([\s\S]+)"))(self.ai_resp)
+        self.client.on(d.cmd(r"\.т ([\s\S]+)"))(self.typing)
+        self.client.on(d.cmd(r"\.set (.+)"))(self.set_setting)
+        self.client.on(d.cmd(r"\.время (.+)"))(self.time_by_city)
 
         self.client.on(
             d.cmd(
-                r"(?i)^\.genpass(?:\s+(.+))?",
+                r"\.genpass(?:\s+(.+))?",
             )
         )(self.gen_pass)
         self.client.on(
             d.cmd(
-                r"(?i)^\.генпасс(?:\s+(.+))?",
+                r"\.генпасс(?:\s+(.+))?",
             )
         )(self.gen_pass)
         self.client.on(
             d.cmd(
-                r"(?i)^\.пароль(?:\s+(.+))?",
+                r"\.пароль(?:\s+(.+))?",
             )
         )(self.gen_pass)
 
+        self.client.on(d.cmd(r"\-флудстики (\d+) (\d+)$"))(
+            self.set_flood_stickers
+        )
+        self.client.on(d.cmd(r"\-флудгиф (\d+) (\d+)$"))(self.set_flood_gifs)
+        self.client.on(d.cmd(r"\-флудобщ (\d+) (\d+)$"))(
+            self.set_flood_messages
+        )
+
+        self.client.on(d.cmd(r"\+флудстики$"))(self.unset_flood_stickers)
+        self.client.on(d.cmd(r"\+флудгиф$"))(self.unset_flood_gifs)
+        self.client.on(d.cmd(r"\+флудобщ$"))(self.unset_flood_messages)
+
+        self.client.on(events.NewMessage())(self._flood_monitor)
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
 
     async def reactions(self, event: Message):
@@ -199,6 +214,154 @@ class UserbotManager:
         await self.online_task.create(
             func=self.auto_online, task_param=30, unit="seconds"
         )
+
+    async def set_flood_stickers(self, event: Message):
+        await self._set_flood_rule(event, "stickers")
+
+    async def set_flood_gifs(self, event: Message):
+        await self._set_flood_rule(event, "gifs")
+
+    async def set_flood_messages(self, event: Message):
+        await self._set_flood_rule(event, "messages")
+
+    async def _set_flood_rule(self, event: Message, rule_type: str):
+        limit = int(event.pattern_match.group(1))
+        window = int(event.pattern_match.group(2))
+        chat_id = event.chat_id
+        key = f"flood.{rule_type}.{chat_id}"
+
+        await self.settings.set(key, {"limit": limit, "window": window})
+        if chat_id not in self._flood_rules:
+            self._flood_rules[chat_id] = {}
+        self._flood_rules[chat_id][rule_type] = {
+            "limit": limit,
+            "window": window,
+        }
+
+        phrase_map = {
+            "stickers": phrase.flood.set_stickers,
+            "gifs": phrase.flood.set_gifs,
+            "messages": phrase.flood.set_messages,
+        }
+        await event.edit(
+            phrase_map[rule_type].format(limit=limit, window=window)
+        )
+
+    async def unset_flood_stickers(self, event: Message):
+        await self._unset_flood_rule(event, "stickers")
+
+    async def unset_flood_gifs(self, event: Message):
+        await self._unset_flood_rule(event, "gifs")
+
+    async def unset_flood_messages(self, event: Message):
+        await self._unset_flood_rule(event, "messages")
+
+    async def _unset_flood_rule(self, event: Message, rule_type: str):
+        chat_id = event.chat_id
+        key = f"flood.{rule_type}.{chat_id}"
+        await self.settings.remove(key)
+
+        if chat_id in self._flood_rules:
+            self._flood_rules[chat_id][rule_type] = {}
+
+        prefix = f"_flood.{rule_type}.{chat_id}."
+        to_remove = [k for k in self._flood_state if k.startswith(prefix)]
+        for k in to_remove:
+            self._flood_state.pop(k, None)
+
+        phrase_map = {
+            "stickers": phrase.flood.unset_stickers,
+            "gifs": phrase.flood.unset_gifs,
+            "messages": phrase.flood.unset_messages,
+        }
+        await event.edit(phrase_map[rule_type])
+
+    async def _load_flood_rules(self, chat_id: int):
+        if chat_id not in self._flood_rules:
+            stickers = (
+                await self.settings.get(f"flood.stickers.{chat_id}") or {}
+            )
+            gifs = await self.settings.get(f"flood.gifs.{chat_id}") or {}
+            messages = (
+                await self.settings.get(f"flood.messages.{chat_id}") or {}
+            )
+            self._flood_rules[chat_id] = {
+                "stickers": stickers,
+                "gifs": gifs,
+                "messages": messages,
+            }
+
+    async def _flood_monitor(self, event: Message):
+        if event.is_private or not event.sender_id:
+            return
+
+        chat_id = event.chat_id
+        await self._load_flood_rules(chat_id)
+        rules = self._flood_rules[chat_id]
+        now = time()
+
+        if rules["stickers"] and isinstance(
+            event.media, types.MessageMediaDocument
+        ):
+            doc = event.media.document
+            if doc and any(
+                isinstance(a, types.DocumentAttributeSticker)
+                for a in (doc.attributes or [])
+            ):
+                await self._check_flood(
+                    event, chat_id, "stickers", rules["stickers"], now
+                )
+
+        if rules["gifs"] and isinstance(
+            event.media, types.MessageMediaDocument
+        ):
+            doc = event.media.document
+            if doc:
+                is_gif = any(
+                    isinstance(a, types.DocumentAttributeAnimated)
+                    or (
+                        isinstance(a, types.DocumentAttributeVideo)
+                        and a.supports_streaming
+                    )
+                    for a in (doc.attributes or [])
+                )
+                if is_gif:
+                    await self._check_flood(
+                        event, chat_id, "gifs", rules["gifs"], now
+                    )
+
+        if rules["messages"] and event.text and not event.media:
+            await self._check_flood(
+                event, chat_id, "messages", rules["messages"], now
+            )
+
+    async def _check_flood(
+        self,
+        event: Message,
+        chat_id: int,
+        flood_type: str,
+        rule: dict,
+        now: float,
+    ):
+        limit: int = rule.get("limit", 0)
+        window: int = rule.get("window", 0)
+        if limit <= 0 or window <= 0:
+            return
+
+        key = f"_flood.{flood_type}.{chat_id}.{event.sender_id}"
+        timestamps = self._flood_state.get(key, [])
+        cutoff = now - window
+        timestamps = [ts for ts in timestamps if ts > cutoff]
+        timestamps.append(now)
+
+        if len(timestamps) > limit:
+            try:
+                await event.reply(await self.settings.get("flood.msg"))
+            except Exception:
+                pass
+            timestamps = []
+
+        self._flood_state[key] = timestamps
 
     async def iris_farm(self):
         target = -1002355128955

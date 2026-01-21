@@ -3,6 +3,16 @@ from loguru import logger
 logger.info(f"Загружен модуль {__name__}!")
 
 
+class flood:
+    set_stickers = "✅ : Установлено правило на флуд стикерами\nМакс: {limit} стикеров за {window} с."
+    set_gifs = "✅ : Установлено правило на флуд гифками\nМакс: {limit} гиф за {window} с."
+    set_messages = "✅ : Установлено правило на флуд сообщениями\nМакс: {limit} сообщений за {window} с."
+
+    unset_stickers = "❌ : Правило на флуд стикерами отключено."
+    unset_gifs = "❌ : Правило на флуд гифками отключено."
+    unset_messages = "❌ : Правило на флуд сообщениями отключено."
+
+
 class notes:
     err_cr = "создании"
     err_rm = "удалении"

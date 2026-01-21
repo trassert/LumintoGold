@@ -21,6 +21,7 @@ default = {
     "auto.online": False,
     "token.geoapify": "",
     "token.openweathermap": "",
+    "flood.msg": "Варн\nФлуд"
 }
 
 
@@ -67,6 +68,13 @@ class UBSettings:
     async def set(self, key: str, value: Any) -> None:
         await self._ensure_loaded()
         self._data[key] = value
+        async with aiofiles.open(self.filename, "wb") as f:
+            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
+            await f.write(content)
+
+    async def remove(self, key: str):
+        await self._ensure_loaded()
+        del self._data[key]
         async with aiofiles.open(self.filename, "wb") as f:
             content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
             await f.write(content)
