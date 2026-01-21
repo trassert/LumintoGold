@@ -279,11 +279,11 @@ class UserbotManager:
     async def _load_flood_rules(self, chat_id: int):
         if chat_id not in self._flood_rules:
             stickers = (
-                await self.settings.get(f"flood.stickers.{chat_id}") or {}
+                await self.settings.get(f"flood.stickers.{chat_id}", {}) 
             )
-            gifs = await self.settings.get(f"flood.gifs.{chat_id}") or {}
+            gifs = await self.settings.get(f"flood.gifs.{chat_id}", {}) 
             messages = (
-                await self.settings.get(f"flood.messages.{chat_id}") or {}
+                await self.settings.get(f"flood.messages.{chat_id}", {}) 
             )
             self._flood_rules[chat_id] = {
                 "stickers": stickers,
