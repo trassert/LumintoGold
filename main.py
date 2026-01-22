@@ -14,6 +14,7 @@ from loguru import logger
 from telethon import events, functions, types
 from telethon import TelegramClient
 from telethon.tl.custom import Message
+from telethon.tl.custom.participantpermissions import ParticipantPermissions
 from telethon.tl.types import MessageMediaDocument, PeerUser, User
 from telethon.tl.functions.account import UpdateStatusRequest
 
@@ -194,8 +195,8 @@ class UserbotManager:
 
         try:
             me = await self.client.get_me()
-            admin_rights = await self.client.get_permissions(chat, me)
-            if not admin_rights.kick_users:
+            admin_rights: ParticipantPermissions = await self.client.get_permissions(chat, me)
+            if not admin_rights.ban_users:
                 return await event.edit(phrase.clear.no_rights)
 
         except Exception:
