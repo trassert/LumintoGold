@@ -216,6 +216,7 @@ class UserbotManager:
                         await event.edit(phrase.clear.kick.format(count=kicked))
                 except Exception:
                     logger.trace("Не могу удалить участника")
+            await asyncio.sleep(await self.settings.get("typing.delay"))
 
         async for ban in self.client.iter_participants(chat, filter=types.ChannelParticipantsKicked):
             user: User = ban
@@ -229,6 +230,7 @@ class UserbotManager:
                         )
                 except Exception:
                     logger.trace("Не могу вынести из бана участника")
+            await asyncio.sleep(await self.settings.get("typing.delay"))
 
         if kicked or unbanned:
             await event.edit(
