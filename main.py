@@ -130,8 +130,8 @@ class UserbotManager:
         self.client.on(d.cmd(r"\!(.+)"))(self.chk_note)
         self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
 
-        self.client.on(d.cmd(r"\.чистка"))(self.clear_pm)
-        self.client.on(d.cmd(r"\.чатчистка$"))(self.clear_chat)
+        self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
+        self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
         self.client.on(d.cmd(r"\.слов"))(self.words)
         self.client.on(d.cmd(r"\.пинг$"))(self.ping)
         self.client.on(d.cmd(r"\.флип"))(self.flip_text)
@@ -609,7 +609,7 @@ class UserbotManager:
             await event.edit(title)
             await asyncio.sleep(animation["delay"])
 
-    async def clear_pm(self, event: Message):
+    async def clean_pm(self, event: Message):
         dialogs = await self.client.get_dialogs()
         deleted_count = 0
         msg = await event.edit(phrase.pm.wait.format(0))
