@@ -131,6 +131,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
 
         self.client.on(d.cmd(r"\.чистка"))(self.clear_pm)
+        self.client.on(d.cmd(r"\.чатчистка$"))(self.clear_chat)
         self.client.on(d.cmd(r"\.слов"))(self.words)
         self.client.on(d.cmd(r"\.пинг$"))(self.ping)
         self.client.on(d.cmd(r"\.флип"))(self.flip_text)
@@ -182,6 +183,68 @@ class UserbotManager:
 
         self.client.on(events.NewMessage())(self._flood_monitor)
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
+
+    async def clean_chat(self, event: Message):
+        if event.is_private:
+            return await event.edit(phrase.clear.private)
+
+        chat = await event.get_chat()
+        if not hasattr(chat, "title"):
+            return await event.edit(phrase.not_a_chat)
+
+        try:
+            me = await self.client.get_me()
+            admin_rights = await self.client.get_permissions(chat, me)
+            if not admin_rights.kick_users:
+                return await event.edit(phrase.clear.no_rights)
+
+        except Exception:
+            return await event.edit(phrase.clear.no_rights)
+
+        await event.edit(phrase.clear.start)
+
+        kicked = 0
+        unbanned = 0
+
+        async for user in self.client.iter_participants(chat):
+            if user.deleted:
+                try:
+                    await self.client.kick_participant(chat, user.id)
+                    kicked += 1
+                    if kicked % 5 == 0:
+                        await event.edit(phrase.clear.kick.format(count=kicked))
+                except Exception:
+                    pass
+
+        async for ban in self.client.iter_banned(chat):
+            user = (
+                ban.participant.user
+                if hasattr(ban.participant, "user")
+                else None
+            )
+            if user and user.deleted:
+                try:
+                    await self.client(
+                        functions.channels.EditBannedRequest(
+                            channel=chat,
+                            user_id=user.id,
+                            banned_rights=types.ChatBannedRights(until_date=0),
+                        )
+                    )
+                    unbanned += 1
+                    if unbanned % 5 == 0:
+                        await event.edit(
+                            phrase.clear.unban.format(count=unbanned)
+                        )
+                except Exception:
+                    pass
+
+        if kicked or unbanned:
+            await event.edit(
+                phrase.clear.done.format(kicked=kicked, unbanned=unbanned)
+            )
+        else:
+            await event.edit(phrase.clear.not_found)
 
     async def reactions(self, event: Message):
         await asyncio.sleep(random.randint(0, 1000))
@@ -278,13 +341,9 @@ class UserbotManager:
 
     async def _load_flood_rules(self, chat_id: int):
         if chat_id not in self._flood_rules:
-            stickers = (
-                await self.settings.get(f"flood.stickers.{chat_id}", {}) 
-            )
-            gifs = await self.settings.get(f"flood.gifs.{chat_id}", {}) 
-            messages = (
-                await self.settings.get(f"flood.messages.{chat_id}", {}) 
-            )
+            stickers = await self.settings.get(f"flood.stickers.{chat_id}", {})
+            gifs = await self.settings.get(f"flood.gifs.{chat_id}", {})
+            messages = await self.settings.get(f"flood.messages.{chat_id}", {})
             self._flood_rules[chat_id] = {
                 "stickers": stickers,
                 "gifs": gifs,
@@ -396,7 +455,7 @@ class UserbotManager:
                 media = reply.photo
 
         result = await self.notes.add(
-            name, note_text, media=media, client=event.client
+            name, note_text, media=media, client=self.client
         )
 
         if result is False:
