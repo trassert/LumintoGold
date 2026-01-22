@@ -214,30 +214,20 @@ class UserbotManager:
                     if kicked % 5 == 0:
                         await event.edit(phrase.clear.kick.format(count=kicked))
                 except Exception:
-                    pass
+                    logger.trace("Не могу удалить участника")
 
-        async for ban in self.client.iter_banned(chat):
-            user = (
-                ban.participant.user
-                if hasattr(ban.participant, "user")
-                else None
-            )
+        async for ban in self.client.iter_participants(chat, filter=types.ChannelParticipantsKicked):
+            user: User = ban
             if user and user.deleted:
                 try:
-                    await self.client(
-                        functions.channels.EditBannedRequest(
-                            channel=chat,
-                            user_id=user.id,
-                            banned_rights=types.ChatBannedRights(until_date=0),
-                        )
-                    )
+                    await self.client.edit_permissions(chat, user, view_messages=True)
                     unbanned += 1
                     if unbanned % 5 == 0:
                         await event.edit(
                             phrase.clear.unban.format(count=unbanned)
                         )
                 except Exception:
-                    pass
+                    logger.trace("Не могу вынести из бана участника")
 
         if kicked or unbanned:
             await event.edit(
