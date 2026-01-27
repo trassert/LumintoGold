@@ -396,11 +396,10 @@ class UserbotManager:
         vk_token = await self.settings.get("tg2vk.vk_token")
         vk_group_id = await self.settings.get("tg2vk.vk_group")
         if not vk_token or not vk_group_id:
-            logger.error("tg2vk: отсутствует токен или ID группы")
-            return
+            return logger.error("tg2vk: отсутствует токен или ID группы")
 
-        bot = Bot(token=vk_token)
         attachments = []
+        bot = Bot(token=vk_token)
 
         try:
             text = self._format_tg_message(event.text)
@@ -419,8 +418,6 @@ class UserbotManager:
             logger.info(f"tg2vk: пост опубликован (ID={resp.post_id})")
         except Exception:
             logger.trace("tg2vk: ошибка публикации")
-        finally:
-            await bot.close()
 
     def _format_tg_message(self, text: str) -> str:
         if not text:
