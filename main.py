@@ -194,6 +194,10 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.авточатстоп$"))(self.toggle_autochat)
         self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.set_autochat_time)
 
+        self.client.on(d.cmd(r"\.калк (.+)"))(self.calc)
+        self.client.on(d.cmd(r"\.к (.+)"))(self.calc)
+        self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
+
         self.client.on(events.NewMessage())(self._flood_monitor)
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
 
@@ -907,6 +911,30 @@ class UserbotManager:
     async def config_reload(self, event: Message):
         await self.settings._ensure_loaded(forced=True)
         await event.edit(phrase.config.reload)
+
+    async def calc(self, event: Message):
+        expr = event.pattern_match.group(1).strip()
+
+        if not re.fullmatch(r"[\d+\-*/().\s]+", expr):
+            return await event.edit(phrase.calc.invalid_chars)
+
+        if any(
+            c in expr
+            for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+        ):
+            return await event.edit(phrase.calc.forbidden)
+
+        try:
+            result = eval(expr, {"__builtins__": {}}, {})
+        except ZeroDivisionError:
+            return await event.edit(phrase.calc.div_by_zero)
+        except Exception:
+            return await event.edit(phrase.calc.error)
+
+        if isinstance(result, float) and result.is_integer():
+            result = int(result)
+
+        await event.edit(phrase.calc.result.format(expr, result))
 
     async def gen_pass(self, event: Message):
         args = (event.pattern_match.group(1) or "").strip()
