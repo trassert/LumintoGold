@@ -1,11 +1,6 @@
-orjson
-telethon
 loguru
+telethon
 psutil
-bestconfig
-cryptg
-geopy
-pytz
-google-genai
-aiohttp
-aiofiles==24.1.0
+vkbottle
+aiofiles
+orjson

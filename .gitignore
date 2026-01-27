@@ -1,15 +1,10 @@
-clients/*
-sessions/*
-db/*
-notes/*
-
-tokens.yml
+venv
 
 **/__pycache__/
 .venv
 .env
 .vscode
-uv.lock
 
 test.*
 *.test
+

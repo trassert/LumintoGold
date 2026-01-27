@@ -1,189 +1,88 @@
-import asyncio
-import shutil
 import os
-import platform
 import psutil
-
-from pathlib import Path
+import platform
 from time import time
-from typing import List
-from loguru import logger
 
-logger.info(f"Загружен модуль {__name__}!")
-
-if platform.system() == "Windows":
-    try:
-        import WinTmp  # type: ignore
-
-        logger.info("Система - Windows, использую WinTmp")
-
-        def get_temperature() -> str:
-            try:
-                temps = WinTmp.CPU_Temps()
-                if not temps:
-                    return "Нет данных"
-                mx, avg, mn = max(temps), sum(temps) / len(temps), min(temps)
-                return f"{round(mx)} | {round(avg)} | {round(mn)}"
-            except Exception:
-                logger.opt(exception=True).debug(
-                    "Ошибка при чтении температуры (WinTmp)"
-                )
-                return "Неизвестно"
-    except ImportError:
-        logger.warning(
-            "WinTmp не установлен, температура недоступна на Windows"
-        )
-
-        def get_temperature() -> str:
-            return "Неизвестно"
+if os.name == 'nt':
+    import WinTmp
+    def get_system_info():
+        boot_time = psutil.boot_time()
+        current_time = time()
+        uptime_seconds = current_time - boot_time
+        days = int(uptime_seconds / (24 * 3600))
+        hours = int((uptime_seconds % (24 * 3600)) / 3600)
+        minutes = int((uptime_seconds % 3600) / 60)
+        result = ""
+        if days > 0:
+            result += f"{days} дн. "
+        if hours > 0:
+            result += f"{hours:02} ч. "
+        result += f"{minutes} мин."
+        mem = psutil.virtual_memory()
+        mem_total = mem.total / (1024 * 1024 * 1024)
+        mem_avail = mem.available / (1024 * 1024 * 1024)
+        mem_used = mem.used / (1024 * 1024 * 1024)
+        disk_usage = psutil.disk_usage("/")
+        disk_total = disk_usage.total / (1024 * 1024 * 1024)
+        disk_used = disk_usage.used / (1024 * 1024 * 1024)
+        disk_free = disk_usage.free / (1024 * 1024 * 1024)
+        temp = WinTmp.CPU_Temps()
+        return f"""⚙️ : Информация о хостинге:
+        Время работы: {result}
+        ОС: {platform.system()} {platform.release()}
+        Процессор:
+            Частота: {int(psutil.cpu_freq().current)} МГц
+            Ядра/Потоки: {psutil.cpu_count(logical=False)}/{psutil.cpu_count(logical=True)}
+            Загрузка: {psutil.cpu_percent(0.5)} %
+            Температура ↑|≈|↓: {round(max(temp))} | {round(sum(temp)/len(temp))} | {round(min(temp))} 
+        Память:
+            Общий объем: {mem_total:.1f} ГБ
+            Доступно: {mem_avail:.1f} ГБ
+            Используется: {mem_used:.1f} ГБ
+            Загрузка: {mem.percent} %
+        Диск:
+            Всего: {disk_total:.1f} ГБ
+            Используется: {disk_used:.1f} ГБ
+            Свободно: {disk_free:.1f} ГБ
+            Загрузка: {disk_usage.percent} %
+        """
 else:
-    logger.info("Система - Linux, использую psutil")
-
-    def get_temperature() -> str:
+    def get_system_info():
+        boot_time = psutil.boot_time()
+        current_time = time()
+        uptime_seconds = current_time - boot_time
+        days = int(uptime_seconds / (24 * 3600))
+        hours = int((uptime_seconds % (24 * 3600)) / 3600)
+        minutes = int((uptime_seconds % 3600) / 60)
+        result = ""
+        if days > 0:
+            result += f"{days} дн. "
+        if hours > 0:
+            result += f"{hours:02} ч. "
+        result += f"{minutes} мин."
+        
+        mem = psutil.virtual_memory()
+        mem_total = mem.total / (1024 * 1024 * 1024)
+        mem_avail = mem.available / (1024 * 1024 * 1024)
+        mem_used = mem.used / (1024 * 1024 * 1024)
         try:
-            temps_data = psutil.sensors_temperatures()
-            current_temps = [
-                entry.current
-                for entries in temps_data.values()
-                for entry in entries
-                if entry.current is not None and entry.current >= 0
-            ]
-            if not current_temps:
-                return "Нет данных"
-            mx, avg, mn = (
-                max(current_temps),
-                sum(current_temps) / len(current_temps),
-                min(current_temps),
-            )
-            return f"{round(mx)} | {round(avg)} | {round(mn)}"
-        except Exception:
-            logger.opt(exception=True).debug(
-                "Ошибка при чтении температуры (Linux/psutil)"
-            )
-            return "Неизвестно"
-
-
-async def get_current_speed() -> List[str | float]:
-    try:
-        start = psutil.net_io_counters()
-        await asyncio.sleep(0.5)
-        end = psutil.net_io_counters()
-
-        upload_mbps = round(
-            (end.bytes_sent - start.bytes_sent) * 8 / 0.5 / 1_000_000, 2
-        )
-        download_mbps = round(
-            (end.bytes_recv - start.bytes_recv) * 8 / 0.5 / 1_000_000, 2
-        )
-        return [download_mbps, upload_mbps]
-    except PermissionError:
-        return ["Недоступно", "Недоступно"]
-    except Exception:
-        logger.opt(exception=True).error("Ошибка при измерении скорости сети")
-        return ["Ошибка", "Ошибка"]
-
-
-def get_boottime() -> str:
-    try:
-        uptime_sec = time() - psutil.boot_time()
-        days, remainder = divmod(uptime_sec, 86400)
-        hours, remainder = divmod(remainder, 3600)
-        minutes = int(remainder // 60)
-
-        parts = []
-        if days:
-            parts.append(f"{int(days)} дн.")
-        if hours:
-            parts.append(f"{int(hours):02} ч.")
-        parts.append(f"{minutes} мин.")
-        return " ".join(parts)
-    except PermissionError:
-        return "Нет доступа"
-    except Exception:
-        logger.opt(exception=True).error("Ошибка при получении времени работы")
-        return "Неизвестно"
-
-
-async def get_cpu_load() -> str:
-    try:
-        loop = asyncio.get_running_loop()
-        load = await loop.run_in_executor(None, psutil.cpu_percent, 0.5)
-        return f"{load} %"
-    except Exception:
-        return "Недоступно"
-
-
-def human(n: int) -> str:
-    units = ["б", "Кб", "Мб", "Гб", "Тб", "Пб"]
-    x = float(n)
-    for u in units:
-        if x < 1024 or u == units[-1]:
-            return f"{x:.2f} {u}"
-        x /= 1024
-
-
-def default_path() -> Path:
-    if os.name == "nt":
-        drive = os.environ.get("SystemDrive", "C:")
-        return Path(drive + "\\")
-    if "ANDROID_ROOT" in os.environ or "ANDROID_DATA" in os.environ:
-        # for p in ("/storage/emulated/0", "/sdcard", str(Path.home())):
-        #     if os.path.exists(p):
-        #         return Path(p)
-        return Path.cwd()
-    return Path("/")
-
-
-def disk_free(path: str | None = None) -> None:
-    p = Path(path) if path else default_path()
-    p = p if p.exists() else Path.cwd()
-
-    total, used, free = shutil.disk_usage(p)
-    return [human(total), human(used), human(free)]
-
-
-async def get_system_info() -> str:
-    mem = psutil.virtual_memory()
-    cpu_freq = psutil.cpu_freq()
-    cpu_cores_phys = psutil.cpu_count(logical=False) or "?"
-    cpu_cores_logical = psutil.cpu_count(logical=True) or "?"
-
-    boottime_task = asyncio.create_task(
-        asyncio.to_thread(lambda: get_boottime())
-    )
-    cpu_load_task = asyncio.create_task(get_cpu_load())
-    network_task = asyncio.create_task(get_current_speed())
-    temp_task = asyncio.create_task(asyncio.to_thread(get_temperature))
-
-    boottime = await boottime_task
-    cpu_load = await cpu_load_task
-    network = await network_task
-    temp = await temp_task
-
-    mem_total = mem.total / (1024**3)
-    mem_avail = mem.available / (1024**3)
-    mem_used = mem.used / (1024**3)
-
-    disk = disk_free()
-
-    return f"""⚙️ : Информация о хостинге:
-    Время работы: {boottime}
-    ОС: {platform.system()} {platform.release()}
-    Процессор:
-        Частота: {int(cpu_freq.current) if cpu_freq else "N/A"} МГц
-        Ядра/Потоки: {cpu_cores_phys}/{cpu_cores_logical}
-        Загрузка: {cpu_load} 
-        Температура ↑|≈|↓: {temp}
-    ОЗУ:
-        Объём: {mem_total:.1f} ГБ
-        Доступно: {mem_avail:.1f} ГБ
-        Используется: {mem_used:.1f} ГБ
-        Загрузка: {mem.percent} %
-    Память:
-        Всего: {disk[0]}
-        Использовано: {disk[1]}
-        Свободно: {disk[2]}
-    Сеть:
-        Загрузка: {network[0]} Мбит/с
-        Выгрузка: {network[1]} Мбит/с
-    """
+            with open("/sys/class/thermal/thermal_zone0/temp") as f:
+                temp = float(f.read()) / 1000
+            temp_info = f"Температура: {temp:.1f}°C"
+        except:
+            temp_info = "Температура: недоступно"
+        
+        return f"""⚙️ : Информация о хостинге:
+        Время работы: {result}
+        ОС: {platform.system()} {platform.release()}
+        Процессор:
+            Частота: {int(psutil.cpu_freq().current)} МГц
+            Ядра/Потоки: {psutil.cpu_count(logical=False)}/{psutil.cpu_count(logical=True)}
+            Загрузка: {psutil.cpu_percent(0.5)} %
+            {temp_info}
+        Память:
+            Общий объем: {mem_total:.1f} ГБ
+            Доступно: {mem_avail:.1f} ГБ
+            Используется: {mem_used:.1f} ГБ
+            Загрузка: {mem.percent} %
+        """

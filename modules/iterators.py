@@ -1,15 +1,10 @@
-from loguru import logger
-
-logger.info(f"Загружен модуль {__name__}!")
-
 class Counter(dict):
     def __missing__(self, key):
         return 0
 
 
-#! Deprecated - dont used in code
 class StringIterator:
-    def __init__(self, strings_list) -> None:
+    def __init__(self, strings_list):
         self.strings_list = strings_list
         self.current_index = 0
 
