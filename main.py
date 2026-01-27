@@ -188,6 +188,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.ии ([\s\S]+)"))(self.ai_resp)
         self.client.on(d.cmd(r"\.т ([\s\S]+)"))(self.typing)
         self.client.on(d.cmd(r"\.set (.+)"))(self.set_setting)
+        self.client.on(d.cmd(r"\.setint (.+)"))(self.set_int_setting)
         self.client.on(d.cmd(r"\.время (.+)"))(self.time_by_city)
 
         self.client.on(
@@ -890,6 +891,11 @@ class UserbotManager:
         key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
         await self.settings.set(key, value)
         await event.edit(phrase.setting.set.format(key=key, value=value))
+
+    async def set_int_setting(self, event: Message):
+        key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
+        await self.settings.set(key, int(value))
+        await event.edit(phrase.setting.setint.format(key=key, value=value))
 
     async def time_by_city(self, event: Message):
         city = event.pattern_match.group(1)
