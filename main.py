@@ -166,7 +166,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
 
         self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
-        self.client.on(d.cmd(r"\.баттмон$"))(self.toggle_batt) 
+        self.client.on(d.cmd(r"\.баттмон$"))(self.toggle_batt)
         self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
         self.client.on(d.cmd(r"\.слов"))(self.words)
         self.client.on(d.cmd(r"\.пинг$"))(self.ping)
