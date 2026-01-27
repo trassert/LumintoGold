@@ -85,6 +85,7 @@ class UserbotManager:
         self.iris_task = task_gen.Generator(f"{phone}_iris")
         self.online_task = task_gen.Generator(f"{phone}_online")
         self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
+        self.autochat_task = task_gen.Generator(f"{phone}_autochat")
         self.ai_client = ai.Client(None, None)
         self.notes = notes.Notes(phone)
         self._flood_state: dict[str, list[float]] = {}
@@ -124,6 +125,9 @@ class UserbotManager:
             await self.online_task.create(
                 func=self.auto_online, task_param=30, unit="seconds"
             )
+
+        if await self.settings.get("autochat.enabled"):
+            await self._start_autochat()
 
     def _register_handlers(self):
         self.client.on(d.cmd(r"\+нот (.+)\n([\s\S]+)"))(self.add_note)
@@ -182,6 +186,12 @@ class UserbotManager:
         self.client.on(d.cmd(r"\+флудстики$"))(self.unset_flood_stickers)
         self.client.on(d.cmd(r"\+флудгиф$"))(self.unset_flood_gifs)
         self.client.on(d.cmd(r"\+флудобщ$"))(self.unset_flood_messages)
+
+        self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.add_autochat)
+        self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.rm_autochat)
+        self.client.on(d.cmd(r"\.авточатстарт$"))(self.toggle_autochat)
+        self.client.on(d.cmd(r"\.авточатстоп$"))(self.toggle_autochat)
+        self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.set_autochat_time)
 
         self.client.on(events.NewMessage())(self._flood_monitor)
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
@@ -277,6 +287,85 @@ class UserbotManager:
         await self.online_task.create(
             func=self.auto_online, task_param=30, unit="seconds"
         )
+
+    async def _start_autochat(self):
+        delay = await self.settings.get("autochat.delay")
+        await self.autochat_task.create(
+            func=self._autochat_sender, task_param=delay, unit="seconds"
+        )
+
+    async def _stop_autochat(self):
+        self.autochat_task.stop()
+
+    async def _autochat_sender(self):
+        chat_ids = await self.settings.get("autochat.chats", [])
+        ad_chat = await self.settings.get("autochat.ad_chat")
+        ad_id = await self.settings.get("autochat.ad_id")
+
+        if not chat_ids or not ad_chat or not ad_id:
+            return
+
+        for chat_id in chat_ids:
+            try:
+                await self.client.forward_messages(chat_id, int(ad_id), ad_chat)
+                logger.info(f"Автопостинг: сообщение отправлено в {chat_id}")
+            except Exception as e:
+                logger.error(
+                    f"Автопостинг: ошибка при отправке в {chat_id}: {e}"
+                )
+            await asyncio.sleep(1)
+
+    async def add_autochat(self, event: Message):
+        try:
+            chat_id = int(event.pattern_match.group(1))
+        except (ValueError, TypeError):
+            return await event.edit(phrase.autochat.invalid_id)
+
+        chats = await self.settings.get("autochat.chats", [])
+        if chat_id not in chats:
+            chats.append(chat_id)
+            await self.settings.set("autochat.chats", chats)
+        await event.edit(phrase.autochat.added.format(chat_id))
+
+    async def rm_autochat(self, event: Message):
+        try:
+            chat_id = int(event.pattern_match.group(1))
+        except (ValueError, TypeError):
+            return await event.edit(phrase.autochat.invalid_id)
+
+        chats = await self.settings.get("autochat.chats", [])
+        if chat_id in chats:
+            chats.remove(chat_id)
+            await self.settings.set("autochat.chats", chats)
+        await event.edit(phrase.autochat.removed.format(chat_id))
+
+    async def toggle_autochat(self, event: Message):
+        enabled = not await self.settings.get("autochat.enabled", False)
+        await self.settings.set("autochat.enabled", enabled)
+
+        if enabled:
+            self.autochat_task = task_gen.Generator(f"{self.phone}_autochat")
+            await self._start_autochat()
+            await event.edit(phrase.autochat.on)
+        else:
+            await self._stop_autochat()
+            await event.edit(phrase.autochat.off)
+
+    async def set_autochat_time(self, event: Message):
+        try:
+            delay = int(event.pattern_match.group(1))
+            if delay < 10:
+                return await event.edit(phrase.autochat.too_fast)
+        except (ValueError, TypeError):
+            return await event.edit(phrase.autochat.invalid_time)
+
+        await self.settings.set("autochat.delay", delay)
+
+        if await self.settings.get("autochat.enabled", False):
+            await self._stop_autochat()
+            await self._start_autochat()
+
+        await event.edit(phrase.autochat.time_set.format(delay))
 
     async def get_emo_id(self, event: Message):
         message: Message = await event.get_reply_message()
@@ -879,7 +968,9 @@ async def main():
             phone = client_file.replace(".json", "")
             tasks.append(run_userbot(phone, data["api_id"], data["api_hash"]))
         except orjson.JSONDecodeError:
-            logger.error(f"{client_file} пуст или неправильно размечен! Отключаем клиента..")
+            logger.error(
+                f"{client_file} пуст или неправильно размечен! Отключаем клиента.."
+            )
     if tasks == []:
         return logger.error("Нет ни одного валидного клиента.")
     await asyncio.gather(*tasks)
