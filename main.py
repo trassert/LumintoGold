@@ -871,12 +871,17 @@ async def main():
     logger.info(f"Клиенты: {clients}")
     tasks = []
     for client_file in clients:
-        async with aiofiles.open(
-            path.join(clients_dir, client_file), "rb"
-        ) as f:
-            data = orjson.loads(await f.read())
-        phone = client_file.replace(".json", "")
-        tasks.append(run_userbot(phone, data["api_id"], data["api_hash"]))
+        try:
+            async with aiofiles.open(
+                path.join(clients_dir, client_file), "rb"
+            ) as f:
+                data = orjson.loads(await f.read())
+            phone = client_file.replace(".json", "")
+            tasks.append(run_userbot(phone, data["api_id"], data["api_hash"]))
+        except orjson.JSONDecodeError:
+            logger.error(f"{client_file} пуст или неправильно размечен! Отключаем клиента..")
+    if tasks == []:
+        return logger.error("Нет ни одного валидного клиента.")
     await asyncio.gather(*tasks)
 
 
