@@ -24,7 +24,7 @@ default = {
     "flood.msg": "Варн\nФлуд",
     "autochat.chats": [],
     "autochat.ad_chat": -1002783775634,
-    "autochat.ad_id": 277,
+    "autochat.ad_id": 474,
     "autochat.delay": 3600,
     "autochat.enabled": False
 }
