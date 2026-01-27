@@ -211,8 +211,7 @@ class UserbotManager:
 
         self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.add_autochat)
         self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.rm_autochat)
-        self.client.on(d.cmd(r"\.авточатстарт$"))(self.toggle_autochat)
-        self.client.on(d.cmd(r"\.авточатстоп$"))(self.toggle_autochat)
+        self.client.on(d.cmd(r"\.авточат$"))(self.toggle_autochat)
         self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.set_autochat_time)
 
         self.client.on(d.cmd(r"\.калк (.+)"))(self.calc)
@@ -377,18 +376,19 @@ class UserbotManager:
             await self.settings.set("tg2vk.enabled", False)
             return await event.edit(phrase.tg2vk.missing_config)
 
-        self.client.remove_event_handler(self._handle_tg_to_vk)
-
         if not enabled:
             if not vk_group or not vk_token:
                 await self.settings.set("tg2vk.enabled", False)
                 return await event.edit(phrase.tg2vk.missing_config)
+            logger.info("tg2vk: enabled")
             self.client.add_event_handler(
                 self._handle_tg_to_vk, events.NewMessage(chats=target_chat)
             )
             await self.settings.set("tg2vk.enabled", True)
             await event.edit(phrase.tg2vk.on)
         else:
+            logger.info("tg2vk: disabled")
+            self.client.remove_event_handler(self._handle_tg_to_vk)
             await self.settings.set("tg2vk.enabled", False)
             await event.edit(phrase.tg2vk.off)
 
@@ -454,10 +454,10 @@ class UserbotManager:
         await event.edit(phrase.autochat.removed.format(chat_id))
 
     async def toggle_autochat(self, event: Message):
-        enabled = not await self.settings.get("autochat.enabled", False)
-        await self.settings.set("autochat.enabled", enabled)
+        disabled = not await self.settings.get("autochat.enabled", False)
+        await self.settings.set("autochat.enabled", disabled)
 
-        if enabled:
+        if disabled:
             await self._start_autochat()
             await event.edit(phrase.autochat.on)
         else:
