@@ -308,10 +308,11 @@ class UserbotManager:
                         chat_id, int(ad_id), ad_chat
                     )
                     logger.info(
-                        f"Автопостинг: сообщение отправлено в {chat_id}"
+                        f"Автопост: сообщение отправлено в {chat_id}"
                     )
                 except Exception:
-                    logger.trace(f"Автопостинг: ошибка в {chat_id}")
+                    logger.trace(f"Автопост: ошибка в {chat_id}")
+                logger.info(f"Автопост: жду {delay} сек.")
                 await asyncio.sleep(delay)
 
     async def _start_autochat(self):
