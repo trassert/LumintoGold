@@ -135,6 +135,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
         self.client.on(d.cmd(r"\.слов"))(self.words)
         self.client.on(d.cmd(r"\.пинг$"))(self.ping)
+        self.client.on(d.cmd(r"\.эмоид$"))(self.get_emo_id)
         self.client.on(d.cmd(r"\.флип"))(self.flip_text)
         self.client.on(d.cmd(r"\.гс$"))(self.on_off_block_voice)
         self.client.on(d.cmd(r"\.читать$"))(self.on_off_mask_read)
@@ -195,7 +196,9 @@ class UserbotManager:
 
         try:
             me = await self.client.get_me()
-            admin_rights: ParticipantPermissions = await self.client.get_permissions(chat, me)
+            admin_rights: ParticipantPermissions = (
+                await self.client.get_permissions(chat, me)
+            )
             if not admin_rights.ban_users:
                 return await event.edit(phrase.clear.no_rights)
 
@@ -218,11 +221,15 @@ class UserbotManager:
                     logger.trace("Не могу удалить участника")
             await asyncio.sleep(await self.settings.get("typing.delay"))
 
-        async for ban in self.client.iter_participants(chat, filter=types.ChannelParticipantsKicked):
+        async for ban in self.client.iter_participants(
+            chat, filter=types.ChannelParticipantsKicked
+        ):
             user: User = ban
             if user and user.deleted:
                 try:
-                    await self.client.edit_permissions(chat, user, view_messages=True)
+                    await self.client.edit_permissions(
+                        chat, user, view_messages=True
+                    )
                     unbanned += 1
                     if unbanned % 5 == 0:
                         await event.edit(
@@ -270,6 +277,20 @@ class UserbotManager:
         await self.online_task.create(
             func=self.auto_online, task_param=30, unit="seconds"
         )
+
+    async def get_emo_id(self, event: Message):
+        message: Message = event.get_reply_message()
+        if message is None:
+            return await event.edit(phrase.emoji.no_entity)
+        if message.entities == []:
+            return await event.edit(phrase.emoji.no_entity)
+        text = []
+        for entity in message.entities or []:
+            if hasattr(entity, "document_id"):
+                text.append(f"`{entity.document_id}`")
+        if text == []:
+            return await event.edit(phrase.emoji.no_entity)
+        return await event.reply(phrase.emoji.get.format(", ".join(text)))
 
     async def set_flood_stickers(self, event: Message):
         await self._set_flood_rule(event, "stickers")

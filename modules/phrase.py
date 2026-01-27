@@ -3,6 +3,9 @@ from loguru import logger
 logger.info(f"Загружен модуль {__name__}!")
 
 
+class emoji:
+    get = "ℹ️ : Получены ID: {}"
+    no_entity = "❌ : В реплае нет ни одного entity."
 class clear:
     private = "❌ : Эта команда работает только в группах."
     no_rights = "❌ : Нет прав на исключение участников."

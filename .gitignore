@@ -10,3 +10,6 @@ tokens.yml
 .env
 .vscode
 uv.lock
+
+test.*
+*.test
