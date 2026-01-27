@@ -309,9 +309,9 @@ class UserbotManager:
             try:
                 await self.client.forward_messages(chat_id, int(ad_id), ad_chat)
                 logger.info(f"Автопостинг: сообщение отправлено в {chat_id}")
-            except Exception as e:
-                logger.error(
-                    f"Автопостинг: ошибка при отправке в {chat_id}: {e}"
+            except Exception:
+                logger.trace(
+                    f"Автопостинг: ошибка при отправке в {chat_id}"
                 )
             await asyncio.sleep(1)
 
