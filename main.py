@@ -290,7 +290,7 @@ class UserbotManager:
                 text.append(f"`{entity.document_id}`")
         if text == []:
             return await event.edit(phrase.emoji.no_entity)
-        return await event.reply(phrase.emoji.get.format(", ".join(text)))
+        return await event.edit(phrase.emoji.get.format(", ".join(text)))
 
     async def set_flood_stickers(self, event: Message):
         await self._set_flood_rule(event, "stickers")
