@@ -31,6 +31,15 @@ logger.add(
     diagnose=False,
 )
 
+try:
+    from vkbottle import Bot  # type: ignore
+    from vkbottle.tools import PhotoWallUploader  # type: ignore
+
+    import_vkbottle = True
+except ModuleNotFoundError:
+    import_vkbottle = False
+    logger.warning("Нету vkbottle! Транслятор tg->vk не будет работать.")
+
 
 class InterceptHandler(logging.Handler):
     def emit(self, record):
@@ -130,7 +139,17 @@ class UserbotManager:
         if await self.settings.get("autochat.enabled"):
             await self._start_autochat()
 
+        if await self.settings.get("tg2vk.enabled", False):
+            target_chat = await self.settings.get("tg2vk.chat")
+            if target_chat:
+                self.client.add_event_handler(
+                    self._handle_tg_to_vk, events.NewMessage(chats=target_chat)
+                )
+
     def _register_handlers(self):
+        if import_vkbottle:
+            self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
+
         self.client.on(d.cmd(r"\+нот (.+)\n([\s\S]+)"))(self.add_note)
         self.client.on(d.cmd(r"\-нот (.+)"))(self.rm_note)
         self.client.on(d.cmd(r"\!(.+)"))(self.chk_note)
@@ -138,6 +157,7 @@ class UserbotManager:
 
         self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
         self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
+        self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
         self.client.on(d.cmd(r"\.слов"))(self.words)
         self.client.on(d.cmd(r"\.пинг$"))(self.ping)
         self.client.on(d.cmd(r"\.эмоид$"))(self.get_emo_id)
@@ -343,6 +363,67 @@ class UserbotManager:
             except Exception:
                 logger.trace(f"Автопостинг: ошибка при отправке в {chat_id}")
             await asyncio.sleep(1)
+
+    async def toggle_tg_to_vk(self, event: Message):
+        if not import_vkbottle:
+            return await event.edit(phrase.tg2vk.no_vkbottle)
+
+        enabled = not await self.settings.get("tg2vk.enabled", False)
+        await self.settings.set("tg2vk.enabled", enabled)
+
+        target_chat = await self.settings.get("tg2vk.chat")
+        vk_group = await self.settings.get("tg2vk.vk_group")
+        vk_token = await self.settings.get("tg2vk.vk_token")
+
+        if enabled:
+            if not target_chat or not vk_group or not vk_token:
+                return await event.edit(phrase.tg2vk.missing_config)
+            self.client.add_event_handler(
+                self._handle_tg_to_vk, events.NewMessage(chats=target_chat)
+            )
+            await event.edit(phrase.tg2vk.on)
+        else:
+            self.client.remove_event_handler(self._handle_tg_to_vk)
+            await event.edit(phrase.tg2vk.off)
+
+    async def _handle_tg_to_vk(self, event: Message):
+        vk_token = await self.settings.get("tg2vk.vk_token")
+        vk_group_id = await self.settings.get("tg2vk.vk_group")
+        if not vk_token or not vk_group_id:
+            logger.error("tg2vk: отсутствует токен или ID группы")
+            return
+
+        bot = Bot(token=vk_token)
+        attachments = []
+
+        try:
+            text = self._format_tg_message(event.text)
+
+            if event.photo:
+                path = await event.download_media(file=bytes)
+                uploader = PhotoWallUploader(bot.api)
+                photo = await uploader.upload(path)
+                attachments.append(photo)
+
+            resp = await bot.api.wall.post(
+                owner_id=-abs(int(vk_group_id)),
+                message=text,
+                attachments=attachments,
+            )
+            logger.info(f"tg2vk: пост опубликован (ID={resp.post_id})")
+        except Exception:
+            logger.trace("tg2vk: ошибка публикации")
+        finally:
+            await bot.close()
+
+    def _format_tg_message(self, text: str) -> str:
+        if not text:
+            text = ""
+        text = re.sub(r"\*\*|__", "", text)
+        text = re.sub(r"\[.*?\]\(.*?\)", "", text)
+        prefix = "📢 Из Telegram\n\n"
+        result = (prefix + text.strip())[:4096]
+        return result if result.strip() else prefix.strip()
 
     async def add_autochat(self, event: Message):
         try:

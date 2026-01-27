@@ -26,7 +26,11 @@ default = {
     "autochat.ad_chat": -1002783775634,
     "autochat.ad_id": 474,
     "autochat.delay": 3600,
-    "autochat.enabled": False
+    "autochat.enabled": False,
+    "tg2vk.enabled": False,
+    "tg2vk.chat": None,
+    "tg2vk.vk_token": None,
+    "tg2vk.vk_group": None
 }
 
 
