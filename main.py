@@ -31,6 +31,8 @@ logger.add(
     diagnose=False,
 )
 
+logger.info("LumintoGold запускается...")
+
 try:
     from vkbottle import Bot  # type: ignore
     from vkbottle.tools import PhotoWallUploader  # type: ignore
@@ -157,7 +159,6 @@ class UserbotManager:
 
         self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
         self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
-        self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
         self.client.on(d.cmd(r"\.слов"))(self.words)
         self.client.on(d.cmd(r"\.пинг$"))(self.ping)
         self.client.on(d.cmd(r"\.эмоид$"))(self.get_emo_id)
@@ -368,22 +369,30 @@ class UserbotManager:
         if not import_vkbottle:
             return await event.edit(phrase.tg2vk.no_vkbottle)
 
-        enabled = not await self.settings.get("tg2vk.enabled", False)
-        await self.settings.set("tg2vk.enabled", enabled)
-
+        enabled = await self.settings.get("tg2vk.enabled", False)
         target_chat = await self.settings.get("tg2vk.chat")
         vk_group = await self.settings.get("tg2vk.vk_group")
         vk_token = await self.settings.get("tg2vk.vk_token")
 
-        if enabled:
-            if not target_chat or not vk_group or not vk_token:
+        if not target_chat:
+            await self.settings.set("tg2vk.enabled", False)
+            return await event.edit(phrase.tg2vk.missing_config)
+
+        self.client.remove_event_handler(
+            self._handle_tg_to_vk, events.NewMessage(chats=target_chat)
+        )
+
+        if not enabled:
+            if not vk_group or not vk_token:
+                await self.settings.set("tg2vk.enabled", False)
                 return await event.edit(phrase.tg2vk.missing_config)
             self.client.add_event_handler(
                 self._handle_tg_to_vk, events.NewMessage(chats=target_chat)
             )
+            await self.settings.set("tg2vk.enabled", True)
             await event.edit(phrase.tg2vk.on)
         else:
-            self.client.remove_event_handler(self._handle_tg_to_vk)
+            await self.settings.set("tg2vk.enabled", False)
             await event.edit(phrase.tg2vk.off)
 
     async def _handle_tg_to_vk(self, event: Message):
