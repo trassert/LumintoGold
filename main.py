@@ -307,9 +307,7 @@ class UserbotManager:
                     await self.client.forward_messages(
                         chat_id, int(ad_id), ad_chat
                     )
-                    logger.info(
-                        f"Автопост: сообщение отправлено в {chat_id}"
-                    )
+                    logger.info(f"Автопост: сообщение отправлено в {chat_id}")
                 except Exception:
                     logger.trace(f"Автопост: ошибка в {chat_id}")
                 logger.info(f"Автопост: жду {delay} сек.")
