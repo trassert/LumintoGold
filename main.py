@@ -380,14 +380,14 @@ class UserbotManager:
             if not vk_group or not vk_token:
                 await self.settings.set("tg2vk.enabled", False)
                 return await event.edit(phrase.tg2vk.missing_config)
-            logger.info("tg2vk: enabled")
+            logger.debug("tg2vk: enabled")
             self.client.add_event_handler(
                 self._handle_tg_to_vk, events.NewMessage(chats=target_chat)
             )
             await self.settings.set("tg2vk.enabled", True)
             await event.edit(phrase.tg2vk.on)
         else:
-            logger.info("tg2vk: disabled")
+            logger.debug("tg2vk: disabled")
             self.client.remove_event_handler(self._handle_tg_to_vk)
             await self.settings.set("tg2vk.enabled", False)
             await event.edit(phrase.tg2vk.off)
