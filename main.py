@@ -279,7 +279,7 @@ class UserbotManager:
         )
 
     async def get_emo_id(self, event: Message):
-        message: Message = event.get_reply_message()
+        message: Message = await event.get_reply_message()
         if message is None:
             return await event.edit(phrase.emoji.no_entity)
         if message.entities == []:
