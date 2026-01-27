@@ -296,14 +296,14 @@ class UserbotManager:
                 if self.batt_state is True:
                     logger.warning("Нет зарядки!")
                     await self.client.send_message(
-                        entity=await self.settings.get("battery.chat"),
+                        entity=int(await self.settings.get("battery.chat")),
                         message=await self.settings.get("battery.msg_no"),
                     )
                     self.batt_state = False
             else:
                 if self.batt_state is False:
                     await self.client.send_message(
-                        entity=await self.settings.get("battery.chat"),
+                        entity=int(await self.settings.get("battery.chat")),
                         message=await self.settings.get("battery.msg_yes"),
                     )
                     self.batt_state = True
