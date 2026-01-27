@@ -85,9 +85,10 @@ class UserbotManager:
         self.iris_task = task_gen.Generator(f"{phone}_iris")
         self.online_task = task_gen.Generator(f"{phone}_online")
         self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
-        self.autochat_task = task_gen.Generator(f"{phone}_autochat")
         self.ai_client = ai.Client(None, None)
         self.notes = notes.Notes(phone)
+        self._autochat_running = False
+        self._autochat_task = None
         self._flood_state: dict[str, list[float]] = {}
         self._flood_rules: dict[int, dict[str, dict]] = {}
 
@@ -288,14 +289,41 @@ class UserbotManager:
             func=self.auto_online, task_param=30, unit="seconds"
         )
 
+    async def _autochat_worker(self):
+        while self._autochat_running:
+            chat_ids = await self.settings.get("autochat.chats", [])
+            ad_chat = await self.settings.get("autochat.ad_chat")
+            ad_id = await self.settings.get("autochat.ad_id")
+            delay = await self.settings.get("autochat.delay", 1000)
+
+            if not (chat_ids and ad_chat and ad_id):
+                await asyncio.sleep(60)
+                continue
+
+            for chat_id in chat_ids:
+                if not self._autochat_running:
+                    return
+                try:
+                    await self.client.forward_messages(
+                        chat_id, int(ad_id), ad_chat
+                    )
+                    logger.info(
+                        f"Автопостинг: сообщение отправлено в {chat_id}"
+                    )
+                except Exception:
+                    logger.trace(f"Автопостинг: ошибка в {chat_id}")
+                await asyncio.sleep(delay)
+
     async def _start_autochat(self):
-        delay = await self.settings.get("autochat.delay")
-        await self.autochat_task.create(
-            func=self._autochat_sender, task_param=delay, unit="seconds"
-        )
+        if self._autochat_running:
+            return
+        self._autochat_running = True
+        self._autochat_task = asyncio.create_task(self._autochat_worker())
 
     async def _stop_autochat(self):
-        self.autochat_task.stop()
+        self._autochat_running = False
+        if self._autochat_task:
+            await self._autochat_task
 
     async def _autochat_sender(self):
         chat_ids = await self.settings.get("autochat.chats", [])
@@ -310,9 +338,7 @@ class UserbotManager:
                 await self.client.forward_messages(chat_id, int(ad_id), ad_chat)
                 logger.info(f"Автопостинг: сообщение отправлено в {chat_id}")
             except Exception:
-                logger.trace(
-                    f"Автопостинг: ошибка при отправке в {chat_id}"
-                )
+                logger.trace(f"Автопостинг: ошибка при отправке в {chat_id}")
             await asyncio.sleep(1)
 
     async def add_autochat(self, event: Message):
@@ -344,7 +370,6 @@ class UserbotManager:
         await self.settings.set("autochat.enabled", enabled)
 
         if enabled:
-            self.autochat_task = task_gen.Generator(f"{self.phone}_autochat")
             await self._start_autochat()
             await event.edit(phrase.autochat.on)
         else:
@@ -360,11 +385,6 @@ class UserbotManager:
             return await event.edit(phrase.autochat.invalid_time)
 
         await self.settings.set("autochat.delay", delay)
-
-        if await self.settings.get("autochat.enabled", False):
-            await self._stop_autochat()
-            await self._start_autochat()
-
         await event.edit(phrase.autochat.time_set.format(delay))
 
     async def get_emo_id(self, event: Message):
