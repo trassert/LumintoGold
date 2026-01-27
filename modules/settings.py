@@ -30,7 +30,11 @@ default = {
     "tg2vk.enabled": False,
     "tg2vk.chat": None,
     "tg2vk.vk_token": None,
-    "tg2vk.vk_group": None
+    "tg2vk.vk_group": None,
+    "battery.status": False,
+    "battery.chat": None,
+    "battery.msg_no": "❌ : Нет зарядки!",
+    "battery.msg_yes": "✅ : Зарядка восстановлена."
 }
 
 

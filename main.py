@@ -69,6 +69,7 @@ from modules import (  # noqa: E402
     ipman,
     apis,
     notes,
+    config,
 )
 
 
@@ -96,6 +97,8 @@ class UserbotManager:
         self.iris_task = task_gen.Generator(f"{phone}_iris")
         self.online_task = task_gen.Generator(f"{phone}_online")
         self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
+        self.battery_task = task_gen.Generator(f"{phone}_battery")
+        self.batt_state = True
         self.ai_client = ai.Client(None, None)
         self.notes = notes.Notes(phone)
         self._autochat_running = False
@@ -148,6 +151,11 @@ class UserbotManager:
                     self._handle_tg_to_vk, events.NewMessage(chats=target_chat)
                 )
 
+        if await self.settings.get("battery.status"):
+            await self.battery_task.create(
+                func=self.chk_battery, task_param=15, unit="seconds"
+            )
+
     def _register_handlers(self):
         if import_vkbottle:
             self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
@@ -158,6 +166,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
 
         self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
+        self.client.on(d.cmd(r"\.баттмон$"))(self.toggle_batt) 
         self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
         self.client.on(d.cmd(r"\.слов"))(self.words)
         self.client.on(d.cmd(r"\.пинг$"))(self.ping)
@@ -281,6 +290,24 @@ class UserbotManager:
         else:
             await event.edit(phrase.clear.not_found)
 
+    async def chk_battery(self):
+        async with aiofiles.open(config.config.battery_path) as f:
+            if "Discharging" in await f.read():
+                if self.batt_state is True:
+                    logger.warning("Нет зарядки!")
+                    await self.client.send_message(
+                        entity=await self.settings.get("battery.chat"),
+                        message=await self.settings.get("battery.msg_no"),
+                    )
+                    self.batt_state = False
+            else:
+                if self.batt_state is False:
+                    await self.client.send_message(
+                        entity=await self.settings.get("battery.chat"),
+                        message=await self.settings.get("battery.msg_yes"),
+                    )
+                    self.batt_state = True
+
     async def reactions(self, event: Message):
         await asyncio.sleep(random.randint(0, 1000))
         try:
@@ -310,6 +337,11 @@ class UserbotManager:
     async def _start_auto_online(self):
         await self.online_task.create(
             func=self.auto_online, task_param=30, unit="seconds"
+        )
+
+    async def _start_mon_batt(self):
+        await self.battery_task.create(
+            func=self.chk_battery, task_param=15, unit="seconds"
         )
 
     async def _autochat_worker(self):
@@ -758,6 +790,16 @@ class UserbotManager:
             phrase.online.on,
             phrase.online.off,
             self._start_auto_online,
+            event,
+        )
+
+    async def toggle_batt(self, event: Message):
+        await self._toggle_setting_and_task(
+            "battery.status",
+            "battery_task",
+            phrase.battmon.on,
+            phrase.battmon.off,
+            self._start_mon_batt,
             event,
         )
 

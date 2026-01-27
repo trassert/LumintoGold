@@ -8,6 +8,10 @@ class emoji:
     no_entity = "❌ : В реплае нет ни одного entity."
 
 
+class battmon:
+    on = "✅ : Включён мониторинг зарядки."
+    off = "❌ : Мониторинг зарядки выключен."
+
 class tg2vk:
     no_vkbottle = "⏩ : Модуль vkbottle не установлен.\nУстановите: `pip install vkbottle`"
     missing_config = "⏩ : Не заданы chat, vk_group или vk_token.\nИспользуйте `.set tg2vk.chat ...`"
