@@ -284,20 +284,19 @@ class UserbotManager:
 
     async def reactions(self, event: Message):
         await asyncio.sleep(random.randint(0, 1000))
-        logger.info("Отправил реакцию!")
-        await self.client(
-            functions.messages.SendReactionRequest(
-                peer=event.peer_id,
-                msg_id=event.message.id,
-                big=True,
-                add_to_recent=True,
-                reaction=[
-                    types.ReactionEmoji(
-                        emoticon=random.choice(["💘", "❤️", "👍"])
-                    )
-                ],
+        try:
+            await self.client(
+                functions.messages.SendReactionRequest(
+                    peer=event.peer_id,
+                    msg_id=event.message.id,
+                    big=True,
+                    add_to_recent=True,
+                    reaction=[types.ReactionEmoji(emoticon="❤️")],
+                )
             )
-        )
+            logger.info("Отправил реакцию!")
+        except Exception:
+            pass
 
     async def _start_iris_farm(self):
         await self.iris_task.create(

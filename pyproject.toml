@@ -17,6 +17,7 @@ dependencies = [
     "pytz>=2025.2",
     "telethon>=1.42.0",
     "uvloop>=0.22.1",
+    "vkbottle>=4.6.2",
 ]
 
 [tool.ruff]
