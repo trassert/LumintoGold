@@ -214,6 +214,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.set (.+)"))(self.set_setting)
         self.client.on(d.cmd(r"\.setint (.+)"))(self.set_int_setting)
         self.client.on(d.cmd(r"\.время (.+)"))(self.time_by_city)
+        self.client.on(d.cmd(r"\.ад(?:\s|$)"))(self.autodelmsg)
 
         self.client.on(
             d.cmd(
@@ -1083,6 +1084,31 @@ class UserbotManager:
             result = int(result)
 
         await event.edit(phrase.calc.result.format(expr, result))
+
+    async def autodelmsg(self, event: Message):
+        lines = event.text.splitlines()
+        first_line = lines[0]
+        rest_text = "\n".join(lines[1:]).strip()
+
+        parts = first_line.split(maxsplit=2)
+        if len(parts) < 2:
+            return await event.edit(phrase.autodel.args)
+
+        try:
+            delay = int(parts[1])
+            text = rest_text or (parts[2] if len(parts) > 2 else "")
+        except ValueError:
+            delay = config.config.wait_delete
+            text = " ".join(parts[1:]) + ("\n" + rest_text if rest_text else "")
+
+        if not text.strip():
+            return await event.edit(phrase.autodel.empty)
+
+        msg: Message = await event.edit(text.strip())
+        await asyncio.sleep(delay)
+        await msg.edit("...")
+        await asyncio.sleep(1)
+        await msg.delete()
 
     async def gen_pass(self, event: Message):
         args = (event.pattern_match.group(1) or "").strip()

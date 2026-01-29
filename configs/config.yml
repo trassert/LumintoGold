@@ -4,3 +4,5 @@ geoapify_url: "https://api.geoapify.com/v1/geocode/reverse"
 openweathermap_url: "https://api.openweathermap.org/data/2.5/weather?q={city}&appid={apikey}&units=metric&lang=ru"
 
 battery_path: "/sys/class/power_supply/battery/status"
+
+wait_delete: 60
