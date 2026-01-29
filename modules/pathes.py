@@ -1,9 +1,10 @@
-import os
+from pathlib import Path
 from loguru import logger
 
 logger.info(f"Загружен модуль {__name__}!")
 
-notes = "notes"
+notes = Path("notes")
+clients = Path("clients")
 
-tasks = os.path.join("db", "tasks.json")
-animations = os.path.join("animations", "animations.json")
+tasks = Path("db") / "tasks.json"
+animations = Path("animations") / "animations.json"

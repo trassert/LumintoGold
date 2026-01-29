@@ -4,13 +4,11 @@ import random
 import re
 import contextlib
 from sys import stderr
-from os import listdir, mkdir, path
 from time import time
-
+from pathlib import Path
 import aiofiles
 import orjson
 from loguru import logger
-
 from telethon import events, functions, types
 from telethon import TelegramClient
 from telethon.tl.custom import Message
@@ -30,7 +28,6 @@ logger.add(
     backtrace=False,
     diagnose=False,
 )
-
 logger.info("LumintoGold запускается...")
 
 try:
@@ -56,6 +53,7 @@ logging.basicConfig(handlers=[InterceptHandler()], level=0)
 from modules import (  # noqa: E402
     ai,
     d,
+    pathes,
     formatter,
     get_sys,
     task_gen,
@@ -78,15 +76,39 @@ def get_args(text: str, skip_first: bool = True) -> list[str]:
     return parts[1:] if skip_first and parts else parts
 
 
+def format_tg_message(text: str) -> str:
+    if not text:
+        text = ""
+    text = re.sub(r"\*\*|__", "", text)
+    text = re.sub(r"\[.*?\]\(.*?\)", "", text)
+    prefix = "📢 Из Telegram\n"
+    result = (prefix + text.strip())[:4096]
+    return result if result.strip() else prefix.strip()
+
+
+async def load_client_config(clients_dir: Path, client_file: str):
+    try:
+        async with aiofiles.open(clients_dir / client_file, "rb") as f:
+            data = orjson.loads(await f.read())
+        phone = client_file.replace(".json", "")
+        return phone, data["api_id"], data["api_hash"]
+    except orjson.JSONDecodeError:
+        logger.error(
+            f"{client_file} пуст или неправильно размечен! Отключаем клиента.."
+        )
+        return None
+
+
 class UserbotManager:
     def __init__(self, phone: str, api_id: int, api_hash: str):
         self.phone = phone
         self.settings = settings.UBSettings(phone, "clients")
+        self.session_path = Path("sessions") / phone
         self.client = TelegramClient(
-            session=path.join("sessions", phone),
+            session=str(self.session_path),
             api_id=api_id,
             api_hash=api_hash,
-            use_ipv6=self.settings.sync_get("use.ipv6", False),
+            use_ipv6=False,
             system_version="4.16.30-vxCUSTOM",
             device_model="LumintoGold",
             system_lang_code="ru",
@@ -107,14 +129,14 @@ class UserbotManager:
         self._flood_rules: dict[int, dict[str, dict]] = {}
 
     async def init(self):
-        self.client.use_ipv6 = await self.settings.get("use.ipv6")
+        use_ipv6 = await self.settings.get("use.ipv6")
+        self.client.use_ipv6 = use_ipv6
         self.ai_client = ai.Client(
             await self.settings.get("ai.token"),
             await self.settings.get("ai.proxy"),
         )
         await self.client.start(phone=self.phone)
         logger.info(f"Запущен клиент ({self.phone})")
-
         self._register_handlers()
 
         if await self.settings.get("block.voice"):
@@ -438,7 +460,7 @@ class UserbotManager:
         bot = Bot(token=vk_token)
 
         try:
-            text = self._format_tg_message(event.text)
+            text = format_tg_message(event.text)
 
             if event.photo:
                 path = await event.download_media(file=bytes)
@@ -454,15 +476,6 @@ class UserbotManager:
             logger.info(f"tg2vk: Пост опубликован (ID={resp.post_id})")
         except Exception:
             logger.trace("tg2vk: Ошибка публикации")
-
-    def _format_tg_message(self, text: str) -> str:
-        if not text:
-            text = ""
-        text = re.sub(r"\*\*|__", "", text)
-        text = re.sub(r"\[.*?\]\(.*?\)", "", text)
-        prefix = "📢 Из Telegram\n\n"
-        result = (prefix + text.strip())[:4096]
-        return result if result.strip() else prefix.strip()
 
     async def add_autochat(self, event: Message):
         try:
@@ -1159,21 +1172,16 @@ async def run_userbot(number: str, api_id: int, api_hash: str):
 
 
 async def main():
-    clients_dir = "clients"
-    try:
-        clients = listdir(clients_dir)
-    except FileNotFoundError:
-        mkdir(clients_dir)
-        clients = []
+    pathes.clients.mkdir(exist_ok=True)
+    client_files = [f for f in pathes.clients.iterdir() if f.suffix == ".json"]
 
-    if not clients:
+    if not client_files:
         logger.warning("Нет ни одного клиента! Создаём нового..")
         number = input("Введи номер: ")
         api_id = int(input("Введи api_id: "))
         api_hash = input("Введи api_hash: ")
-        async with aiofiles.open(
-            path.join(clients_dir, f"{number}.json"), "wb"
-        ) as f:
+        config_path = pathes.clients / f"{number}.json"
+        async with aiofiles.open(config_path, "wb") as f:
             await f.write(
                 orjson.dumps(
                     {"api_id": api_id, "api_hash": api_hash},
@@ -1182,21 +1190,15 @@ async def main():
             )
         return await main()
 
-    logger.info(f"Клиенты: {clients}")
+    logger.info(f"Клиенты: {[f.name for f in client_files]}")
     tasks = []
-    for client_file in clients:
-        try:
-            async with aiofiles.open(
-                path.join(clients_dir, client_file), "rb"
-            ) as f:
-                data = orjson.loads(await f.read())
-            phone = client_file.replace(".json", "")
-            tasks.append(run_userbot(phone, data["api_id"], data["api_hash"]))
-        except orjson.JSONDecodeError:
-            logger.error(
-                f"{client_file} пуст или неправильно размечен! Отключаем клиента.."
-            )
-    if tasks == []:
+    for cf in client_files:
+        result = await load_client_config(pathes.clients, cf.name)
+        if result:
+            phone, api_id, api_hash = result
+            tasks.append(run_userbot(phone, api_id, api_hash))
+
+    if not tasks:
         return logger.error("Нет ни одного валидного клиента.")
     await asyncio.gather(*tasks)
 

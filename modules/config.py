@@ -1,9 +1,8 @@
-from os import path
-
+from pathlib import Path
 from bestconfig import Config
 from loguru import logger
 
 logger.info(f"Загружен модуль {__name__}!")
 
-config = Config(path.join("configs", "config.yml"))
-tokens = Config(path.join("configs", "tokens.yml"))
+config = Config(Path("configs") / "config.yml")
+tokens = Config(Path("configs") / "tokens.yml")
