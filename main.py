@@ -34,8 +34,8 @@ logger.add(
 logger.info("LumintoGold запускается...")
 
 try:
-    from vkbottle import Bot  # type: ignore
-    from vkbottle.tools import PhotoWallUploader  # type: ignore
+    from vkbottle import Bot
+    from vkbottle.tools import PhotoWallUploader
 
     import_vkbottle = True
 except ModuleNotFoundError:
@@ -159,6 +159,8 @@ class UserbotManager:
     def _register_handlers(self):
         if import_vkbottle:
             self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
+
+        self.client.on(d.cmd(r".$(.+)"))(self.run_shell)
 
         self.client.on(d.cmd(r"\+нот (.+)\n([\s\S]+)"))(self.add_note)
         self.client.on(d.cmd(r"\-нот (.+)"))(self.rm_note)
@@ -1099,6 +1101,49 @@ class UserbotManager:
             await event.edit(phrase.password.done.format(pwd))
         except Exception as ex:
             await event.edit(phrase.error.format(ex))
+
+    async def run_shell(self, event: Message):
+        cmd = event.pattern_match.group(1).strip()
+        if not cmd:
+            return await event.edit(phrase.shell.no_command)
+
+        msg = await event.edit(phrase.shell.started.format(cmd))
+        full_output = ""
+
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                shell=True,
+            )
+
+            while proc.stdout and not proc.stdout.at_eof():
+                try:
+                    chunk = await asyncio.wait_for(
+                        proc.stdout.read(1024), timeout=1.0
+                    )
+                    if not chunk:
+                        break
+                    decoded = chunk.decode("utf-8", errors="replace")
+                    full_output += decoded
+
+                    display = full_output[-3000:]
+                    with contextlib.suppress(Exception):
+                        await msg.edit(phrase.shell.live.format(cmd, display))
+
+                except asyncio.TimeoutError:
+                    continue
+
+            await proc.wait()
+
+            final = (full_output or "[no output]").strip()
+            if len(final) > 4000:
+                final = final[-4000:] + "\n... (обрезано)"
+            await msg.edit(phrase.shell.finished.format(cmd, final))
+
+        except Exception as e:
+            await msg.edit(phrase.shell.error.format(e))
 
     async def run(self):
         await self.init()
