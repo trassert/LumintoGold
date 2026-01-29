@@ -160,7 +160,7 @@ class UserbotManager:
         if import_vkbottle:
             self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
 
-        self.client.on(d.cmd(r".$(.+)"))(self.run_shell)
+        self.client.on(d.cmd(r"\.\$(.+)"))(self.run_shell)
 
         self.client.on(d.cmd(r"\+нот (.+)\n([\s\S]+)"))(self.add_note)
         self.client.on(d.cmd(r"\-нот (.+)"))(self.rm_note)
