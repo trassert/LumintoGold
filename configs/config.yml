@@ -5,4 +5,4 @@ url:
 
 battery_path: "/sys/class/power_supply/battery/status"
 wait_delete: 60
-ai_model: "openai/gpt-oss-20b:free"
+ai_model: "qwen/qwen3-next-80b-a3b-instruct:free"
