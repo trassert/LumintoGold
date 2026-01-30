@@ -16,7 +16,6 @@ default = {
     "mask.read": [],
     "luminto.reactions": True,
     "ai.token": None,
-    "ai.proxy": None,
     "use.ipv6": False,
     "auto.online": False,
     "token.geoapify": "",

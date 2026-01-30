@@ -12,7 +12,7 @@ async def get_weather(city, token=""):
         return phrase.weather.no_token
     async with aiohttp.ClientSession() as session:
         async with session.get(
-            config.config.openweathermap_url.format(city=city, apikey=token),
+            config.config.url.openweathermap.format(city=city, apikey=token),
             timeout=aiohttp.ClientTimeout(total=5),
         ) as response:
             data = await response.json()

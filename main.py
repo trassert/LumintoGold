@@ -121,7 +121,6 @@ class UserbotManager:
         self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
         self.battery_task = task_gen.Generator(f"{phone}_battery")
         self.batt_state = True
-        self.ai_client = ai.Client(None, None)
         self.notes = notes.Notes(phone)
         self._autochat_running = False
         self._autochat_task = None
@@ -131,9 +130,8 @@ class UserbotManager:
     async def init(self):
         use_ipv6 = await self.settings.get("use.ipv6")
         self.client.use_ipv6 = use_ipv6
-        self.ai_client = ai.Client(
-            await self.settings.get("ai.token"),
-            await self.settings.get("ai.proxy"),
+        self.ai_client = ai.Chat(
+            self.phone, await self.settings.get("ai.token")
         )
         await self.client.start(phone=self.phone)
         logger.info(f"Запущен клиент ({self.phone})")
@@ -204,11 +202,10 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
 
-        self.client.on(d.cmd(r"\.токен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
         self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
-        self.client.on(d.cmd(r"\.прокси (.+)"))(self.ai_proxy)
         self.client.on(d.cmd(r"\.ии ([\s\S]+)"))(self.ai_resp)
         self.client.on(d.cmd(r"\.т ([\s\S]+)"))(self.typing)
         self.client.on(d.cmd(r"\.set (.+)"))(self.set_setting)
@@ -1030,23 +1027,17 @@ class UserbotManager:
         await event.edit(await get_sys.get_system_info())
 
     async def ai_token(self, event: Message):
-        token = event.pattern_match.group(1).strip()
+        token: str = event.pattern_match.group(1).strip()
         await self.settings.set("ai.token", token)
-        self.ai_client.change_api_key(token)
+        self.ai_client.api_key = token
         await event.edit(phrase.ai.token_set)
-
-    async def ai_proxy(self, event: Message):
-        proxy = event.pattern_match.group(1).strip()
-        await self.settings.set("ai.proxy", proxy)
-        self.ai_client.change_proxy(proxy)
-        await event.edit(phrase.ai.proxy_set)
 
     async def ai_resp(self, event: Message):
         if not await self.settings.get("ai.token"):
             return await event.edit(phrase.ai.no_token)
         text = event.pattern_match.group(1).strip()
         try:
-            response = await self.ai_client.generate(text)
+            response = await self.ai_client.send(text)
         except Exception as e:
             return await event.edit(phrase.error.format(e))
         if len(response) > 4096:

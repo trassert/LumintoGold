@@ -1,8 +1,8 @@
-ai_model: "gemini-2.5-flash-lite"
-
-geoapify_url: "https://api.geoapify.com/v1/geocode/reverse"
-openweathermap_url: "https://api.openweathermap.org/data/2.5/weather?q={city}&appid={apikey}&units=metric&lang=ru"
+url:
+  geoapify: "https://api.geoapify.com/v1/geocode/reverse"
+  openweathermap: "https://api.openweathermap.org/data/2.5/weather?q={city}&appid={apikey}&units=metric&lang=ru"
+  openrouter: "https://openrouter.ai/api/v1/chat/completions"
 
 battery_path: "/sys/class/power_supply/battery/status"
-
 wait_delete: 60
+ai_model: "google/gemma-3n-e4b-it:free"

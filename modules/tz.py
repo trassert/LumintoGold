@@ -28,7 +28,7 @@ except ModuleNotFoundError:
     async def get_timezone(lat, lon, api_key) -> str | None:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                config.config.geoapify_url,
+                config.config.url.geoapify,
                 params={
                     "lat": lat,
                     "lon": lon,
