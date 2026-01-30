@@ -5,4 +5,4 @@ url:
 
 battery_path: "/sys/class/power_supply/battery/status"
 wait_delete: 60
-ai_model: "arcee-ai/trinity-large-preview:free"
+ai_model: "tngtech/deepseek-r1t2-chimera:free"

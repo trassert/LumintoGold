@@ -131,7 +131,7 @@ class UserbotManager:
         use_ipv6 = await self.settings.get("use.ipv6")
         self.client.use_ipv6 = use_ipv6
         self.ai_client = ai.Chat(
-            self.phone, await self.settings.get("ai.token")
+            self.phone, await self.settings.get("ai.token"), model=await self.settings.get("ai.model")
         )
         await self.client.start(phone=self.phone)
         logger.info(f"Запущен клиент ({self.phone})")
@@ -203,6 +203,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
 
         self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
         self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
@@ -1031,6 +1032,12 @@ class UserbotManager:
         await self.settings.set("ai.token", token)
         self.ai_client.api_key = token
         await event.edit(phrase.ai.token_set)
+
+    async def ai_model(self, event: Message):
+        model: str = event.pattern_match.group(1).strip()
+        await self.settings.set("ai.model", model)
+        self.ai_client.model = model
+        await event.edit(phrase.ai.model_set)
 
     async def ai_resp(self, event: Message):
         if not await self.settings.get("ai.token"):
