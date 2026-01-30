@@ -202,6 +202,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
 
+        self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
         self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
         self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
@@ -1038,6 +1039,10 @@ class UserbotManager:
         await self.settings.set("ai.model", model)
         self.ai_client.model = model
         await event.edit(phrase.ai.model_set)
+        
+    async def ai_clear(self, event: Message):
+        await self.ai_client.clear()
+        await event.edit(phrase.ai.clear)
 
     async def ai_resp(self, event: Message):
         if not await self.settings.get("ai.token"):
