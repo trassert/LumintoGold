@@ -3,6 +3,8 @@ from pathlib import Path
 import aiofiles
 import aiohttp
 import orjson
+from groq import AsyncGroq
+from httpx import AsyncClient
 from loguru import logger
 
 from . import config, pathes
@@ -58,7 +60,7 @@ class Chat:
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "HTTP-Referer": "https://t.me/lumintogold",  # убран лишний пробел
+            "HTTP-Referer": "https://t.me/lumintogold",
             "X-Title": "lumintogold",
             "Content-Type": "application/json",
         }
@@ -95,3 +97,39 @@ class Chat:
     def history(self) -> list[dict[str, str]]:
         """Текущая история (только для чтения)."""
         return self._history.copy()
+
+
+class Groq:
+    def __init__(
+        self,
+        number: str,
+        api_key: str = None,
+        proxy: str = None,
+    ):
+        self.proxy: str = proxy
+        self.api_key: str = api_key
+        self.number: str = number
+        self.model = "whisper-large-v3-turbo"
+        self.path: Path = pathes.voice / number
+        self.chkdir()
+
+    def init_client(self):
+        self.client = AsyncGroq(
+            api_key=self.api_key, http_client=AsyncClient(proxy=self.proxy)
+        )
+
+    def chkdir(self):
+        return self.path.mkdir(exist_ok=True)
+
+    async def voice(self, id):
+        path = self.path / f"voice_{id}.ogg"
+        async with aiofiles.open(path, "rb") as f:
+            audio_data = await f.read()
+        transcription = await self.client.audio.transcriptions.create(
+            file=(path, audio_data),
+            model=self.model,
+            temperature=0,
+            response_format="verbose_json",
+        )
+        path.unlink(missing_ok=True)
+        return transcription.text.strip()

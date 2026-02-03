@@ -104,6 +104,7 @@ class UserbotManager:
         self.phone = phone
         self.settings = settings.UBSettings(phone, "clients")
         self.session_path = Path("sessions") / phone
+        self.voice_path = pathes.voice / phone
         self.client = TelegramClient(
             session=str(self.session_path),
             api_id=api_id,
@@ -131,8 +132,16 @@ class UserbotManager:
         use_ipv6 = await self.settings.get("use.ipv6")
         self.client.use_ipv6 = use_ipv6
         self.ai_client = ai.Chat(
-            self.phone, await self.settings.get("ai.token"), model=await self.settings.get("ai.model")
+            self.phone,
+            await self.settings.get("ai.token"),
+            model=await self.settings.get("ai.model"),
         )
+        self.groq = ai.Groq(
+            self.phone,
+            await self.settings.get("groq.token"),
+            await self.settings.get("groq.proxy"),
+        )
+        self.groq.init_client()
         await self.client.start(phone=self.phone)
         logger.info(f"Запущен клиент ({self.phone})")
         self._register_handlers()
@@ -188,6 +197,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
 
         self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
+        self.client.on(d.cmd(r"\.voice$"))(self.voice2text)
         self.client.on(d.cmd(r"\.баттмон$"))(self.toggle_batt)
         self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
         self.client.on(d.cmd(r"\.слов"))(self.words)
@@ -528,7 +538,11 @@ class UserbotManager:
         if message is None or not message.entities:
             return await event.edit(phrase.emoji.no_entity)
 
-        text = [f"`{entity.document_id}`" for entity in message.entities if hasattr(entity, "document_id")]
+        text = [
+            f"`{entity.document_id}`"
+            for entity in message.entities
+            if hasattr(entity, "document_id")
+        ]
 
         if not text:
             return await event.edit(phrase.emoji.no_entity)
@@ -854,6 +868,24 @@ class UserbotManager:
                 "voice.message", phrase.voice.default_message
             )
             await event.respond(msg)
+
+    async def voice2text(self, event: Message):
+        reply: Message = await event.get_reply_message()
+        if not reply or not reply.voice:
+            return await event.edit(phrase.voice.no_reply)
+
+        file_path = self.voice_path / f"voice_{event.id}.ogg"
+        await reply.download_media(file=str(file_path))
+
+        try:
+            return await event.edit(
+                phrase.voice.done.format(await self.groq.voice(event.id))
+            )
+
+        except Exception as e:
+            logger.exception("Ошибка при распознавании голоса")
+            msg = phrase.voice.error.format(error=str(e)[:200])
+            return await event.edit(msg)
 
     async def ipman(self, event: Message):
         arg = event.pattern_match.group(1)
