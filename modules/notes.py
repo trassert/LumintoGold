@@ -1,9 +1,9 @@
-import os
 import asyncio
-from typing import List, Optional, Union, Dict
-from telethon import TelegramClient
+import os
+
 import aiofiles
 from loguru import logger
+from telethon import TelegramClient
 
 from . import pathes
 
@@ -12,9 +12,9 @@ logger.info(f"Загружен модуль {__name__}!")
 
 class Notes:
     def __init__(
-        self, number: Union[str, int], base_dir: str = pathes.notes
+        self, number: str | int, base_dir: str = pathes.notes
     ) -> None:
-        """Метод инициализации. Проверьте, что здесь ДВА подчеркивания."""
+        """Метод инициализации."""
         self.number = str(number)
         self.base_dir = base_dir
         self.user_dir = os.path.join(self.base_dir, self.number)
@@ -57,7 +57,7 @@ class Notes:
             logger.trace("Ошибка в Notes.add")
             return False
 
-    async def get(self, name: str) -> Optional[Dict]:
+    async def get(self, name: str) -> dict | None:
         try:
             norm_name = self._normalize_name(name)
             base_path = os.path.join(self.user_dir, norm_name)
@@ -67,7 +67,7 @@ class Notes:
             if not os.path.exists(txt_path):
                 return None
 
-            async with aiofiles.open(txt_path, "r", encoding="utf-8") as f:
+            async with aiofiles.open(txt_path, encoding="utf-8") as f:
                 text = await f.read()
 
             return {
@@ -77,13 +77,13 @@ class Notes:
         except Exception:
             return None
 
-    async def get_list(self) -> List[str]:
+    async def get_list(self) -> list[str]:
         if not os.path.isdir(self.user_dir):
             return []
         files = os.listdir(self.user_dir)
         return sorted([f[:-4] for f in files if f.endswith(".txt")])
 
-    async def get_by_index(self, index: int) -> Optional[Dict]:
+    async def get_by_index(self, index: int) -> dict | None:
         names = await self.get_list()
         if 1 <= index <= len(names):
             return await self.get(names[index - 1])

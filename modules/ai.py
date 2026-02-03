@@ -1,11 +1,11 @@
 from pathlib import Path
-from typing import List, Dict
-import orjson
+
 import aiofiles
 import aiohttp
+import orjson
+from loguru import logger
 
 from . import config, pathes
-from loguru import logger
 
 logger.info(f"Загружен модуль {__name__}!")
 
@@ -22,7 +22,7 @@ class Chat:
         self.chat_id = chat_id
         self.chats_dir = chats_dir or Path(pathes.ai)
         self.api_key: str = api_key
-        self._history: List[Dict[str, str]] = []
+        self._history: list[dict[str, str]] = []
         self._path = self.chats_dir / f"{self.chat_id}.json"
         self.chats_dir.mkdir(parents=True, exist_ok=True)
 
@@ -92,6 +92,6 @@ class Chat:
             self._path.unlink()
 
     @property
-    def history(self) -> List[Dict[str, str]]:
+    def history(self) -> list[dict[str, str]]:
         """Текущая история (только для чтения)."""
         return self._history.copy()

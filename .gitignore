@@ -9,6 +9,7 @@ tokens.yml
 .venv
 .env
 .vscode
+.ruff_cache
 uv.lock
 
 test.*

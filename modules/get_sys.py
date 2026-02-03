@@ -1,12 +1,11 @@
 import asyncio
-import shutil
 import os
 import platform
-import psutil
-
+import shutil
 from pathlib import Path
 from time import time
-from typing import List
+
+import psutil
 from loguru import logger
 
 logger.info(f"Загружен модуль {__name__}!")
@@ -63,7 +62,7 @@ else:
             return "Неизвестно"
 
 
-async def get_current_speed() -> List[str | float]:
+async def get_current_speed() -> list[str | float]:
     try:
         start = psutil.net_io_counters()
         await asyncio.sleep(0.5)
@@ -172,7 +171,7 @@ async def get_system_info() -> str:
     Процессор:
         Частота: {int(cpu_freq.current) if cpu_freq else "N/A"} МГц
         Ядра/Потоки: {cpu_cores_phys}/{cpu_cores_logical}
-        Загрузка: {cpu_load} 
+        Загрузка: {cpu_load}
         Температура ↑|≈|↓: {temp}
     ОЗУ:
         Объём: {mem_total:.1f} ГБ

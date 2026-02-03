@@ -1,9 +1,9 @@
 import os
 from typing import Any
-from loguru import logger
 
 import aiofiles
 import orjson
+from loguru import logger
 
 logger.info(f"Загружен модуль {__name__}!")
 

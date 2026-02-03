@@ -4,7 +4,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 import aiofiles
 import orjson
@@ -12,27 +12,26 @@ from loguru import logger
 
 from . import pathes
 
-
 logger.info(f"Загружен модуль {__name__}!")
 
 TaskType = Literal["interval", "daily"]
 TaskUnit = Literal["hours", "seconds"]
-TaskParam = Union[int, str]
-RandomDelay = Optional[tuple[int, int]]
+TaskParam = int | str
+RandomDelay = tuple[int, int] | None
 
 
 class Generator:
-    _instances: dict[str, "Generator"] = {}
+    _instances: dict[str, Generator] = {}
 
     def __init__(self, key_name: str, filename: str = pathes.tasks) -> None:
         logger.info(f"Инициализирован таск-ген {key_name}")
         self.key_name: str = key_name
         self.filename: str = filename
-        self._task: Optional[asyncio.Task] = None
-        self._task_type: Optional[TaskType] = None
-        self._task_param: Optional[TaskParam] = None
+        self._task: asyncio.Task | None = None
+        self._task_type: TaskType | None = None
+        self._task_param: TaskParam | None = None
         self._random_delay: RandomDelay = None
-        self._next_run_timestamp: Optional[float] = None
+        self._next_run_timestamp: float | None = None
         Generator._instances[key_name] = self
 
     def _get_random_delay(self) -> float:
@@ -168,7 +167,7 @@ class Generator:
         async with aiofiles.open(self.filename, "wb") as f:
             await f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
 
-    async def info(self) -> Optional[float]:
+    async def info(self) -> float | None:
         data = await self._get_task_data()
         if not self._task or self._next_run_timestamp is None:
             if not data:

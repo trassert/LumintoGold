@@ -1,8 +1,7 @@
 import aiohttp
-
 from loguru import logger
 
-from . import phrase, config
+from . import config, phrase
 
 logger.info(f"Загружен модуль {__name__}!")
 

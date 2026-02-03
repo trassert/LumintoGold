@@ -1,20 +1,20 @@
 import asyncio
+import contextlib
 import logging
 import random
 import re
-import contextlib
+from pathlib import Path
 from sys import stderr
 from time import time
-from pathlib import Path
+
 import aiofiles
 import orjson
 from loguru import logger
-from telethon import events, functions, types
-from telethon import TelegramClient
+from telethon import TelegramClient, events, functions, types
 from telethon.tl.custom import Message
 from telethon.tl.custom.participantpermissions import ParticipantPermissions
-from telethon.tl.types import MessageMediaDocument, PeerUser, User
 from telethon.tl.functions.account import UpdateStatusRequest
+from telethon.tl.types import MessageMediaDocument, PeerUser, User
 
 logger.remove()
 logger.add(
@@ -52,22 +52,22 @@ logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
 from modules import (  # noqa: E402
     ai,
-    d,
-    pathes,
-    formatter,
-    get_sys,
-    task_gen,
-    genpass,
-    phrase,
-    flip_map,
-    iterators,
-    settings,
-    tz,
-    db,
-    ipman,
     apis,
-    notes,
     config,
+    d,
+    db,
+    flip_map,
+    formatter,
+    genpass,
+    get_sys,
+    ipman,
+    iterators,
+    notes,
+    pathes,
+    phrase,
+    settings,
+    task_gen,
+    tz,
 )
 
 
@@ -525,16 +525,14 @@ class UserbotManager:
 
     async def get_emo_id(self, event: Message):
         message: Message = await event.get_reply_message()
-        if message is None:
+        if message is None or not message.entities:
             return await event.edit(phrase.emoji.no_entity)
-        if message.entities == []:
+
+        text = [f"`{entity.document_id}`" for entity in message.entities if hasattr(entity, "document_id")]
+
+        if not text:
             return await event.edit(phrase.emoji.no_entity)
-        text = []
-        for entity in message.entities or []:
-            if hasattr(entity, "document_id"):
-                text.append(f"`{entity.document_id}`")
-        if text == []:
-            return await event.edit(phrase.emoji.no_entity)
+
         return await event.edit(phrase.emoji.get.format(", ".join(text)))
 
     async def set_flood_stickers(self, event: Message):
@@ -1039,7 +1037,7 @@ class UserbotManager:
         await self.settings.set("ai.model", model)
         self.ai_client.model = model
         await event.edit(phrase.ai.model_set)
-        
+
     async def ai_clear(self, event: Message):
         await self.ai_client.clear()
         await event.edit(phrase.ai.clear)
@@ -1174,7 +1172,7 @@ class UserbotManager:
                     with contextlib.suppress(Exception):
                         await msg.edit(phrase.shell.live.format(cmd, display))
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
 
             await proc.wait()

@@ -1,12 +1,11 @@
-import pytz
-import aiohttp
-
-from loguru import logger
-from geopy.geocoders import Nominatim
 from datetime import datetime
 
-from . import config
+import aiohttp
+import pytz
+from geopy.geocoders import Nominatim
+from loguru import logger
 
+from . import config
 
 logger.info(f"Загружен модуль {__name__}!")
 

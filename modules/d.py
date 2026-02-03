@@ -1,5 +1,5 @@
-from telethon import events
 from loguru import logger
+from telethon import events
 
 logger.info(f"Загружен модуль {__name__}!")
 
