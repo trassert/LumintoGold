@@ -214,6 +214,8 @@ class UserbotManager:
 
         self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
         self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"\.войспрокси (.+)"))(self.voiceproxy)
+        self.client.on(d.cmd(r"\.войстокен (.+)"))(self.voicetoken)
         self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
@@ -872,20 +874,34 @@ class UserbotManager:
     async def voice2text(self, event: Message):
         reply: Message = await event.get_reply_message()
         if not reply or not reply.voice:
-            return await event.edit(phrase.voice.no_reply)
+            return await event.edit(phrase.voicerec.no_reply)
 
         file_path = self.voice_path / f"voice_{event.id}.ogg"
         await reply.download_media(file=str(file_path))
 
         try:
             return await event.edit(
-                phrase.voice.done.format(await self.groq.voice(event.id))
+                phrase.voicerec.done.format(await self.groq.voice(event.id))
             )
 
         except Exception as e:
             logger.exception("Ошибка при распознавании голоса")
-            msg = phrase.voice.error.format(error=str(e)[:200])
+            msg = phrase.voicerec.error.format(error=str(e)[:200])
             return await event.edit(msg)
+
+    async def voiceproxy(self, event: Message):
+        arg = event.pattern_match.group(1).strip()
+        self.groq.proxy = arg
+        await self.settings.set("groq.proxy", arg)
+        self.groq.init_client()
+        return await event.edit(phrase.voicerec.proxy)
+
+    async def voicetoken(self, event: Message):
+        arg = event.pattern_match.group(1).strip()
+        self.groq.api_key = arg
+        await self.settings.set("groq.token", arg)
+        self.groq.init_client()
+        return await event.edit(phrase.voicerec.token)
 
     async def ipman(self, event: Message):
         arg = event.pattern_match.group(1)

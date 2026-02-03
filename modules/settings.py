@@ -34,7 +34,9 @@ default = {
     "battery.status": False,
     "battery.chat": None,
     "battery.msg_no": "❌ : Нет зарядки!",
-    "battery.msg_yes": "✅ : Зарядка восстановлена."
+    "battery.msg_yes": "✅ : Зарядка восстановлена.",
+    "groq.proxy": None,
+    "groq.token": None
 }
 
 
