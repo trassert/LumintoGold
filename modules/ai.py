@@ -126,7 +126,7 @@ class Groq:
         async with aiofiles.open(path, "rb") as f:
             audio_data = await f.read()
         transcription = await self.client.audio.transcriptions.create(
-            file=(path, audio_data),
+            file=(str(path), audio_data),
             model=self.model,
             temperature=0,
             response_format="verbose_json",
