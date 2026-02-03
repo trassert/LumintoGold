@@ -136,12 +136,15 @@ class UserbotManager:
             await self.settings.get("ai.token"),
             model=await self.settings.get("ai.model"),
         )
-        self.groq = ai.Groq(
-            self.phone,
-            await self.settings.get("groq.token"),
-            await self.settings.get("groq.proxy"),
-        )
-        self.groq.init_client()
+        try:
+            self.groq = ai.Groq(
+                self.phone,
+                await self.settings.get("groq.token"),
+                await self.settings.get("groq.proxy"),
+            )
+            self.groq.init_client()
+        except Exception:
+            logger.warning("Установите войс-токен (.войстокен <токен>)")
         await self.client.start(phone=self.phone)
         logger.info(f"Запущен клиент ({self.phone})")
         self._register_handlers()
