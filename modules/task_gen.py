@@ -21,7 +21,7 @@ RandomDelay = tuple[int, int] | None
 
 
 class Generator:
-    _instances: dict[str, Generator] = {}
+    _instances: dict[str, "Generator"] = {}  # noqa: UP037
 
     def __init__(self, key_name: str, filename: str = pathes.tasks) -> None:
         logger.info(f"Инициализирован таск-ген {key_name}")
