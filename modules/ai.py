@@ -119,7 +119,7 @@ class Groq:
         )
 
     def chkdir(self):
-        return self.path.mkdir(exist_ok=True)
+        return self.path.mkdir(exist_ok=True, parents=True)
 
     async def voice(self, id):
         path = self.path / f"voice_{id}.ogg"
