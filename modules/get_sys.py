@@ -152,7 +152,7 @@ async def get_system_info() -> str:
     network_task = await asyncio.create_task(get_current_speed())
     temp_task = await asyncio.create_task(asyncio.to_thread(get_temperature))
 
-    temp = f"Температура ↑|≈|↓: {temp_task}" if temp_task is not None else ""
+    temp = f"\nТемпература ↑|≈|↓: {temp_task}" if temp_task is not None else ""
 
     mem_total = mem.total / (1024**3)
     mem_avail = mem.available / (1024**3)
@@ -166,8 +166,7 @@ async def get_system_info() -> str:
     Процессор:
         Частота: {int(cpu_freq.current) if cpu_freq else "N/A"} МГц
         Ядра/Потоки: {cpu_cores_phys}/{cpu_cores_logical}
-        Загрузка: {cpu_load_task}
-        {temp}
+        Загрузка: {cpu_load_task}{temp}
     ОЗУ:
         Объём: {mem_total:.1f} ГБ
         Доступно: {mem_avail:.1f} ГБ
