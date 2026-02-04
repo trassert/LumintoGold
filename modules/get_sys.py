@@ -20,21 +20,21 @@ if platform.system() == "Windows":
             try:
                 temps = WinTmp.CPU_Temps()
                 if not temps:
-                    return "Нет данных"
+                    return None
                 mx, avg, mn = max(temps), sum(temps) / len(temps), min(temps)
                 return f"{round(mx)} | {round(avg)} | {round(mn)}"
             except Exception:
                 logger.opt(exception=True).debug(
                     "Ошибка при чтении температуры (WinTmp)"
                 )
-                return "Неизвестно"
+                return None
     except ImportError:
         logger.warning(
             "WinTmp не установлен, температура недоступна на Windows"
         )
 
         def get_temperature() -> str:
-            return "Неизвестно"
+            return None
 else:
     logger.info("Система - Linux, использую psutil")
 
@@ -48,7 +48,7 @@ else:
                 if entry.current is not None and entry.current >= 0
             ]
             if not current_temps:
-                return "Нет данных"
+                return None
             mx, avg, mn = (
                 max(current_temps),
                 sum(current_temps) / len(current_temps),
@@ -56,10 +56,8 @@ else:
             )
             return f"{round(mx)} | {round(avg)} | {round(mn)}"
         except Exception:
-            logger.opt(exception=True).debug(
-                "Ошибка при чтении температуры (Linux/psutil)"
-            )
-            return "Неизвестно"
+            logger.warning("Не могу прочитать температуру.")
+            return None
 
 
 async def get_current_speed() -> list[str | float]:
@@ -147,17 +145,14 @@ async def get_system_info() -> str:
     cpu_cores_phys = psutil.cpu_count(logical=False) or "?"
     cpu_cores_logical = psutil.cpu_count(logical=True) or "?"
 
-    boottime_task = asyncio.create_task(
+    boottime_task = await asyncio.create_task(
         asyncio.to_thread(lambda: get_boottime())
     )
-    cpu_load_task = asyncio.create_task(get_cpu_load())
-    network_task = asyncio.create_task(get_current_speed())
-    temp_task = asyncio.create_task(asyncio.to_thread(get_temperature))
+    cpu_load_task = await asyncio.create_task(get_cpu_load())
+    network_task = await asyncio.create_task(get_current_speed())
+    temp_task = await asyncio.create_task(asyncio.to_thread(get_temperature))
 
-    boottime = await boottime_task
-    cpu_load = await cpu_load_task
-    network = await network_task
-    temp = await temp_task
+    temp = f"Температура ↑|≈|↓: {temp_task}" if temp_task is not None else ""
 
     mem_total = mem.total / (1024**3)
     mem_avail = mem.available / (1024**3)
@@ -166,13 +161,13 @@ async def get_system_info() -> str:
     disk = disk_free()
 
     return f"""⚙️ : Информация о хостинге:
-    Время работы: {boottime}
+    Время работы: {boottime_task}
     ОС: {platform.system()} {platform.release()}
     Процессор:
         Частота: {int(cpu_freq.current) if cpu_freq else "N/A"} МГц
         Ядра/Потоки: {cpu_cores_phys}/{cpu_cores_logical}
-        Загрузка: {cpu_load}
-        Температура ↑|≈|↓: {temp}
+        Загрузка: {cpu_load_task}
+        {temp}
     ОЗУ:
         Объём: {mem_total:.1f} ГБ
         Доступно: {mem_avail:.1f} ГБ
@@ -183,6 +178,6 @@ async def get_system_info() -> str:
         Использовано: {disk[1]}
         Свободно: {disk[2]}
     Сеть:
-        Загрузка: {network[0]} Мбит/с
-        Выгрузка: {network[1]} Мбит/с
+        Загрузка: {network_task[0]} Мбит/с
+        Выгрузка: {network_task[1]} Мбит/с
     """
