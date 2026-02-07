@@ -214,7 +214,6 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.к (.+)"))(self.calc)
         self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
 
-        self.client.on(events.NewMessage())(self._flood_monitor)
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
 
     async def clean_chat(self, event: Message):
