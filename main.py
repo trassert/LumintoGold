@@ -882,13 +882,23 @@ class UserbotManager:
         deleted_count = 0
         msg = await event.edit(phrase.pm.wait.format(0))
         for dialog in dialogs:
-            user = dialog.entity
-            if isinstance(user, User) and user.deleted:
+            user: User = dialog.entity
+            if not isinstance(user, User):
+                continue
+            on_delete = False
+            if user.deleted:
+                on_delete = True
+            else:
+                messages = await self.client.get_messages(user.id, limit=10)
+                if all(isinstance(msg, MessageService) for msg in messages):
+                    on_delete = True
+            if on_delete:
                 await self.client.delete_dialog(dialog.id)
                 await asyncio.sleep(await self.settings.get("typing.delay"))
                 deleted_count += 1
                 if deleted_count % 5 == 0:
                     await msg.edit(phrase.pm.wait.format(deleted_count))
+
         await event.edit(phrase.pm.cleared.format(deleted_count))
 
     async def set_setting(self, event: Message):
@@ -1148,15 +1158,6 @@ class UserbotManager:
 
         except Exception as e:
             await msg.edit(phrase.shell.error.format(e))
-
-    async def test(self, event: Message):
-        messages = await self.client.get_messages(
-            int(event.pattern_match.group(1).strip()), limit=10
-        )
-        has_real_message = any(not isinstance(msg, MessageService) for msg in messages)
-        return await event.reply(
-            f"dial.pm: {event.pattern_match.group(1).strip()} - {str(messages)[:200]}\n\nResult: {has_real_message}"
-        )
 
     async def run(self):
         await self.init()
