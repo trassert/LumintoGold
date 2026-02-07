@@ -215,7 +215,6 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
-        self.client.on(d.cmd(r"\.тест (.+)"))(self.test)
         self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
         self.client.on(d.cmd(r"\.ии ([\s\S]+)"))(self.ai_resp)
         self.client.on(d.cmd(r"\.т ([\s\S]+)"))(self.typing)
