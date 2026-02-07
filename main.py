@@ -14,7 +14,12 @@ from telethon import TelegramClient, events, functions, types
 from telethon.tl.custom import Message
 from telethon.tl.custom.participantpermissions import ParticipantPermissions
 from telethon.tl.functions.account import UpdateStatusRequest
-from telethon.tl.types import MessageMediaDocument, PeerUser, User
+from telethon.tl.types import (
+    MessageMediaDocument,
+    MessageService,
+    PeerUser,
+    User,
+)
 
 logger.remove()
 logger.add(
@@ -1148,8 +1153,10 @@ class UserbotManager:
         messages = await self.client.get_messages(
             int(event.pattern_match.group(1).strip()), limit=10
         )
-        has_real_message = any(isinstance(msg, Message) for msg in messages)
-        return await event.reply(f"dial.pm: {event.pattern_match.group(1).strip()} - {messages}\n\nResult: {has_real_message}")
+        has_real_message = any(not isinstance(msg, MessageService) for msg in messages)
+        return await event.reply(
+            f"dial.pm: {event.pattern_match.group(1).strip()} - {str(messages)[:200]}\n\nResult: {has_real_message}"
+        )
 
     async def run(self):
         await self.init()
