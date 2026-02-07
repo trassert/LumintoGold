@@ -222,6 +222,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
+        self.client.on(d.cmd(r"\.тест (.+)"))(self.test)
         self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
         self.client.on(d.cmd(r"\.ии ([\s\S]+)"))(self.ai_resp)
         self.client.on(d.cmd(r"\.т ([\s\S]+)"))(self.typing)
@@ -495,7 +496,7 @@ class UserbotManager:
     async def add_autochat(self, event: Message):
         try:
             chat_id = int(event.pattern_match.group(1))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return await event.edit(phrase.autochat.invalid_id)
 
         chats = await self.settings.get("autochat.chats", [])
@@ -507,7 +508,7 @@ class UserbotManager:
     async def rm_autochat(self, event: Message):
         try:
             chat_id = int(event.pattern_match.group(1))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return await event.edit(phrase.autochat.invalid_id)
 
         chats = await self.settings.get("autochat.chats", [])
@@ -532,7 +533,7 @@ class UserbotManager:
             delay = int(event.pattern_match.group(1))
             if delay < 10:
                 return await event.edit(phrase.autochat.too_fast)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return await event.edit(phrase.autochat.invalid_time)
 
         await self.settings.set("autochat.delay", delay)
@@ -1235,6 +1236,12 @@ class UserbotManager:
 
         except Exception as e:
             await msg.edit(phrase.shell.error.format(e))
+
+    async def test(self, event: Message):
+        messages = await self.client.get_messages(
+            int(event.pattern_match.group(1).strip()), limit=1
+        )
+        return await event.reply(f"dial.pm: {event.pattern_match.group(1).strip()} - {messages}")
 
     async def run(self):
         await self.init()
