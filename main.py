@@ -880,6 +880,7 @@ class UserbotManager:
         dialogs = await self.client.get_dialogs()
         deleted_count = 0
         msg = await event.edit(phrase.pm.wait.format(0))
+        deleted = []
         for dialog in dialogs:
             user: User = dialog.entity
             if not isinstance(user, User):
@@ -892,13 +893,14 @@ class UserbotManager:
                 if all(isinstance(msg, MessageService) for msg in messages):
                     on_delete = True
             if on_delete:
+                deleted.append(f"[{user.first_name}](tg://user?id={user.id})")
                 await self.client.delete_dialog(dialog.id)
                 await asyncio.sleep(await self.settings.get("typing.delay"))
                 deleted_count += 1
                 if deleted_count % 5 == 0:
                     await msg.edit(phrase.pm.wait.format(deleted_count))
 
-        await event.edit(phrase.pm.cleared.format(deleted_count))
+        await event.edit(phrase.pm.cleared.format(chats=deleted_count, list=", ".join(deleted)))
 
     async def set_setting(self, event: Message):
         key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
