@@ -474,7 +474,7 @@ class UserbotManager:
     async def rm_autochat(self, event: Message):
         try:
             chat_id = int(event.pattern_match.group(1))
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return await event.edit(phrase.autochat.invalid_id)
 
         chats = await self.settings.get("autochat.chats", [])
@@ -499,7 +499,7 @@ class UserbotManager:
             delay = int(event.pattern_match.group(1))
             if delay < 10:
                 return await event.edit(phrase.autochat.too_fast)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return await event.edit(phrase.autochat.invalid_time)
 
         await self.settings.set("autochat.delay", delay)
