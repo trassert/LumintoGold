@@ -84,9 +84,7 @@ class Generator:
         try:
             target_time = datetime.strptime(time_str, "%H:%M").time()
         except ValueError as e:
-            raise ValueError(
-                "Неверный формат времени. Используйте 'HH:MM'."
-            ) from e
+            raise ValueError("Неверный формат времени. Используйте 'HH:MM'.") from e
 
         self._next_run_timestamp = self._get_next_daily_run(target_time)
         data = await self._get_task_data()
@@ -175,9 +173,7 @@ class Generator:
             task_type = data.get("task_type")
             task_param = data.get("task_param")
             last_run = data.get("last_run")
-            if not all(
-                (task_type, task_param is not None, last_run is not None)
-            ):
+            if not all((task_type, task_param is not None, last_run is not None)):
                 return None
             if task_type == "interval":
                 if not isinstance(task_param, int):

@@ -47,8 +47,6 @@ geolocator = Nominatim(user_agent="geo_assistant")
 
 def time(timezone_name):
     try:
-        return datetime.now(pytz.timezone(timezone_name)).strftime(
-            "%H:%M:%S %d-%m-%Y"
-        )
+        return datetime.now(pytz.timezone(timezone_name)).strftime("%H:%M:%S %d-%m-%Y")
     except pytz.UnknownTimeZoneError:
         return "Неизвестный часовой пояс"

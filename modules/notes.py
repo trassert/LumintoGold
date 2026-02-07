@@ -11,9 +11,7 @@ logger.info(f"Загружен модуль {__name__}!")
 
 
 class Notes:
-    def __init__(
-        self, number: str | int, base_dir: str = pathes.notes
-    ) -> None:
+    def __init__(self, number: str | int, base_dir: str = pathes.notes) -> None:
         """Метод инициализации."""
         self.number = str(number)
         self.base_dir = base_dir
@@ -30,17 +28,13 @@ class Notes:
             raise ValueError("Invalid name")
         return name.lower()
 
-    async def add(
-        self, name: str, text: str, media=None, client: TelegramClient = None
-    ) -> bool:
+    async def add(self, name: str, text: str, media=None, client: TelegramClient = None) -> bool:
         try:
             norm_name = self._normalize_name(name)
             await self._ensure_user_dir()
             base_path = os.path.join(self.user_dir, norm_name)
 
-            async with aiofiles.open(
-                f"{base_path}.txt", "w", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(f"{base_path}.txt", "w", encoding="utf-8") as f:
                 await f.write(text)
 
             img_path = f"{base_path}.jpg"

@@ -72,9 +72,7 @@ class Chat:
                 ) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
-                        raise RuntimeError(
-                            f"OpenRouter error {resp.status}: {error_text}"
-                        )
+                        raise RuntimeError(f"OpenRouter error {resp.status}: {error_text}")
                     data = await resp.json()
         except Exception as e:
             ai_reply = f"[Ошибка ИИ: {e}]"
@@ -114,9 +112,7 @@ class Groq:
         self.chkdir()
 
     def init_client(self):
-        self.client = AsyncGroq(
-            api_key=self.api_key, http_client=AsyncClient(proxy=self.proxy)
-        )
+        self.client = AsyncGroq(api_key=self.api_key, http_client=AsyncClient(proxy=self.proxy))
 
     def chkdir(self):
         return self.path.mkdir(exist_ok=True, parents=True)

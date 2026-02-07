@@ -4,9 +4,7 @@ from telethon import events
 logger.info(f"Загружен модуль {__name__}!")
 
 
-def cmd(
-    pattern, *, incoming=False, outgoing=True, **kwargs
-) -> events.NewMessage:
+def cmd(pattern, *, incoming=False, outgoing=True, **kwargs) -> events.NewMessage:
     "Wrapper for events.NewMessage"
 
     return events.NewMessage(

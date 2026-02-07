@@ -24,14 +24,10 @@ if platform.system() == "Windows":
                 mx, avg, mn = max(temps), sum(temps) / len(temps), min(temps)
                 return f"{round(mx)} | {round(avg)} | {round(mn)}"
             except Exception:
-                logger.opt(exception=True).debug(
-                    "Ошибка при чтении температуры (WinTmp)"
-                )
+                logger.opt(exception=True).debug("Ошибка при чтении температуры (WinTmp)")
                 return None
     except ImportError:
-        logger.warning(
-            "WinTmp не установлен, температура недоступна на Windows"
-        )
+        logger.warning("WinTmp не установлен, температура недоступна на Windows")
 
         def get_temperature() -> str:
             return None
@@ -66,12 +62,8 @@ async def get_current_speed() -> list[str | float]:
         await asyncio.sleep(0.5)
         end = psutil.net_io_counters()
 
-        upload_mbps = round(
-            (end.bytes_sent - start.bytes_sent) * 8 / 0.5 / 1_000_000, 2
-        )
-        download_mbps = round(
-            (end.bytes_recv - start.bytes_recv) * 8 / 0.5 / 1_000_000, 2
-        )
+        upload_mbps = round((end.bytes_sent - start.bytes_sent) * 8 / 0.5 / 1_000_000, 2)
+        download_mbps = round((end.bytes_recv - start.bytes_recv) * 8 / 0.5 / 1_000_000, 2)
         return [download_mbps, upload_mbps]
     except PermissionError:
         return ["Недоступно", "Недоступно"]
@@ -145,9 +137,7 @@ async def get_system_info() -> str:
     cpu_cores_phys = psutil.cpu_count(logical=False) or "?"
     cpu_cores_logical = psutil.cpu_count(logical=True) or "?"
 
-    boottime_task = await asyncio.create_task(
-        asyncio.to_thread(lambda: get_boottime())
-    )
+    boottime_task = await asyncio.create_task(asyncio.to_thread(lambda: get_boottime()))
     cpu_load_task = await asyncio.create_task(get_cpu_load())
     network_task = await asyncio.create_task(get_current_speed())
     temp_task = await asyncio.create_task(asyncio.to_thread(get_temperature))
