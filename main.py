@@ -1146,9 +1146,10 @@ class UserbotManager:
 
     async def test(self, event: Message):
         messages = await self.client.get_messages(
-            int(event.pattern_match.group(1).strip()), limit=1
+            int(event.pattern_match.group(1).strip()), limit=10
         )
-        return await event.reply(f"dial.pm: {event.pattern_match.group(1).strip()} - {messages}")
+        has_real_message = any(isinstance(msg, Message) for msg in messages)
+        return await event.reply(f"dial.pm: {event.pattern_match.group(1).strip()} - {messages}\n\nResult: {has_real_message}")
 
     async def run(self):
         await self.init()
