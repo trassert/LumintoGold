@@ -29,6 +29,7 @@ class AutoChatManager:
             self._task = None
 
     async def _worker(self):
+        index = 0
         while self._running:
             chat_ids = await self.settings.get("autochat.chats", [])
             ad_chat = await self.settings.get("autochat.ad_chat")
@@ -39,16 +40,22 @@ class AutoChatManager:
                 await asyncio.sleep(60)
                 continue
 
-            for chat_id in chat_ids:
+            if index >= len(chat_ids):
+                index = 0
+
+            chat_id = chat_ids[index]
+            index += 1
+
+            try:
+                await self.client.forward_messages(chat_id, int(ad_id), ad_chat)
+                logger.info(f"Автопост: сообщение отправлено в {chat_id}")
+            except Exception:
+                logger.exception(f"Автопост: ошибка при отправке в {chat_id}")
+
+            for _ in range(delay):
                 if not self._running:
                     return
-                try:
-                    await self.client.forward_messages(chat_id, int(ad_id), ad_chat)
-                except Exception:
-                    pass
                 await asyncio.sleep(1)
-
-            await asyncio.sleep(delay)
 
     async def toggle(self, event: Message):
         enabled = not await self.settings.get("autochat.enabled", False)
