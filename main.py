@@ -53,52 +53,6 @@ class InterceptHandler(logging.Handler):
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
-from modules import (  # noqa: E402
-    ai,
-    apis,
-    config,
-    d,
-    db,
-    flip_map,
-    formatter,
-    genpass,
-    get_sys,
-    ipman,
-    iterators,
-    notes,
-    pathes,
-    phrase,
-    settings,
-    task_gen,
-    tz,
-)
-
-
-def get_args(text: str, skip_first: bool = True) -> list[str]:
-    parts = text.split()
-    return parts[1:] if skip_first and parts else parts
-
-
-def format_tg_message(text: str) -> str:
-    if not text:
-        text = ""
-    text = re.sub(r"\*\*|__", "", text)
-    text = re.sub(r"\[.*?\]\(.*?\)", "", text)
-    prefix = "📢 Из Telegram\n"
-    result = (prefix + text.strip())[:4096]
-    return result if result.strip() else prefix.strip()
-
-
-async def load_client_config(clients_dir: Path, client_file: str):
-    try:
-        async with aiofiles.open(clients_dir / client_file, "rb") as f:
-            data = orjson.loads(await f.read())
-        phone = client_file.replace(".json", "")
-        return phone, data["api_id"], data["api_hash"]
-    except orjson.JSONDecodeError:
-        logger.error(f"{client_file} пуст или неправильно размечен! Отключаем клиента..")
-        return None
-
 
 class UserbotManager:
     def __init__(self, phone: str, api_id: int, api_hash: str):
@@ -124,10 +78,8 @@ class UserbotManager:
         self.battery_task = task_gen.Generator(f"{phone}_battery")
         self.batt_state = True
         self.notes = notes.Notes(phone)
-        self._autochat_running = False
-        self._autochat_task = None
-        self._flood_state: dict[str, list[float]] = {}
-        self._flood_rules: dict[int, dict[str, dict]] = {}
+        self.flood_ctrl = flood.FloodController(self.client, self.settings)
+        self.autochat = autochat.AutoChatManager(self.client, self.settings)
 
     async def init(self):
         use_ipv6 = await self.settings.get("use.ipv6")
@@ -169,7 +121,7 @@ class UserbotManager:
             await self.online_task.create(func=self.auto_online, task_param=30, unit="seconds")
 
         if await self.settings.get("autochat.enabled"):
-            await self._start_autochat()
+            await self.autochat.start()
 
         if await self.settings.get("tg2vk.enabled", False):
             target_chat = await self.settings.get("tg2vk.chat")
@@ -239,18 +191,24 @@ class UserbotManager:
             )
         )(self.gen_pass)
 
-        self.client.on(d.cmd(r"\-флудстики (\d+) (\d+)$"))(self.set_flood_stickers)
-        self.client.on(d.cmd(r"\-флудгиф (\d+) (\d+)$"))(self.set_flood_gifs)
-        self.client.on(d.cmd(r"\-флудобщ (\d+) (\d+)$"))(self.set_flood_messages)
+        self.client.on(events.NewMessage())(self.flood_ctrl.monitor)
+        self.client.on(d.cmd(r"\-флудстики (\d+) (\d+)$"))(
+            lambda e: self.flood_ctrl.set_rule(e, "stickers")
+        )
+        self.client.on(d.cmd(r"\-флудгиф (\d+) (\d+)$"))(
+            lambda e: self.flood_ctrl.set_rule(e, "gifs")
+        )
+        self.client.on(d.cmd(r"\-флудобщ (\d+) (\d+)$"))(
+            lambda e: self.flood_ctrl.set_rule(e, "messages")
+        )
+        self.client.on(d.cmd(r"\+флудстики$"))(lambda e: self.flood_ctrl.unset_rule(e, "stickers"))
+        self.client.on(d.cmd(r"\+флудгиф$"))(lambda e: self.flood_ctrl.unset_rule(e, "gifs"))
+        self.client.on(d.cmd(r"\+флудобщ$"))(lambda e: self.flood_ctrl.unset_rule(e, "messages"))
 
-        self.client.on(d.cmd(r"\+флудстики$"))(self.unset_flood_stickers)
-        self.client.on(d.cmd(r"\+флудгиф$"))(self.unset_flood_gifs)
-        self.client.on(d.cmd(r"\+флудобщ$"))(self.unset_flood_messages)
-
-        self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.add_autochat)
-        self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.rm_autochat)
-        self.client.on(d.cmd(r"\.авточат$"))(self.toggle_autochat)
-        self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.set_autochat_time)
+        self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.autochat.add_chat)
+        self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.autochat.remove_chat)
+        self.client.on(d.cmd(r"\.авточат$"))(self.autochat.toggle)
+        self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.autochat.set_delay)
 
         self.client.on(d.cmd(r"\.калк (.+)"))(self.calc)
         self.client.on(d.cmd(r"\.к (.+)"))(self.calc)
@@ -357,39 +315,6 @@ class UserbotManager:
     async def _start_mon_batt(self):
         await self.battery_task.create(func=self.chk_battery, task_param=15, unit="seconds")
 
-    async def _autochat_worker(self):
-        while self._autochat_running:
-            chat_ids = await self.settings.get("autochat.chats", [])
-            ad_chat = await self.settings.get("autochat.ad_chat")
-            ad_id = await self.settings.get("autochat.ad_id")
-            delay = await self.settings.get("autochat.delay", 1000)
-
-            if not (chat_ids and ad_chat and ad_id):
-                await asyncio.sleep(60)
-                continue
-
-            for chat_id in chat_ids:
-                if not self._autochat_running:
-                    return
-                try:
-                    await self.client.forward_messages(chat_id, int(ad_id), ad_chat)
-                    logger.info(f"Автопост: сообщение отправлено в {chat_id}")
-                except Exception:
-                    logger.trace(f"Автопост: ошибка в {chat_id}")
-                logger.info(f"Автопост: жду {delay} сек.")
-                await asyncio.sleep(delay)
-
-    async def _start_autochat(self):
-        if self._autochat_running:
-            return
-        self._autochat_running = True
-        self._autochat_task = asyncio.create_task(self._autochat_worker())
-
-    async def _stop_autochat(self):
-        self._autochat_running = False
-        if self._autochat_task:
-            await self._autochat_task
-
     async def _autochat_sender(self):
         chat_ids = await self.settings.get("autochat.chats", [])
         ad_chat = await self.settings.get("autochat.ad_chat")
@@ -446,7 +371,7 @@ class UserbotManager:
         bot = Bot(token=vk_token)
 
         try:
-            text = format_tg_message(event.text)
+            text = format.f2vk(event.text)
 
             if event.photo:
                 path = await event.download_media(file=bytes)
@@ -463,52 +388,6 @@ class UserbotManager:
         except Exception:
             logger.trace("tg2vk: Ошибка публикации")
 
-    async def add_autochat(self, event: Message):
-        try:
-            chat_id = int(event.pattern_match.group(1))
-        except (ValueError, TypeError):
-            return await event.edit(phrase.autochat.invalid_id)
-
-        chats = await self.settings.get("autochat.chats", [])
-        if chat_id not in chats:
-            chats.append(chat_id)
-            await self.settings.set("autochat.chats", chats)
-        await event.edit(phrase.autochat.added.format(chat_id))
-
-    async def rm_autochat(self, event: Message):
-        try:
-            chat_id = int(event.pattern_match.group(1))
-        except (ValueError, TypeError):
-            return await event.edit(phrase.autochat.invalid_id)
-
-        chats = await self.settings.get("autochat.chats", [])
-        if chat_id in chats:
-            chats.remove(chat_id)
-            await self.settings.set("autochat.chats", chats)
-        await event.edit(phrase.autochat.removed.format(chat_id))
-
-    async def toggle_autochat(self, event: Message):
-        disabled = not await self.settings.get("autochat.enabled", False)
-        await self.settings.set("autochat.enabled", disabled)
-
-        if disabled:
-            await self._start_autochat()
-            await event.edit(phrase.autochat.on)
-        else:
-            await self._stop_autochat()
-            await event.edit(phrase.autochat.off)
-
-    async def set_autochat_time(self, event: Message):
-        try:
-            delay = int(event.pattern_match.group(1))
-            if delay < 10:
-                return await event.edit(phrase.autochat.too_fast)
-        except (ValueError, TypeError):
-            return await event.edit(phrase.autochat.invalid_time)
-
-        await self.settings.set("autochat.delay", delay)
-        await event.edit(phrase.autochat.time_set.format(delay))
-
     async def get_emo_id(self, event: Message):
         message: Message = await event.get_reply_message()
         if message is None or not message.entities:
@@ -524,134 +403,6 @@ class UserbotManager:
             return await event.edit(phrase.emoji.no_entity)
 
         return await event.edit(phrase.emoji.get.format(", ".join(text)))
-
-    async def set_flood_stickers(self, event: Message):
-        await self._set_flood_rule(event, "stickers")
-
-    async def set_flood_gifs(self, event: Message):
-        await self._set_flood_rule(event, "gifs")
-
-    async def set_flood_messages(self, event: Message):
-        await self._set_flood_rule(event, "messages")
-
-    async def _set_flood_rule(self, event: Message, rule_type: str):
-        limit = int(event.pattern_match.group(1))
-        window = int(event.pattern_match.group(2))
-        chat_id = event.chat_id
-        key = f"flood.{rule_type}.{chat_id}"
-
-        await self.settings.set(key, {"limit": limit, "window": window})
-        if chat_id not in self._flood_rules:
-            self._flood_rules[chat_id] = {}
-        self._flood_rules[chat_id][rule_type] = {
-            "limit": limit,
-            "window": window,
-        }
-
-        phrase_map = {
-            "stickers": phrase.flood.set_stickers,
-            "gifs": phrase.flood.set_gifs,
-            "messages": phrase.flood.set_messages,
-        }
-        await event.edit(phrase_map[rule_type].format(limit=limit, window=window))
-
-    async def unset_flood_stickers(self, event: Message):
-        await self._unset_flood_rule(event, "stickers")
-
-    async def unset_flood_gifs(self, event: Message):
-        await self._unset_flood_rule(event, "gifs")
-
-    async def unset_flood_messages(self, event: Message):
-        await self._unset_flood_rule(event, "messages")
-
-    async def _unset_flood_rule(self, event: Message, rule_type: str):
-        chat_id = event.chat_id
-        key = f"flood.{rule_type}.{chat_id}"
-        await self.settings.remove(key)
-
-        if chat_id in self._flood_rules:
-            self._flood_rules[chat_id][rule_type] = {}
-
-        prefix = f"_flood.{rule_type}.{chat_id}."
-        to_remove = [k for k in self._flood_state if k.startswith(prefix)]
-        for k in to_remove:
-            self._flood_state.pop(k, None)
-
-        phrase_map = {
-            "stickers": phrase.flood.unset_stickers,
-            "gifs": phrase.flood.unset_gifs,
-            "messages": phrase.flood.unset_messages,
-        }
-        await event.edit(phrase_map[rule_type])
-
-    async def _load_flood_rules(self, chat_id: int):
-        if chat_id not in self._flood_rules:
-            stickers = await self.settings.get(f"flood.stickers.{chat_id}", {})
-            gifs = await self.settings.get(f"flood.gifs.{chat_id}", {})
-            messages = await self.settings.get(f"flood.messages.{chat_id}", {})
-            self._flood_rules[chat_id] = {
-                "stickers": stickers,
-                "gifs": gifs,
-                "messages": messages,
-            }
-
-    async def _flood_monitor(self, event: Message):
-        if event.is_private or not event.sender_id:
-            return
-
-        chat_id = event.chat_id
-        await self._load_flood_rules(chat_id)
-        rules = self._flood_rules[chat_id]
-        now = time()
-
-        if rules["stickers"] and isinstance(event.media, types.MessageMediaDocument):
-            doc = event.media.document
-            if doc and any(
-                isinstance(a, types.DocumentAttributeSticker) for a in (doc.attributes or [])
-            ):
-                await self._check_flood(event, chat_id, "stickers", rules["stickers"], now)
-
-        if rules["gifs"] and isinstance(event.media, types.MessageMediaDocument):
-            doc = event.media.document
-            if doc:
-                is_gif = any(
-                    isinstance(a, types.DocumentAttributeAnimated)
-                    or (isinstance(a, types.DocumentAttributeVideo) and a.supports_streaming)
-                    for a in (doc.attributes or [])
-                )
-                if is_gif:
-                    await self._check_flood(event, chat_id, "gifs", rules["gifs"], now)
-
-        if rules["messages"] and event.text and not event.media:
-            await self._check_flood(event, chat_id, "messages", rules["messages"], now)
-
-    async def _check_flood(
-        self,
-        event: Message,
-        chat_id: int,
-        flood_type: str,
-        rule: dict,
-        now: float,
-    ):
-        limit: int = rule.get("limit", 0)
-        window: int = rule.get("window", 0)
-        if limit <= 0 or window <= 0:
-            return
-
-        key = f"_flood.{flood_type}.{chat_id}.{event.sender_id}"
-        timestamps = self._flood_state.get(key, [])
-        cutoff = now - window
-        timestamps = [ts for ts in timestamps if ts > cutoff]
-        timestamps.append(now)
-
-        if len(timestamps) > limit:
-            try:
-                await event.reply(await self.settings.get("flood.msg"))
-            except Exception:
-                pass
-            timestamps = []
-
-        self._flood_state[key] = timestamps
 
     async def iris_farm(self):
         target = -1002355128955
@@ -944,7 +695,7 @@ class UserbotManager:
             await asyncio.sleep(await self.settings.get("typing.delay"))
 
     async def words(self, event: Message):
-        args = get_args(event.text.lower())
+        args = format.get_args(event.text.lower())
         arg_len = next(
             (int(x.replace("л", "")) for x in args if "л" in x and x.replace("л", "").isdigit()),
             None,
@@ -1039,7 +790,7 @@ class UserbotManager:
         except Exception as e:
             return await event.edit(phrase.error.format(e))
         if len(response) > 4096:
-            chunks = formatter.splitter(response)
+            chunks = format.splitter(response)
             await event.edit(chunks[0])
             for chunk in chunks[1:]:
                 await event.reply(chunk)
@@ -1161,16 +912,11 @@ class UserbotManager:
             await msg.edit(phrase.shell.error.format(e))
 
     async def run(self):
-        await self.init()
-        await self.client.run_until_disconnected()
-
-
-async def run_userbot(number: str, api_id: int, api_hash: str):
-    try:
-        bot = UserbotManager(number, api_id, api_hash)
-        await bot.run()
-    except Exception:
-        logger.exception(f"Критическая ошибка в {number}")
+        try:
+            await self.init()
+            await self.client.run_until_disconnected()
+        except Exception:
+            logger.exception(f"Критическая ошибка в {self.number}")
 
 
 async def main():
@@ -1195,10 +941,10 @@ async def main():
     logger.info(f"Клиенты: {[f.name for f in client_files]}")
     tasks = []
     for cf in client_files:
-        result = await load_client_config(pathes.clients, cf.name)
+        result = await config.load_client(pathes.clients, cf.name)
         if result:
             phone, api_id, api_hash = result
-            tasks.append(run_userbot(phone, api_id, api_hash))
+            tasks.append(UserbotManager(phone, api_id, api_hash).run())
 
     if not tasks:
         return logger.error("Нет ни одного валидного клиента.")
@@ -1206,6 +952,28 @@ async def main():
 
 
 if __name__ == "__main__":
+    from modules import (
+        ai,
+        apis,
+        autochat,
+        config,
+        d,
+        db,
+        flip_map,
+        flood,
+        format,
+        genpass,
+        get_sys,
+        ipman,
+        iterators,
+        notes,
+        pathes,
+        phrase,
+        settings,
+        task_gen,
+        tz,
+    )
+
     try:
         try:
             import uvloop
