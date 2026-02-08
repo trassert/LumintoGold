@@ -413,6 +413,7 @@ class UserbotManager:
 
     async def iceyes_bonus(self):
         await self.client.send_message("iceyes_bot", "💸 Бонус")
+        await self.client.send_message("icetik_bot", "💸 Бонус")
         logger.info(f"{self.phone} - сработал автобонус")
 
     async def add_note(self, event: Message):
