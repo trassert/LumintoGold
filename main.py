@@ -600,13 +600,13 @@ class UserbotManager:
     async def get_id(self, event: Message):
         arg = event.pattern_match.group(1).strip()
         arglist: list[str] = arg.split()
-        result = ""
+        result = []
         for index in arglist:
             index = index.strip()
-            result += f"🆔 » {index} - {await d.get_info(self.client, index)}"
-        if result == "":
+            result.append(f"🆔 » {index} - `{await d.get_info(self.client, index)}`")
+        if result == []:
             return await event.edit(phrase.result_empty)
-        return await event.edit(result)
+        return await event.edit("\n".join(result))
 
     async def ipman(self, event: Message):
         arg = event.pattern_match.group(1)
