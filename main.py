@@ -162,6 +162,7 @@ class UserbotManager:
 
         self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
         self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"\.id (.+)"))(self.get_id)
         self.client.on(d.cmd(r"\.войспрокси (.+)"))(self.voiceproxy)
         self.client.on(d.cmd(r"\.войстокен (.+)"))(self.voicetoken)
         self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
@@ -595,6 +596,17 @@ class UserbotManager:
         await self.settings.set("groq.token", arg)
         self.groq.init_client()
         return await event.edit(phrase.voicerec.token)
+
+    async def get_id(self, event: Message):
+        arg = event.pattern_match.group(1).strip()
+        arglist: list[str] = arg.split()
+        result = ""
+        for index in arglist:
+            index = index.strip()
+            result += f"🆔 » {index} - {await d.get_info(self.client, index)}"
+        if result == "":
+            return await event.edit(phrase.result_empty)
+        return await event.edit(result)
 
     async def ipman(self, event: Message):
         arg = event.pattern_match.group(1)
