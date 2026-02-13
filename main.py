@@ -575,7 +575,7 @@ class UserbotManager:
         try:
             return await event.edit(
                 phrase.voicerec.done.format(
-                    await self.ai_client.transcribe_voice(self.number, event.id)
+                    await self.ai_client.transcribe_voice(self.phone, event.id)
                 )
             )
 
