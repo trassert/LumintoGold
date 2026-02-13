@@ -156,11 +156,13 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
 
-        self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
         self.client.on(d.cmd(r"\.id (.+)"))(self.get_id)
+
+        self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
         self.client.on(d.cmd(r"\.иипрокси (.+)"))(self.ai_proxy)
         self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
         self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
+
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
         self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
@@ -780,7 +782,7 @@ class UserbotManager:
         model: str = event.pattern_match.group(1).strip()
         await self.settings.set("ai.model", model)
         self.ai_chat.chat_model = model
-        self.ai_client.init_client()
+        self.ai_chat = self.ai_client.chat(self.phone)
         await event.edit(phrase.ai.model_set)
 
     async def ai_clear(self, event: Message):
