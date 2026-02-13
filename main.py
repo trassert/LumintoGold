@@ -84,20 +84,16 @@ class UserbotManager:
     async def init(self):
         use_ipv6 = await self.settings.get("use.ipv6")
         self.client.use_ipv6 = use_ipv6
-        self.ai_client = ai.Chat(
-            self.phone,
-            await self.settings.get("ai.token"),
-            model=await self.settings.get("ai.model"),
-        )
         try:
-            self.groq = ai.Groq(
-                self.phone,
-                await self.settings.get("groq.token"),
-                await self.settings.get("groq.proxy"),
+            self.ai_client = ai.GroqClient(
+                api_key=await self.settings.get("groq.token"),
+                proxy=await self.settings.get("groq.proxy"),
+                chat_model=await self.settings.get("ai.model"),
             )
-            self.groq.init_client()
+            self.ai_client.init_client()
+            self.ai_chat = self.ai_client.chat(self.phone)
         except Exception:
-            logger.warning("Установите войс-токен (.войстокен <токен>)")
+            logger.warning("Установите Groq-токен (.иитокен <токен>)")
         await self.client.start(phone=self.phone)
         logger.info(f"Запущен клиент ({self.phone})")
         self._register_handlers()
@@ -161,10 +157,9 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
 
         self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
-        self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
         self.client.on(d.cmd(r"\.id (.+)"))(self.get_id)
-        self.client.on(d.cmd(r"\.войспрокси (.+)"))(self.voiceproxy)
-        self.client.on(d.cmd(r"\.войстокен (.+)"))(self.voicetoken)
+        self.client.on(d.cmd(r"\.иипрокси (.+)"))(self.ai_proxy)
+        self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
         self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
@@ -576,25 +571,29 @@ class UserbotManager:
         await reply.download_media(file=str(file_path))
 
         try:
-            return await event.edit(phrase.voicerec.done.format(await self.groq.voice(event.id)))
+            return await event.edit(
+                phrase.voicerec.done.format(
+                    await self.ai_client.transcribe_voice(self.number, event.id)
+                )
+            )
 
         except Exception as e:
             logger.exception("Ошибка при распознавании голоса")
             msg = phrase.voicerec.error.format(error=str(e)[:200])
             return await event.edit(msg)
 
-    async def voiceproxy(self, event: Message):
+    async def ai_proxy(self, event: Message):
         arg = event.pattern_match.group(1).strip()
-        self.groq.proxy = arg
+        self.ai_client.proxy = arg
         await self.settings.set("groq.proxy", arg)
-        self.groq.init_client()
+        self.ai_client.init_client()
         return await event.edit(phrase.voicerec.proxy)
 
-    async def voicetoken(self, event: Message):
+    async def ai_token(self, event: Message):
         arg = event.pattern_match.group(1).strip()
-        self.groq.api_key = arg
+        self.ai_client.api_key = arg
         await self.settings.set("groq.token", arg)
-        self.groq.init_client()
+        self.ai_client.init_client()
         return await event.edit(phrase.voicerec.token)
 
     async def get_id(self, event: Message):
@@ -777,28 +776,23 @@ class UserbotManager:
     async def server_load(self, event: Message):
         await event.edit(await get_sys.get_system_info())
 
-    async def ai_token(self, event: Message):
-        token: str = event.pattern_match.group(1).strip()
-        await self.settings.set("ai.token", token)
-        self.ai_client.api_key = token
-        await event.edit(phrase.ai.token_set)
-
     async def ai_model(self, event: Message):
         model: str = event.pattern_match.group(1).strip()
         await self.settings.set("ai.model", model)
-        self.ai_client.model = model
+        self.ai_chat.chat_model = model
+        self.ai_client.init_client()
         await event.edit(phrase.ai.model_set)
 
     async def ai_clear(self, event: Message):
-        await self.ai_client.clear()
+        await self.ai_chat.clear()
         await event.edit(phrase.ai.clear)
 
     async def ai_resp(self, event: Message):
-        if not await self.settings.get("ai.token"):
+        if not await self.settings.get("groq.token"):
             return await event.edit(phrase.ai.no_token)
         text = event.pattern_match.group(1).strip()
         try:
-            response = await self.ai_client.send(text)
+            response = await self.ai_chat.send(text)
         except Exception as e:
             return await event.edit(phrase.error.format(e))
         if len(response) > 4096:

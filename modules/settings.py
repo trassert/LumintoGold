@@ -15,7 +15,6 @@ default = {
     "block.voice": False,
     "mask.read": [],
     "luminto.reactions": True,
-    "ai.token": None,
     "ai.model": None,
     "use.ipv6": False,
     "auto.online": False,
