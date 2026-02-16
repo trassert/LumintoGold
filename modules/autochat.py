@@ -77,6 +77,7 @@ class AutoChatManager:
             chats.append(chat_id)
             await self.settings.set("autochat.chats", chats)
         await event.edit(phrase.autochat.added.format(chat_id))
+        return None
 
     async def remove_chat(self, event: Message):
         try:
@@ -88,6 +89,7 @@ class AutoChatManager:
             chats.remove(chat_id)
             await self.settings.set("autochat.chats", chats)
         await event.edit(phrase.autochat.removed.format(chat_id))
+        return None
 
     async def set_delay(self, event: Message):
         try:
@@ -98,3 +100,4 @@ class AutoChatManager:
             return await event.edit(phrase.autochat.invalid_time)
         await self.settings.set("autochat.delay", delay)
         await event.edit(phrase.autochat.time_set.format(delay))
+        return None

@@ -265,6 +265,7 @@ class UserbotManager:
             await event.edit(phrase.clear.done.format(kicked=kicked, unbanned=unbanned))
         else:
             await event.edit(phrase.clear.not_found)
+        return None
 
     async def chk_battery(self):
         async with aiofiles.open(config.config.battery_path) as f:
@@ -356,6 +357,7 @@ class UserbotManager:
             self.client.remove_event_handler(self._handle_tg_to_vk)
             await self.settings.set("tg2vk.enabled", False)
             await event.edit(phrase.tg2vk.off)
+        return None
 
     async def _handle_tg_to_vk(self, event: Message):
         logger.info("tg2vk: Новый пост")
@@ -622,6 +624,7 @@ class UserbotManager:
             f"Провайдер: {response.get('isp')}\n"
             f"Координаты: {response.get('lat')}/{response.get('lon')}"
         )
+        return None
 
     async def get_weather(self, event: Message):
         await event.edit(phrase.weather.wait)
@@ -639,6 +642,7 @@ class UserbotManager:
         for title in animation["text"]:
             await event.edit(title)
             await asyncio.sleep(animation["delay"])
+        return None
 
     async def clean_pm(self, event: Message):
         dialogs = await self.client.get_dialogs()
@@ -696,6 +700,7 @@ class UserbotManager:
             f"📅 Дата: {city_time.strftime('%d.%m.%Y')}\n"
             f"🌐 Пояс: {tz_name}"
         )
+        return None
 
     async def typing(self, event: Message):
         text = event.pattern_match.group(1).strip()
@@ -774,6 +779,7 @@ class UserbotManager:
             return await event.edit(phrase.no_text)
         flipped = "".join(flip_map.flip_map.get(c, c) for c in reversed(text))
         await event.edit(flipped)
+        return None
 
     async def server_load(self, event: Message):
         await event.edit(await get_sys.get_system_info())
@@ -804,6 +810,7 @@ class UserbotManager:
                 await event.reply(chunk)
         else:
             await event.edit(response)
+        return None
 
     async def config_reload(self, event: Message):
         await self.settings._ensure_loaded(forced=True)
@@ -829,6 +836,7 @@ class UserbotManager:
             result = int(result)
 
         await event.edit(phrase.calc.result.format(expr, result))
+        return None
 
     async def autodelmsg(self, event: Message):
         lines = event.text.splitlines()
@@ -854,6 +862,7 @@ class UserbotManager:
         await msg.edit("...")
         await asyncio.sleep(1)
         await msg.delete()
+        return None
 
     async def gen_pass(self, event: Message):
         args = (event.pattern_match.group(1) or "").strip()
@@ -957,6 +966,7 @@ async def main():
     if not tasks:
         return logger.error("Нет ни одного валидного клиента.")
     await asyncio.gather(*tasks)
+    return None
 
 
 if __name__ == "__main__":

@@ -32,5 +32,4 @@ def gen_pass(length: int, letters: bool, digits: bool, special: bool) -> str:
     if not chars:
         chars = CHARSETS["letters"]
 
-    password = "".join(random.choices(chars, k=length))
-    return password
+    return "".join(random.choices(chars, k=length))

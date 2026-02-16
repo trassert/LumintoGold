@@ -2,13 +2,41 @@ from pathlib import Path
 
 import aiofiles
 import orjson
-from bestconfig import Config
+import yaml
 from loguru import logger
 
 logger.info(f"Загружен модуль {__name__}!")
 
-config = Config(Path("configs") / "config.yml")
-tokens = Config(Path("configs") / "tokens.yml")
+
+class ConfigSection(dict):
+    "Конфиг-секции для менеджера. Dict -> ConfigSection."
+
+    def __init__(self, data):
+        super().__init__(data)
+        for key, value in data.items():
+            if isinstance(value, dict):
+                self[key] = ConfigSection(value)
+            elif isinstance(value, list):
+                self[key] = [ConfigSection(i) if isinstance(i, dict) else i for i in value]
+
+    def __getattr__(self, key):
+        return self.get(key)
+
+
+class ConfigManager:
+    "Root. Вызывается."
+
+    def __init__(self, path: Path):
+        logger.info(f"Зарегестрирован конфиг {path}")
+        raw_data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        self._data = ConfigSection(raw_data)
+
+    def __getattr__(self, key):
+        return getattr(self._data, key)
+
+
+config = ConfigManager(Path("configs") / "config.yml")
+tokens = ConfigManager(Path("configs") / "tokens.yml")
 
 
 async def load_client(clients_dir: Path, client_file: str):

@@ -99,6 +99,7 @@ class FloodController:
             "messages": phrase.flood.set_messages,
         }
         await event.edit(phrase_map[rule_type].format(limit=limit, window=window))
+        return None
 
     async def unset_rule(self, event: Message, rule_type: str):
         chat_id = event.chat_id

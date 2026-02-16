@@ -109,6 +109,7 @@ def human(n: int) -> str:
         if x < 1024 or u == units[-1]:
             return f"{x:.2f} {u}"
         x /= 1024
+    return None
 
 
 def default_path() -> Path:
