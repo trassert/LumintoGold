@@ -10,7 +10,7 @@ from time import time
 import aiofiles
 import orjson
 from loguru import logger
-from telethon import TelegramClient, events, functions, types
+from telethon import TelegramClient, errors, events, functions, types
 from telethon.tl.custom import Message
 from telethon.tl.custom.participantpermissions import ParticipantPermissions
 from telethon.tl.functions.account import UpdateStatusRequest
@@ -672,63 +672,58 @@ class UserbotManager:
 
         await event.edit(phrase.pm.cleared.format(chats=deleted_count, list=", ".join(deleted)))
 
-    async def clean_blacklist(self, event: Message):
-        """
-        Сканирует чёрный список и удаляет удалённые аккаунты.
-        """
-        blocked = []
-        offset = 0
-        limit = 100
 
-        while True:
-            result = await self.client(
-                functions.contacts.GetBlockedRequest(offset=offset, limit=limit)
-            )
-            blocked.extend(result.users)
-            if len(result.users) < limit:
-                break
-            offset += limit
-            await asyncio.sleep(await self.settings.get("typing.delay"))
-        msg = await event.edit("🔍 Сканирую чёрный список...")
-        removed_count = 0
-        removed_names = []
-        for user in blocked:
-            if not isinstance(user, User):
-                continue
+async def clean_blacklist(self, event: Message):
+    blocked = []
+    offset = 0
+    limit = 1000
 
-            if user.deleted:
-                should_unblock = True
-            else:
-                try:
-                    messages = await self.client.get_messages(user.id, limit=10)
-                    if messages and all(isinstance(m, MessageService) for m in messages):
-                        should_unblock = True
-                    else:
-                        should_unblock = False
-                except Exception:
-                    should_unblock = False
+    msg = await event.edit("🔍 Сканирую чёрный список...")
 
-            if should_unblock:
-                name = user.first_name or f"ID:{user.id}"
-                removed_names.append(f"[{name}](tg://user?id={user.id})")
+    while True:
+        await asyncio.sleep(await self.settings.get("typing.delay"))
+        result = await self.client(functions.contacts.GetBlockedRequest(offset=offset, limit=limit))
+        blocked.extend(result.users)
+        if len(result.users) < limit:
+            break
+        offset += limit
 
-                await self.client(functions.contacts.UnblockRequest(id=user.id))
+    removed_count = 0
+    removed_names = []
 
-                removed_count += 1
+    for user in blocked:
+        if not isinstance(user, User):
+            continue
 
-                if removed_count % 5 == 0:
-                    await msg.edit(f"⏳ Удалено из ЧС: {removed_count}...")
+        if not user.deleted:
+            continue
 
-                await asyncio.sleep(await self.settings.get("typing.delay"))
+        name = user.first_name or f"@{user.id}"
+        removed_names.append(f"[{name}](tg://user?id={user.id})")
 
-        names_str = ", ".join(removed_names[:20])
-        if len(removed_names) > 20:
-            names_str += f" и ещё {len(removed_names) - 20}"
+        try:
+            await self.client(functions.contacts.UnblockRequest(id=user.id))
+            removed_count += 1
 
-        await msg.edit(
-            f"✅ Готово! Удалено из чёрного списка: **{removed_count}**\n"
-            f"📋 Аккаунты: {names_str if names_str else 'нет'}"
-        )
+        except errors.FloodWaitError as e:
+            await asyncio.sleep(e.seconds)
+            await self.client(functions.contacts.UnblockRequest(id=user.id))
+            removed_count += 1
+
+        except Exception:
+            continue
+
+        if removed_count % 50 == 0 and removed_count > 0:
+            await msg.edit(f"⏳ Удалено из ЧС: {removed_count}...")
+
+    names_str = ", ".join(removed_names[:20])
+    if len(removed_names) > 20:
+        names_str += f" и ещё {len(removed_names) - 20}"
+
+    await msg.edit(
+        f"✅ Готово! Удалено из чёрного списка: **{removed_count}**\n"
+        f"📋 Аккаунты: {names_str if names_str else 'нет'}"
+    )
 
     async def set_setting(self, event: Message):
         key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
