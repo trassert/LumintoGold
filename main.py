@@ -692,9 +692,6 @@ class UserbotManager:
 
         for user in blocked:
             logger.info(f"BL scan @{user.id}")
-            if not isinstance(user, User):
-                continue
-
             if not user.deleted:
                 continue
 
