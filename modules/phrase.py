@@ -180,6 +180,7 @@ class setting:
 
 class pm:
     wait = "Удалено {} чатов.."
+
     cleared = "✅ : Чистка **ЛС** закончена! Удалено: {chats} чат(а/ов):\n{list}"
 
 

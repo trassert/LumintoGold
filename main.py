@@ -141,6 +141,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
 
         self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
+        self.client.on(d.cmd(r"\.чсчистка"))(self.clean_blacklist)
         self.client.on(d.cmd(r"\.voice$"))(self.voice2text)
         self.client.on(d.cmd(r"\.баттмон$"))(self.toggle_batt)
         self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
@@ -661,7 +662,8 @@ class UserbotManager:
                 if all(isinstance(msg, MessageService) for msg in messages):
                     on_delete = True
             if on_delete:
-                deleted.append(f"[{user.first_name}](tg://user?id={user.id})")
+                if user.first_name:
+                    deleted.append(f"[{user.first_name}](tg://user?id={user.id})")
                 await self.client.delete_dialog(dialog.id)
                 await asyncio.sleep(await self.settings.get("typing.delay"))
                 deleted_count += 1
@@ -669,6 +671,64 @@ class UserbotManager:
                     await msg.edit(phrase.pm.wait.format(deleted_count))
 
         await event.edit(phrase.pm.cleared.format(chats=deleted_count, list=", ".join(deleted)))
+
+    async def clean_blacklist(self, event: Message):
+        """
+        Сканирует чёрный список и удаляет удалённые аккаунты.
+        """
+        blocked = []
+        offset = 0
+        limit = 100
+
+        while True:
+            result = await self.client(
+                functions.contacts.GetBlockedRequest(offset=offset, limit=limit)
+            )
+            blocked.extend(result.users)
+            if len(result.users) < limit:
+                break
+            offset += limit
+            await asyncio.sleep(await self.settings.get("typing.delay"))
+        msg = await event.edit("🔍 Сканирую чёрный список...")
+        removed_count = 0
+        removed_names = []
+        for user in blocked:
+            if not isinstance(user, User):
+                continue
+
+            if user.deleted:
+                should_unblock = True
+            else:
+                try:
+                    messages = await self.client.get_messages(user.id, limit=10)
+                    if messages and all(isinstance(m, MessageService) for m in messages):
+                        should_unblock = True
+                    else:
+                        should_unblock = False
+                except Exception:
+                    should_unblock = False
+
+            if should_unblock:
+                name = user.first_name or f"ID:{user.id}"
+                removed_names.append(f"[{name}](tg://user?id={user.id})")
+
+                await self.client(functions.contacts.UnblockRequest(peer=user.id))
+
+                removed_count += 1
+
+                if removed_count % 5 == 0:
+                    await msg.edit(f"⏳ Удалено из ЧС: {removed_count}...")
+
+                await asyncio.sleep(await self.settings.get("typing.delay"))
+
+        names_str = ", ".join(removed_names[:20])
+        if len(removed_names) > 20:
+            names_str += f" и ещё {len(removed_names) - 20}"
+
+        await msg.edit(
+            f"✅ Готово! Удалено из чёрного списка: **{removed_count}**\n"
+            f"📋 Аккаунты: {names_str if names_str else 'нет'}"
+        )
 
     async def set_setting(self, event: Message):
         key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
