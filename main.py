@@ -712,7 +712,7 @@ class UserbotManager:
                 name = user.first_name or f"ID:{user.id}"
                 removed_names.append(f"[{name}](tg://user?id={user.id})")
 
-                await self.client(functions.contacts.UnblockRequest(peer=user.id))
+                await self.client(functions.contacts.UnblockRequest(id=user.id))
 
                 removed_count += 1
 
