@@ -691,12 +691,14 @@ class UserbotManager:
         removed_names = []
 
         for user in blocked:
+            logger.info(f"BL scan @{user.id}")
             if not isinstance(user, User):
                 continue
 
             if not user.deleted:
                 continue
 
+            logger.info(f"Deleting @{user.id} from BL..")
             name = user.first_name or f"@{user.id}"
             removed_names.append(f"[{name}](tg://user?id={user.id})")
 
@@ -709,10 +711,7 @@ class UserbotManager:
                 await self.client(functions.contacts.UnblockRequest(id=user.id))
                 removed_count += 1
 
-            except Exception:
-                continue
-
-            if removed_count % 50 == 0 and removed_count > 0:
+            if removed_count % 25 == 0 and removed_count > 0:
                 await msg.edit(f"⏳ Удалено из ЧС: {removed_count}...")
 
         names_str = ", ".join(removed_names[:20])
