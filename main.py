@@ -672,58 +672,57 @@ class UserbotManager:
 
         await event.edit(phrase.pm.cleared.format(chats=deleted_count, list=", ".join(deleted)))
 
+    async def clean_blacklist(self, event: Message):
+        blocked = []
+        offset = 0
+        limit = 1000
 
-async def clean_blacklist(self, event: Message):
-    blocked = []
-    offset = 0
-    limit = 1000
+        msg = await event.edit("🔍 Сканирую чёрный список...")
 
-    msg = await event.edit("🔍 Сканирую чёрный список...")
+        while True:
+            await asyncio.sleep(await self.settings.get("typing.delay"))
+            result = await self.client(functions.contacts.GetBlockedRequest(offset=offset, limit=limit))
+            blocked.extend(result.users)
+            if len(result.users) < limit:
+                break
+            offset += limit
 
-    while True:
-        await asyncio.sleep(await self.settings.get("typing.delay"))
-        result = await self.client(functions.contacts.GetBlockedRequest(offset=offset, limit=limit))
-        blocked.extend(result.users)
-        if len(result.users) < limit:
-            break
-        offset += limit
+        removed_count = 0
+        removed_names = []
 
-    removed_count = 0
-    removed_names = []
+        for user in blocked:
+            if not isinstance(user, User):
+                continue
 
-    for user in blocked:
-        if not isinstance(user, User):
-            continue
+            if not user.deleted:
+                continue
 
-        if not user.deleted:
-            continue
+            name = user.first_name or f"@{user.id}"
+            removed_names.append(f"[{name}](tg://user?id={user.id})")
 
-        name = user.first_name or f"@{user.id}"
-        removed_names.append(f"[{name}](tg://user?id={user.id})")
+            try:
+                await self.client(functions.contacts.UnblockRequest(id=user.id))
+                removed_count += 1
 
-        try:
-            await self.client(functions.contacts.UnblockRequest(id=user.id))
-            removed_count += 1
+            except errors.FloodWaitError as e:
+                await asyncio.sleep(e.seconds)
+                await self.client(functions.contacts.UnblockRequest(id=user.id))
+                removed_count += 1
 
-        except errors.FloodWaitError as e:
-            await asyncio.sleep(e.seconds)
-            await self.client(functions.contacts.UnblockRequest(id=user.id))
-            removed_count += 1
+            except Exception:
+                continue
 
-        except Exception:
-            continue
+            if removed_count % 50 == 0 and removed_count > 0:
+                await msg.edit(f"⏳ Удалено из ЧС: {removed_count}...")
 
-        if removed_count % 50 == 0 and removed_count > 0:
-            await msg.edit(f"⏳ Удалено из ЧС: {removed_count}...")
+        names_str = ", ".join(removed_names[:20])
+        if len(removed_names) > 20:
+            names_str += f" и ещё {len(removed_names) - 20}"
 
-    names_str = ", ".join(removed_names[:20])
-    if len(removed_names) > 20:
-        names_str += f" и ещё {len(removed_names) - 20}"
-
-    await msg.edit(
-        f"✅ Готово! Удалено из чёрного списка: **{removed_count}**\n"
-        f"📋 Аккаунты: {names_str if names_str else 'нет'}"
-    )
+        await msg.edit(
+            f"✅ Готово! Удалено из чёрного списка: **{removed_count}**\n"
+            f"📋 Аккаунты: {names_str if names_str else 'нет'}"
+        )
 
     async def set_setting(self, event: Message):
         key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
