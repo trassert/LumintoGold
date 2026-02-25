@@ -29,6 +29,7 @@ default = {
     "tg2vk.enabled": False,
     "tg2vk.chat": None,
     "vk.token": None,
+    "vktarget.poll_wait": 5,
     "tg2vk.vk_group": None,
     "battery.status": False,
     "battery.chat": None,
