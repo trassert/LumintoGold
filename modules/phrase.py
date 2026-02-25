@@ -216,6 +216,10 @@ class blacklist:
     done = "✅ Готово! Удалено из чёрного списка: **{removed_count}**\n📋 Аккаунты: {names_str}"
 
 
+class help:
+    text = "📚 : Команды бота находятся здесь:\n  **github.com/trassert/LumintoGold/wiki**"
+
+
 class iris:
     farm_cmds = ["/ферма", "/фарма"]
 

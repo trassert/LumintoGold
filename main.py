@@ -146,8 +146,10 @@ class UserbotManager:
         self.client.on(d.cmd(r"\!(.+)"))(self.chk_note)
         self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
 
-        self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
-        self.client.on(d.cmd(r"\.чсчистка"))(self.clean_blacklist)
+        self.client.on(d.cmd(r"\.чистка$"))(self.clean_pm)
+        self.client.on(d.cmd(r"\.help$"))(self.help)
+        self.client.on(d.cmd(r"\.помощь$"))(self.help)
+        self.client.on(d.cmd(r"\.чсчистка$"))(self.clean_blacklist)
         self.client.on(d.cmd(r"\.voice$"))(self.voice2text)
         self.client.on(d.cmd(r"\.баттмон$"))(self.toggle_batt)
         self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
@@ -221,6 +223,9 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
 
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
+
+    async def help(self, event: Message):
+        return await event.edit(phrase.help.text, link_preview=False)
 
     async def clean_chat(self, event: Message):
         if event.is_private:
