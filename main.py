@@ -985,7 +985,7 @@ class UserbotManager:
 
     async def run_shell(self, event: Message):
         cmd = event.pattern_match.group(1).strip()
-        if self.phone not in config.config.admins:
+        if self.phone not in config.tokens.admins:
             return await event.edit(phrase.shell.not_admin)
         if not cmd:
             return await event.edit(phrase.shell.no_command)
