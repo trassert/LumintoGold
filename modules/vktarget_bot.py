@@ -155,16 +155,19 @@ class VKTargetAutomation:
         self.logger: Any = logger
         self._handler: Any | None = None
         self.vk: VKMethods | None = None
+        self._poll_task: asyncio.Task[Any] | None = None
 
     async def start(self) -> None:
         if self._handler is None:
             self._handler = self._on_message
-            # подготовим VKMethods сессии
+
             await self.settings._ensure_loaded()
             token = await self.settings.get("vk.token")
             self.vk = VKMethods(self.logger, token=token)
             await self.vk.init()
             self.client.add_event_handler(self._handler, events.NewMessage(chats="vktarget_bot"))
+
+            self._poll_task = asyncio.create_task(self._poll_loop())
             self.logger.info("VKTarget automation started")
 
     def stop(self) -> None:
@@ -174,7 +177,11 @@ class VKTargetAutomation:
             except Exception:
                 self.logger.exception("Не удалось удалить handler vktarget")
             self._handler = None
-            # закрываем aiohttp-сессию асинхронно
+
+            if self._poll_task is not None and not self._poll_task.done():
+                self._poll_task.cancel()
+                self._poll_task = None
+
             try:
                 if self.vk is not None:
                     asyncio.create_task(self.vk.close())
@@ -182,8 +189,29 @@ class VKTargetAutomation:
                 self.logger.exception("Ошибка при закрытии сессии vktarget")
             self.logger.info("VKTarget automation stopped")
 
+    async def _poll_loop(self) -> None:
+        """Периодический опрос бота сообщением 'Задания'."""
+        try:
+            await asyncio.sleep(2)
+            await self._send_poll()
+
+            while True:
+                await asyncio.sleep(60 * 18)
+                await self._send_poll()
+        except asyncio.CancelledError:
+            self.logger.debug("VKTarget poll loop cancelled")
+        except Exception as e:
+            self.logger.exception(f"Ошибка в poll loop vktarget: {e}")
+
+    async def _send_poll(self) -> None:
+        """Отправить опрос 'Задания' боту."""
+        try:
+            await self.client.send_message("vktarget_bot", "Задания")
+            self.logger.info("Отправил опрос 'Задания' vktarget_bot")
+        except Exception as e:
+            self.logger.exception(f"Не удалось отправить опрос: {e}")
+
     async def _on_message(self, event: Any) -> None:
-        # используем подготовленный экземпляр VKMethods
         vk = getattr(self, "vk", None)
         if vk is None:
             await self.settings._ensure_loaded()
@@ -192,33 +220,76 @@ class VKTargetAutomation:
             await vk.init()
 
         await event.mark_read()
-        await asyncio.sleep(4)
+
+        await asyncio.sleep(1)
         text = event.text or ""
-        if "Вступите в" in text:
+
+        asyncio.create_task(self._process_task(text, event, vk))
+
+    async def _process_task(self, text: str, event: Any, vk: VKMethods) -> None:
+        """Асинхронная обработка задач от vktarget."""
+        try:
+            if "Вступите в" in text:
+                await self._handle_join_group(text, event, vk)
+            elif "Поставьте лайк на" in text or "Посмотреть" in text:
+                await self._handle_like(text, event, vk)
+            elif "Добавить в" in text:
+                await self._handle_add_friend(text, event, vk)
+            elif "канал" in text:
+                await self._handle_channel(text, event, vk)
+            elif "Доступны новые задания!" in text and "исчезнуть" not in text:
+                self.logger.info("Доступны новые задания!")
+                await event.respond("Задания")
+            else:
+                await self._handle_default(event)
+        except Exception as e:
+            self.logger.exception(f"Ошибка при обработке задачи: {e}")
+
+    async def _handle_join_group(self, text: str, event: Any, vk: VKMethods) -> None:
+        """Обработка задачи присоединения к группе."""
+        try:
             url = text.split("](")[1].split(")")[0]
             if await vk.join_vk_group(url) == 0:
                 await event.click(text="Скрыть")
-                return await event.respond("Задания")
-            await event.click(text="Проверить")
-            return await event.respond("Задания")
+                await event.respond("Задания")
+            else:
+                await event.click(text="Проверить")
+                await event.respond("Задания")
+        except Exception as e:
+            self.logger.exception(f"Ошибка при присоединении к группе: {e}")
+            await self._send_poll()
 
-        if "Поставьте лайк на" in text or "Посмотреть" in text:
+    async def _handle_like(self, text: str, event: Any, vk: VKMethods) -> None:
+        """Обработка задачи лайка поста."""
+        try:
             url = text.split("](")[1].split(")")[0]
             if await vk.like_vk_post(url) == 0:
                 await event.click(text="Скрыть")
-                return await event.respond("Задания")
-            await event.click(text="Проверить")
-            return await event.respond("Задания")
+                await event.respond("Задания")
+            else:
+                await event.click(text="Проверить")
+                await event.respond("Задания")
+        except Exception as e:
+            self.logger.exception(f"Ошибка при лайке поста: {e}")
+            await self._send_poll()
 
-        if "Добавить в" in text:
+    async def _handle_add_friend(self, text: str, event: Any, vk: VKMethods) -> None:
+        """Обработка задачи добавления в друзья."""
+        try:
             url = text.split("](")[1].split(")")[0]
             if await vk.add_vk_friend(url) == 0:
                 await event.click(text="Скрыть")
-                return await event.respond("Задания")
-            await event.click(text="Проверить")
-            return await event.respond("Задания")
+                await event.respond("Задания")
+            else:
+                await event.click(text="Проверить")
+                await event.respond("Задания")
+        except Exception as e:
+            self.logger.exception(f"Ошибка при добавлении в друзья: {e}")
+            await self._send_poll()
 
-        if "канал" in text:
+    async def _handle_channel(self, text: str, event: Any, vk: VKMethods) -> None:
+        """Обработка задачи подписки на канал."""
+        try:
             channelname = None
             for line in text.split("\n"):
                 if "канал" in line:
@@ -231,28 +302,30 @@ class VKTargetAutomation:
                     await event.click(text="Скрыть")
                 except Exception:
                     await event.respond("Задания")
-                return None
+                return
             try:
                 await self.client(JoinChannelRequest(channelname))
                 self.logger.info(f"Подписываюсь на канал {channelname}")
-                await asyncio.sleep(20)
+                await asyncio.sleep(15)
                 await event.click(text="Проверить")
             except Exception:
                 try:
                     await self.client(ImportChatInviteRequest(channelname))
                     self.logger.info(f"Подписываюсь на канал {channelname}")
-                    await asyncio.sleep(20)
+                    await asyncio.sleep(15)
                     await event.click(text="Проверить")
                 except Exception:
                     await event.click(text="Скрыть")
                     self.logger.info(f"Не смог подписаться на канал {channelname}")
-                    return await event.respond("Задания")
-            return await event.respond("Задания")
+                    await event.respond("Задания")
+                    return
+            await event.respond("Задания")
+        except Exception as e:
+            self.logger.exception(f"Ошибка при подписке на канал: {e}")
+            await self._send_poll()
 
-        if "Доступны новые задания!" in text and "исчезнуть" not in text:
-            self.logger.info("Доступны новые задания!")
-            return await event.respond("Задания")
-
+    async def _handle_default(self, event: Any) -> None:
+        """Обработка неизвестных сообщений."""
         try:
             await event.click(text="Скрыть")
         except Exception:
