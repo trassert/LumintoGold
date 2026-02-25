@@ -1,4 +1,5 @@
 import asyncio
+import random
 import re
 import time
 
@@ -9,6 +10,17 @@ from loguru import logger
 from . import config
 
 logger.info(f"Загружен модуль {__name__}!")
+
+test_urls = [
+    "http://google.com",
+    "http://example.com",
+    "http://github.com",
+    "http://bing.com",
+    "http://yahoo.com",
+    "http://duckduckgo.com",
+    "http://baidu.com",
+    "http://yandex.ru",
+]
 
 
 def is_valid_ip(ip: str) -> bool:
@@ -56,7 +68,6 @@ async def check_proxy_ping(proxy_type: str, ipport: str) -> float | None:
     Возвращает пинг в мс (float), если прокси жив.
     Возвращает None, если прокси мертв или ошибка.
     """
-    url = "http://google.com"
     timeout = aiohttp.ClientTimeout(total=3)
 
     try:
@@ -69,7 +80,7 @@ async def check_proxy_ping(proxy_type: str, ipport: str) -> float | None:
         if p_type == "http":
             proxy_url = f"http://{ipport}"
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, proxy=proxy_url) as resp:
+                async with session.get(random.choice(test_urls), proxy=proxy_url) as resp:
                     if resp.status != 200:
                         return None
         else:
@@ -80,7 +91,7 @@ async def check_proxy_ping(proxy_type: str, ipport: str) -> float | None:
             connector = ProxyConnector(proxy_type=p_map[p_type], host=host, port=port, rdns=True)
             try:
                 async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-                    async with session.get(url) as resp:
+                    async with session.get(random.choice(test_urls)) as resp:
                         if resp.status != 200:
                             return None
             finally:
@@ -109,9 +120,9 @@ async def get_proxy_list() -> list[str]:
 
 
 async def get_working_proxies(
-    proxy_type: str = None, count: int = 5, max_concurrency: int = 5
-) -> list[tuple[str, float]]:
-    """Возвращает список кортежей ("ip:port", latency) отсортированный по latency.
+    proxy_type: str = None, count: int = 5, max_concurrency: int = 100
+) -> list[tuple[str, str, float]]:
+    """Возвращает список кортежей ("proxy_type", "ip:port", latency) отсортированный по latency.
 
     Проверки выполняются параллельно с ограничением `max_concurrency`.
     """
@@ -137,12 +148,12 @@ async def get_working_proxies(
 
         if latency is None:
             return None
-        return ipport, latency
+        return ptype, ipport, latency
 
     tasks = [asyncio.create_task(_check(p)) for p in proxies]
     results = await asyncio.gather(*tasks)
 
     working = [r for r in results if r is not None]
-    working.sort(key=lambda x: x[1])
+    working.sort(key=lambda x: x[2])
 
     return working[:count]

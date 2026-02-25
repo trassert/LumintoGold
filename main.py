@@ -239,9 +239,9 @@ class UserbotManager:
         if not proxies:
             return await event.edit(phrase.fp.not_found)
         text = ""
-        for n, proxy in enumerate(proxies, start=1):
-            ip, port = proxy[0].split(":")
-            text += f"{n}. `{ip}`:`{port}` ({proxy[1]} мс)\n"
+        for proxy in proxies:
+            ip, port = proxy[1].split(":")
+            text += f"**{proxy[0]}** - `{ip}`:`{port}` ({proxy[2]} мс)\n"
         return await event.edit(phrase.fp.result.format(count=len(proxies), proxys=text))
 
     async def help(self, event: Message):
