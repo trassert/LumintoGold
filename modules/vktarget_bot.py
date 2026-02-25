@@ -196,7 +196,7 @@ class VKTargetAutomation:
             await self._send_poll()
 
             while True:
-                await asyncio.sleep(60 * 18)
+                await asyncio.sleep(60 * 10)
                 await self._send_poll()
         except asyncio.CancelledError:
             self.logger.debug("VKTarget poll loop cancelled")
