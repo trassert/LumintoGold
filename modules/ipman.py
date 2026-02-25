@@ -109,7 +109,7 @@ async def get_proxy_list() -> list[str]:
 
 
 async def get_working_proxies(
-    proxy_type: str = None, count: int = 5, max_concurrency: int = 100
+    proxy_type: str = None, count: int = 5, max_concurrency: int = 5
 ) -> list[tuple[str, float]]:
     """Возвращает список кортежей ("ip:port", latency) отсортированный по latency.
 
