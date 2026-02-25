@@ -173,6 +173,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
         self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
 
+        self.client.on(d.cmd(r"\.прокси(.*)"))(self.fp)
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
         self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
@@ -223,6 +224,24 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
 
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
+
+    async def fp(self, event: Message):
+        arg = event.pattern_match.group(1).strip().lower()
+        proxy_type = None
+        if arg == "http":
+            proxy_type = "http"
+        elif arg == "socks4":
+            proxy_type = "socks4"
+        elif arg == "socks5":
+            proxy_type = "socks5"
+        await event.edit(phrase.fp.wait)
+        proxies = await ipman.get_working_proxies(proxy_type=proxy_type)
+        if not proxies:
+            return await event.edit(phrase.fp.not_found)
+        text = ""
+        for n, proxy in enumerate(proxies, start=1):
+            text += f"{n}. {proxy[0]} ({proxy[1]} мс)\n"
+        return await event.edit(phrase.fp.result.format(count=len(proxies), proxys=text))
 
     async def help(self, event: Message):
         return await event.edit(phrase.help.text, link_preview=False)

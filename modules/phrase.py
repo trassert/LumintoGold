@@ -231,3 +231,9 @@ class iceyes:
 class vktarget:
     on = "✅ : Авто vktarget_bot включено"
     off = "❌ : Авто vktarget_bot выключено"
+
+
+class fp:
+    wait = "⏳ : Получаю список прокси..."
+    not_found = "❌ : Не удалось получить список прокси."
+    result = "✅ : Получено {count} прокси:\n{proxys}"
