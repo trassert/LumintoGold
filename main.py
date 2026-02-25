@@ -21,6 +21,8 @@ from telethon.tl.types import (
     User,
 )
 
+from modules import phrase
+
 logger.remove()
 logger.add(
     stderr,
@@ -33,7 +35,7 @@ logger.add(
     backtrace=False,
     diagnose=False,
 )
-logger.info("LumintoGold запускается...")
+logger.info(phrase.misc.startup)
 
 try:
     from vkbottle import Bot
@@ -42,7 +44,7 @@ try:
     import_vkbottle = True
 except ModuleNotFoundError:
     import_vkbottle = False
-    logger.warning("Нету vkbottle! Транслятор tg->vk не будет работать.")
+    logger.warning(phrase.misc.vkbottle_missing)
 
 
 class InterceptHandler(logging.Handler):
@@ -94,7 +96,7 @@ class UserbotManager:
             self.ai_chat = self.ai_client.chat(self.phone)
         except Exception:
             logger.warning("Установите Groq-токен (.иитокен <токен>)")
-        await self.client.start(phone=self.phone)
+        await self.client.start(phone=self.phone) # type: ignore
         logger.info(f"Запущен клиент ({self.phone})")
         self._register_handlers()
 
@@ -130,90 +132,10 @@ class UserbotManager:
             await self.battery_task.create(func=self.chk_battery, task_param=15, unit="seconds")
 
     def _register_handlers(self):
-        if import_vkbottle:
-            self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
+        # вынесена регистрация обработчиков в отдельный модуль
+        from modules import handlers
 
-        self.client.on(d.cmd(r"\.\$(.+)"))(self.run_shell)
-
-        self.client.on(d.cmd(r"\+нот (.+)\n([\s\S]+)"))(self.add_note)
-        self.client.on(d.cmd(r"\-нот (.+)"))(self.rm_note)
-        self.client.on(d.cmd(r"\!(.+)"))(self.chk_note)
-        self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
-
-        self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
-        self.client.on(d.cmd(r"\.чсчистка"))(self.clean_blacklist)
-        self.client.on(d.cmd(r"\.voice$"))(self.voice2text)
-        self.client.on(d.cmd(r"\.баттмон$"))(self.toggle_batt)
-        self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
-        self.client.on(d.cmd(r"\.слов"))(self.words)
-        self.client.on(d.cmd(r"\.пинг$"))(self.ping)
-        self.client.on(d.cmd(r"\.эмоид$"))(self.get_emo_id)
-        self.client.on(d.cmd(r"\.флип"))(self.flip_text)
-        self.client.on(d.cmd(r"\.гс$"))(self.on_off_block_voice)
-        self.client.on(d.cmd(r"\.читать$"))(self.on_off_mask_read)
-        self.client.on(d.cmd(r"\.серв$"))(self.server_load)
-        self.client.on(d.cmd(r"\.релоадконфиг$"))(self.config_reload)
-        self.client.on(d.cmd(r"\.автоферма$"))(self.on_off_farming)
-        self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
-        self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
-
-        self.client.on(d.cmd(r"\.id (.+)"))(self.get_id)
-
-        self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
-        self.client.on(d.cmd(r"\.иипрокси (.+)"))(self.ai_proxy)
-        self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
-        self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
-
-        self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
-        self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
-        self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
-        self.client.on(d.cmd(r"\.ии ([\s\S]+)"))(self.ai_resp)
-        self.client.on(d.cmd(r"\.т ([\s\S]+)"))(self.typing)
-        self.client.on(d.cmd(r"\.set (.+)"))(self.set_setting)
-        self.client.on(d.cmd(r"\.setint (.+)"))(self.set_int_setting)
-        self.client.on(d.cmd(r"\.время (.+)"))(self.time_by_city)
-        self.client.on(d.cmd(r"\.ад(?:\s|$)"))(self.autodelmsg)
-
-        self.client.on(
-            d.cmd(
-                r"\.genpass(?:\s+(.+))?",
-            )
-        )(self.gen_pass)
-        self.client.on(
-            d.cmd(
-                r"\.генпасс(?:\s+(.+))?",
-            )
-        )(self.gen_pass)
-        self.client.on(
-            d.cmd(
-                r"\.пароль(?:\s+(.+))?",
-            )
-        )(self.gen_pass)
-
-        self.client.on(events.NewMessage())(self.flood_ctrl.monitor)
-        self.client.on(d.cmd(r"\-флудстики (\d+) (\d+)$"))(
-            lambda e: self.flood_ctrl.set_rule(e, "stickers")
-        )
-        self.client.on(d.cmd(r"\-флудгиф (\d+) (\d+)$"))(
-            lambda e: self.flood_ctrl.set_rule(e, "gifs")
-        )
-        self.client.on(d.cmd(r"\-флудобщ (\d+) (\d+)$"))(
-            lambda e: self.flood_ctrl.set_rule(e, "messages")
-        )
-        self.client.on(d.cmd(r"\+флудстики$"))(lambda e: self.flood_ctrl.unset_rule(e, "stickers"))
-        self.client.on(d.cmd(r"\+флудгиф$"))(lambda e: self.flood_ctrl.unset_rule(e, "gifs"))
-        self.client.on(d.cmd(r"\+флудобщ$"))(lambda e: self.flood_ctrl.unset_rule(e, "messages"))
-
-        self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.autochat.add_chat)
-        self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.autochat.remove_chat)
-        self.client.on(d.cmd(r"\.авточат$"))(self.autochat.toggle)
-        self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.autochat.set_delay)
-
-        self.client.on(d.cmd(r"\.калк (.+)"))(self.calc)
-        self.client.on(d.cmd(r"\.к (.+)"))(self.calc)
-        self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
-
-        self.client.on(events.NewMessage())(self._dynamic_mask_reader)
+        handlers.register(self, import_vkbottle)
 
     async def clean_chat(self, event: Message):
         if event.is_private:
@@ -407,14 +329,14 @@ class UserbotManager:
     async def iris_farm(self):
         target = -1002355128955
         try:
-            await self.client.send_message(target, random.choice(["/ферма", "/фарма"]))
+            await self.client.send_message(target, random.choice(phrase.iris.farm_cmds))
         except Exception:
-            await self.client.send_message("iris_cm_bot", random.choice(["/ферма", "/фарма"]))
+            await self.client.send_message("iris_cm_bot", random.choice(phrase.iris.farm_cmds))
         logger.info(f"{self.phone} - сработала автоферма")
 
     async def iceyes_bonus(self):
-        await self.client.send_message("iceyes_bot", "💸 Бонус")
-        await self.client.send_message("icetik_bot", "💸 Бонус")
+        await self.client.send_message("iceyes_bot", phrase.iceyes.bonus_msg)
+        await self.client.send_message("icetik_bot", phrase.iceyes.bonus_msg)
         logger.info(f"{self.phone} - сработал автобонус")
 
     async def add_note(self, event: Message):
@@ -659,7 +581,7 @@ class UserbotManager:
                 on_delete = True
             else:
                 messages = await self.client.get_messages(user.id, limit=10)
-                if all(isinstance(msg, MessageService) for msg in messages):
+                if all(isinstance(msg, MessageService) for msg in messages): # type: ignore
                     on_delete = True
             if on_delete:
                 if user.first_name:
@@ -677,7 +599,7 @@ class UserbotManager:
         offset = 0
         limit = 1000
 
-        msg = await event.edit("🔍 Сканирую чёрный список...")
+        msg = await event.edit(phrase.blacklist.scanning)
 
         while True:
             await asyncio.sleep(await self.settings.get("typing.delay"))
@@ -709,16 +631,13 @@ class UserbotManager:
                 removed_count += 1
 
             if removed_count % 25 == 0 and removed_count > 0:
-                await msg.edit(f"⏳ Удалено из ЧС: {removed_count}...")
+                await msg.edit(phrase.blacklist.progress.format(count=removed_count))
 
         names_str = ", ".join(removed_names[:20])
         if len(removed_names) > 20:
             names_str += f" и ещё {len(removed_names) - 20}"
 
-        await msg.edit(
-            f"✅ Готово! Удалено из чёрного списка: **{removed_count}**\n"
-            f"📋 Аккаунты: {names_str if names_str else 'нет'}"
-        )
+        await msg.edit(phrase.blacklist.done.format(removed_count=removed_count, names_str=(names_str if names_str else "нет")))
 
     async def set_setting(self, event: Message):
         key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
@@ -745,10 +664,12 @@ class UserbotManager:
         tzz = tz.pytz.timezone(tz_name)
         city_time = tz.datetime.now(tzz)
         await event.edit(
-            f"📍 {location.address}\n"
-            f"🕒 Время: {city_time.strftime('%H:%M:%S')}\n"
-            f"📅 Дата: {city_time.strftime('%d.%m.%Y')}\n"
-            f"🌐 Пояс: {tz_name}"
+            phrase.time.location_info.format(
+                address=location.address,
+                time=city_time.strftime("%H:%M:%S"),
+                date=city_time.strftime("%d.%m.%Y"),
+                tz=tz_name,
+            )
         )
         return None
 
@@ -909,7 +830,7 @@ class UserbotManager:
 
         msg: Message = await event.edit(text.strip())
         await asyncio.sleep(delay)
-        await msg.edit("...")
+        await msg.edit(phrase.autodel.deleting)
         await asyncio.sleep(1)
         await msg.delete()
         return None
@@ -939,6 +860,8 @@ class UserbotManager:
 
     async def run_shell(self, event: Message):
         cmd = event.pattern_match.group(1).strip()
+        if self.phone not in config.config.admins:
+            return await event.edit(phrase.shell.not_admin)
         if not cmd:
             return await event.edit(phrase.shell.no_command)
 
@@ -972,7 +895,7 @@ class UserbotManager:
 
             final = (full_output or "[no output]").strip()
             if len(final) > 4000:
-                final = final[-4000:] + "\n... (обрезано)"
+                final = final[-4000:] + phrase.shell.truncated
             await msg.edit(phrase.shell.finished.format(cmd, final))
 
         except Exception as e:
@@ -981,7 +904,7 @@ class UserbotManager:
     async def run(self):
         try:
             await self.init()
-            await self.client.run_until_disconnected()
+            await self.client.run_until_disconnected() # type: ignore
         except Exception:
             logger.exception(f"Критическая ошибка в {self.number}")
 
@@ -991,10 +914,10 @@ async def main():
     client_files = [f for f in pathes.clients.iterdir() if f.suffix == ".json"]
 
     if not client_files:
-        logger.warning("Нет ни одного клиента! Создаём нового..")
-        number = input("Введи номер: ")
-        api_id = int(input("Введи api_id: "))
-        api_hash = input("Введи api_hash: ")
+        logger.warning(phrase.misc.no_clients)
+        number = input(phrase.misc.input_number)
+        api_id = int(input(phrase.misc.input_api_id))
+        api_hash = input(phrase.misc.input_api_hash)
         config_path = pathes.clients / f"{number}.json"
         async with aiofiles.open(config_path, "wb") as f:
             await f.write(
@@ -1014,7 +937,7 @@ async def main():
             tasks.append(UserbotManager(phone, api_id, api_hash).run())
 
     if not tasks:
-        return logger.error("Нет ни одного валидного клиента.")
+        return logger.error(phrase.misc.no_valid_clients)
     await asyncio.gather(*tasks)
     return None
 
@@ -1036,7 +959,6 @@ if __name__ == "__main__":
         iterators,
         notes,
         pathes,
-        phrase,
         settings,
         task_gen,
         tz,
@@ -1048,7 +970,7 @@ if __name__ == "__main__":
 
             uvloop.run(main())
         except ModuleNotFoundError:
-            logger.warning("Uvloop не найден! Установите его: pip install uvloop")
+            logger.warning(phrase.misc.uvloop_missing)
             asyncio.run(main())
     except KeyboardInterrupt:
-        logger.warning("Закрываю бота...")
+        logger.warning(phrase.misc.shutting_down)

@@ -5,3 +5,6 @@ url:
 
 battery_path: "/sys/class/power_supply/battery/status"
 wait_delete: 60
+
+admins:
+  - 79994442266

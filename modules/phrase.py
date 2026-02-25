@@ -15,15 +15,18 @@ class voicerec:
 class autodel:
     args = "❌ : Использование: `.ад [время] <текст>`"
     empty = "❌ : Текст не может быть пустым."
+    deleting = "..."
 
 
 class shell:
+    not_admin = "⛔ : Только для админов."
     no_command = "💻 : Укажи команду после `..`"
     forbidden = "⚠️ : Запрещённая команда или символ."
     started = "🚀 : `$ {}`\n\n```Запуск...```"
     live = "💻 : `$ {}`\n\n```{}```"
     finished = "✅ : `$ {}`\n\n```{}```"
     error = "💥 : Ошибка: `{}`"
+    truncated = "\n... (обрезано)"
 
 
 class emoji:
@@ -171,6 +174,12 @@ class password:
 class time:
     not_found = "❌ : Город {} не найден."
     not_timezone = "❌ : Не удалось определить часовой пояс для {}."
+    location_info = (
+        "📍 {address}\n"
+        "🕒 Время: {time}\n"
+        "📅 Дата: {date}\n"
+        "🌐 Пояс: {tz}"
+    )
 
 
 class setting:
@@ -197,3 +206,36 @@ error = "🪲 : Непредвиденная ошибка: {}"
 not_a_chat = "❌ : Это не чат."
 from_tg = "📢 Из Telegram\n"
 result_empty = "❌ : Результат пуст."
+
+
+class misc:
+    startup = "LumintoGold запускается..."
+    no_clients = "Нет ни одного клиента! Создаём нового.."
+    input_number = "Введи номер: "
+    input_api_id = "Введи api_id: "
+    input_api_hash = "Введи api_hash: "
+    no_valid_clients = "Нет ни одного валидного клиента."
+    uvloop_missing = "Uvloop не найден! Установите его: pip install uvloop"
+    shutting_down = "Закрываю бота..."
+    vkbottle_missing = "Нету vkbottle! Транслятор tg->vk не будет работать."
+
+
+class blacklist:
+    scanning = "🔍 Сканирую чёрный список..."
+    progress = "⏳ Удалено из ЧС: {count}..."
+    done = (
+        "✅ Готово! Удалено из чёрного списка: **{removed_count}**\n"
+        "📋 Аккаунты: {names_str}"
+    )
+
+
+class iris:
+    farm_cmds = ["/ферма", "/фарма"]
+
+
+class iceyes:
+    bonus_msg = "💸 Бонус"
+
+
+# небольшие вспомогательные фразы
+
