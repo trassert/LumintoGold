@@ -21,7 +21,7 @@ from telethon.tl.types import (
     User,
 )
 
-from modules import phrase
+from modules import phrase, vktarget_bot
 
 logger.remove()
 logger.add(
@@ -82,6 +82,7 @@ class UserbotManager:
         self.notes = notes.Notes(phone)
         self.flood_ctrl = flood.FloodController(self.client, self.settings)
         self.autochat = autochat.AutoChatManager(self.client, self.settings)
+        self.vktarget = vktarget_bot.VKTargetAutomation(self.client, self.settings, logger)
 
     async def init(self):
         use_ipv6 = await self.settings.get("use.ipv6")
@@ -96,7 +97,7 @@ class UserbotManager:
             self.ai_chat = self.ai_client.chat(self.phone)
         except Exception:
             logger.warning("Установите Groq-токен (.иитокен <токен>)")
-        await self.client.start(phone=self.phone) # type: ignore
+        await self.client.start(phone=self.phone)  # type: ignore
         logger.info(f"Запущен клиент ({self.phone})")
         self._register_handlers()
 
@@ -117,6 +118,9 @@ class UserbotManager:
 
         if await self.settings.get("auto.online"):
             await self.online_task.create(func=self.auto_online, task_param=30, unit="seconds")
+
+        if await self.settings.get("vktarget.enabled", False):
+            await self.vktarget.start()
 
         if await self.settings.get("autochat.enabled"):
             await self.autochat.start()
@@ -158,6 +162,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.автоферма$"))(self.on_off_farming)
         self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
+        self.client.on(d.cmd(r"\.авто vktarget_bot$"))(self.toggle_vktarget)
 
         self.client.on(d.cmd(r"\.id (.+)"))(self.get_id)
 
@@ -202,9 +207,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\-флудобщ (\d+) (\d+)$"))(
             lambda e: self.flood_ctrl.set_rule(e, "messages")
         )
-        self.client.on(d.cmd(r"\+флудстики$"))(
-            lambda e: self.flood_ctrl.unset_rule(e, "stickers")
-        )
+        self.client.on(d.cmd(r"\+флудстики$"))(lambda e: self.flood_ctrl.unset_rule(e, "stickers"))
         self.client.on(d.cmd(r"\+флудгиф$"))(lambda e: self.flood_ctrl.unset_rule(e, "gifs"))
         self.client.on(d.cmd(r"\+флудобщ$"))(lambda e: self.flood_ctrl.unset_rule(e, "messages"))
 
@@ -341,7 +344,7 @@ class UserbotManager:
         enabled = await self.settings.get("tg2vk.enabled", False)
         target_chat = await self.settings.get("tg2vk.chat")
         vk_group = await self.settings.get("tg2vk.vk_group")
-        vk_token = await self.settings.get("tg2vk.vk_token")
+        vk_token = await self.settings.get("vk.token")
 
         if not target_chat:
             await self.settings.set("tg2vk.enabled", False)
@@ -366,7 +369,7 @@ class UserbotManager:
 
     async def _handle_tg_to_vk(self, event: Message):
         logger.info("tg2vk: Новый пост")
-        vk_token = await self.settings.get("tg2vk.vk_token")
+        vk_token = await self.settings.get("vk.token")
         vk_group_id = await self.settings.get("tg2vk.vk_group")
         if not vk_token or not vk_group_id:
             return logger.error("tg2vk: Отсутствует токен или ID группы")
@@ -525,6 +528,16 @@ class UserbotManager:
             event,
         )
 
+    async def toggle_vktarget(self, event: Message):
+        enabled = not await self.settings.get("vktarget.enabled", False)
+        await self.settings.set("vktarget.enabled", enabled)
+        if enabled:
+            await self.vktarget.start()
+            await event.edit(phrase.vktarget.on)
+        else:
+            self.vktarget.stop()
+            await event.edit(phrase.vktarget.off)
+
     async def toggle_batt(self, event: Message):
         await self._toggle_setting_and_task(
             "battery.status",
@@ -663,7 +676,7 @@ class UserbotManager:
                 on_delete = True
             else:
                 messages = await self.client.get_messages(user.id, limit=10)
-                if all(isinstance(msg, MessageService) for msg in messages): # type: ignore
+                if all(isinstance(msg, MessageService) for msg in messages):  # type: ignore
                     on_delete = True
             if on_delete:
                 if user.first_name:
@@ -685,7 +698,9 @@ class UserbotManager:
 
         while True:
             await asyncio.sleep(await self.settings.get("typing.delay"))
-            result = await self.client(functions.contacts.GetBlockedRequest(offset=offset, limit=limit))
+            result = await self.client(
+                functions.contacts.GetBlockedRequest(offset=offset, limit=limit)
+            )
             blocked.extend(result.users)
             if len(result.users) < limit:
                 break
@@ -719,7 +734,11 @@ class UserbotManager:
         if len(removed_names) > 20:
             names_str += f" и ещё {len(removed_names) - 20}"
 
-        await msg.edit(phrase.blacklist.done.format(removed_count=removed_count, names_str=(names_str if names_str else "нет")))
+        await msg.edit(
+            phrase.blacklist.done.format(
+                removed_count=removed_count, names_str=(names_str if names_str else "нет")
+            )
+        )
 
     async def set_setting(self, event: Message):
         key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
@@ -986,7 +1005,7 @@ class UserbotManager:
     async def run(self):
         try:
             await self.init()
-            await self.client.run_until_disconnected() # type: ignore
+            await self.client.run_until_disconnected()  # type: ignore
         except Exception:
             logger.exception(f"Критическая ошибка в {self.phone}")
 

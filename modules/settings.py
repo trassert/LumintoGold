@@ -28,7 +28,7 @@ default = {
     "autochat.enabled": False,
     "tg2vk.enabled": False,
     "tg2vk.chat": None,
-    "tg2vk.vk_token": None,
+    "vk.token": None,
     "tg2vk.vk_group": None,
     "battery.status": False,
     "battery.chat": None,

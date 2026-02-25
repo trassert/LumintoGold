@@ -169,12 +169,7 @@ class password:
 class time:
     not_found = "❌ : Город {} не найден."
     not_timezone = "❌ : Не удалось определить часовой пояс для {}."
-    location_info = (
-        "📍 {address}\n"
-        "🕒 Время: {time}\n"
-        "📅 Дата: {date}\n"
-        "🌐 Пояс: {tz}"
-    )
+    location_info = "📍 {address}\n🕒 Время: {time}\n📅 Дата: {date}\n🌐 Пояс: {tz}"
 
 
 class setting:
@@ -218,10 +213,7 @@ class misc:
 class blacklist:
     scanning = "🔍 Сканирую чёрный список..."
     progress = "⏳ Удалено из ЧС: {count}..."
-    done = (
-        "✅ Готово! Удалено из чёрного списка: **{removed_count}**\n"
-        "📋 Аккаунты: {names_str}"
-    )
+    done = "✅ Готово! Удалено из чёрного списка: **{removed_count}**\n📋 Аккаунты: {names_str}"
 
 
 class iris:
@@ -232,5 +224,6 @@ class iceyes:
     bonus_msg = "💸 Бонус"
 
 
-# небольшие вспомогательные фразы
-
+class vktarget:
+    on = "✅ : Авто vktarget_bot включено"
+    off = "❌ : Авто vktarget_bot выключено"
