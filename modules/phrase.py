@@ -1,8 +1,3 @@
-from loguru import logger
-
-logger.info(f"Загружен модуль {__name__}!")
-
-
 class voicerec:
     done = "🎙 : {}"
     no_reply = "❌ : Ответь на голосовое сообщение командой `.voice`."

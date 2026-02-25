@@ -132,10 +132,92 @@ class UserbotManager:
             await self.battery_task.create(func=self.chk_battery, task_param=15, unit="seconds")
 
     def _register_handlers(self):
-        # вынесена регистрация обработчиков в отдельный модуль
-        from modules import handlers
+        if import_vkbottle:
+            self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
 
-        handlers.register(self, import_vkbottle)
+        self.client.on(d.cmd(r"\.\$(.+)"))(self.run_shell)
+
+        self.client.on(d.cmd(r"\+нот (.+)\n([\s\S]+)"))(self.add_note)
+        self.client.on(d.cmd(r"\-нот (.+)"))(self.rm_note)
+        self.client.on(d.cmd(r"\!(.+)"))(self.chk_note)
+        self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
+
+        self.client.on(d.cmd(r"\.чистка"))(self.clean_pm)
+        self.client.on(d.cmd(r"\.чсчистка"))(self.clean_blacklist)
+        self.client.on(d.cmd(r"\.voice$"))(self.voice2text)
+        self.client.on(d.cmd(r"\.баттмон$"))(self.toggle_batt)
+        self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
+        self.client.on(d.cmd(r"\.слов"))(self.words)
+        self.client.on(d.cmd(r"\.пинг$"))(self.ping)
+        self.client.on(d.cmd(r"\.эмоид$"))(self.get_emo_id)
+        self.client.on(d.cmd(r"\.флип"))(self.flip_text)
+        self.client.on(d.cmd(r"\.гс$"))(self.on_off_block_voice)
+        self.client.on(d.cmd(r"\.читать$"))(self.on_off_mask_read)
+        self.client.on(d.cmd(r"\.серв$"))(self.server_load)
+        self.client.on(d.cmd(r"\.релоадконфиг$"))(self.config_reload)
+        self.client.on(d.cmd(r"\.автоферма$"))(self.on_off_farming)
+        self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
+        self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
+
+        self.client.on(d.cmd(r"\.id (.+)"))(self.get_id)
+
+        self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
+        self.client.on(d.cmd(r"\.иипрокси (.+)"))(self.ai_proxy)
+        self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
+        self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
+
+        self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
+        self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
+        self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
+        self.client.on(d.cmd(r"\.ии ([\s\S]+)"))(self.ai_resp)
+        self.client.on(d.cmd(r"\.т ([\s\S]+)"))(self.typing)
+        self.client.on(d.cmd(r"\.set (.+)"))(self.set_setting)
+        self.client.on(d.cmd(r"\.setint (.+)"))(self.set_int_setting)
+        self.client.on(d.cmd(r"\.время (.+)"))(self.time_by_city)
+        self.client.on(d.cmd(r"\.ад(?:\s|$)"))(self.autodelmsg)
+
+        self.client.on(
+            d.cmd(
+                r"\.genpass(?:\s+(.+))?",
+            )
+        )(self.gen_pass)
+        self.client.on(
+            d.cmd(
+                r"\.генпасс(?:\s+(.+))?",
+            )
+        )(self.gen_pass)
+        self.client.on(
+            d.cmd(
+                r"\.пароль(?:\s+(.+))?",
+            )
+        )(self.gen_pass)
+
+        self.client.on(events.NewMessage())(self.flood_ctrl.monitor)
+        self.client.on(d.cmd(r"\-флудстики (\d+) (\d+)$"))(
+            lambda e: self.flood_ctrl.set_rule(e, "stickers")
+        )
+        self.client.on(d.cmd(r"\-флудгиф (\d+) (\d+)$"))(
+            lambda e: self.flood_ctrl.set_rule(e, "gifs")
+        )
+        self.client.on(d.cmd(r"\-флудобщ (\d+) (\d+)$"))(
+            lambda e: self.flood_ctrl.set_rule(e, "messages")
+        )
+        self.client.on(d.cmd(r"\+флудстики$"))(
+            lambda e: self.flood_ctrl.unset_rule(e, "stickers")
+        )
+        self.client.on(d.cmd(r"\+флудгиф$"))(lambda e: self.flood_ctrl.unset_rule(e, "gifs"))
+        self.client.on(d.cmd(r"\+флудобщ$"))(lambda e: self.flood_ctrl.unset_rule(e, "messages"))
+
+        self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.autochat.add_chat)
+        self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.autochat.remove_chat)
+        self.client.on(d.cmd(r"\.авточат$"))(self.autochat.toggle)
+        self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.autochat.set_delay)
+
+        self.client.on(d.cmd(r"\.калк (.+)"))(self.calc)
+        self.client.on(d.cmd(r"\.к (.+)"))(self.calc)
+        self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
+
+        self.client.on(events.NewMessage())(self._dynamic_mask_reader)
 
     async def clean_chat(self, event: Message):
         if event.is_private:
@@ -906,7 +988,7 @@ class UserbotManager:
             await self.init()
             await self.client.run_until_disconnected() # type: ignore
         except Exception:
-            logger.exception(f"Критическая ошибка в {self.number}")
+            logger.exception(f"Критическая ошибка в {self.phone}")
 
 
 async def main():
