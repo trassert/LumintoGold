@@ -113,7 +113,9 @@ class UserbotManager:
 
         if await self.settings.get("iceyes.bonus"):
             await self.iceyes_task.create(
-                func=self.iceyes_bonus, task_param=1, random_delay=(1, 60)
+                func=self.iceyes_bonus,
+                task_param=1,
+                random_delay=(1, 60),
             )
 
         if await self.settings.get("auto.online"):
@@ -129,7 +131,8 @@ class UserbotManager:
             target_chat = await self.settings.get("tg2vk.chat")
             if target_chat:
                 self.client.add_event_handler(
-                    self._handle_tg_to_vk, events.NewMessage(chats=target_chat)
+                    self._handle_tg_to_vk,
+                    events.NewMessage(chats=target_chat),
                 )
 
         if await self.settings.get("battery.status"):
@@ -187,28 +190,28 @@ class UserbotManager:
         self.client.on(
             d.cmd(
                 r"\.genpass(?:\s+(.+))?",
-            )
+            ),
         )(self.gen_pass)
         self.client.on(
             d.cmd(
                 r"\.генпасс(?:\s+(.+))?",
-            )
+            ),
         )(self.gen_pass)
         self.client.on(
             d.cmd(
                 r"\.пароль(?:\s+(.+))?",
-            )
+            ),
         )(self.gen_pass)
 
         self.client.on(events.NewMessage())(self.flood_ctrl.monitor)
         self.client.on(d.cmd(r"\-флудстики (\d+) (\d+)$"))(
-            lambda e: self.flood_ctrl.set_rule(e, "stickers")
+            lambda e: self.flood_ctrl.set_rule(e, "stickers"),
         )
         self.client.on(d.cmd(r"\-флудгиф (\d+) (\d+)$"))(
-            lambda e: self.flood_ctrl.set_rule(e, "gifs")
+            lambda e: self.flood_ctrl.set_rule(e, "gifs"),
         )
         self.client.on(d.cmd(r"\-флудобщ (\d+) (\d+)$"))(
-            lambda e: self.flood_ctrl.set_rule(e, "messages")
+            lambda e: self.flood_ctrl.set_rule(e, "messages"),
         )
         self.client.on(d.cmd(r"\+флудстики$"))(lambda e: self.flood_ctrl.unset_rule(e, "stickers"))
         self.client.on(d.cmd(r"\+флудгиф$"))(lambda e: self.flood_ctrl.unset_rule(e, "gifs"))
@@ -281,7 +284,8 @@ class UserbotManager:
             await asyncio.sleep(await self.settings.get("typing.delay"))
 
         async for ban in self.client.iter_participants(
-            chat, filter=types.ChannelParticipantsKicked
+            chat,
+            filter=types.ChannelParticipantsKicked,
         ):
             user: User = ban
             if user and user.deleted:
@@ -328,7 +332,7 @@ class UserbotManager:
                     big=True,
                     add_to_recent=True,
                     reaction=[types.ReactionEmoji(emoticon="❤️")],
-                )
+                ),
             )
             logger.info("Отправил реакцию!")
         except Exception:
@@ -381,7 +385,8 @@ class UserbotManager:
                 return await event.edit(phrase.tg2vk.missing_config)
             logger.debug("tg2vk: enabled")
             self.client.add_event_handler(
-                self._handle_tg_to_vk, events.NewMessage(chats=target_chat)
+                self._handle_tg_to_vk,
+                events.NewMessage(chats=target_chat),
             )
             await self.settings.set("tg2vk.enabled", True)
             await event.edit(phrase.tg2vk.on)
@@ -620,8 +625,8 @@ class UserbotManager:
         try:
             return await event.edit(
                 phrase.voicerec.done.format(
-                    await self.ai_client.transcribe_voice(self.phone, event.id)
-                )
+                    await self.ai_client.transcribe_voice(self.phone, event.id),
+                ),
             )
 
         except Exception as e:
@@ -665,7 +670,7 @@ class UserbotManager:
             f"Регион: {response.get('regionName')}\n"
             f"Город: {response.get('city')}\n"
             f"Провайдер: {response.get('isp')}\n"
-            f"Координаты: {response.get('lat')}/{response.get('lon')}"
+            f"Координаты: {response.get('lat')}/{response.get('lon')}",
         )
         return None
 
@@ -724,7 +729,7 @@ class UserbotManager:
         while True:
             await asyncio.sleep(await self.settings.get("typing.delay"))
             result = await self.client(
-                functions.contacts.GetBlockedRequest(offset=offset, limit=limit)
+                functions.contacts.GetBlockedRequest(offset=offset, limit=limit),
             )
             blocked.extend(result.users)
             if len(result.users) < limit:
@@ -761,8 +766,9 @@ class UserbotManager:
 
         await msg.edit(
             phrase.blacklist.done.format(
-                removed_count=removed_count, names_str=(names_str if names_str else "нет")
-            )
+                removed_count=removed_count,
+                names_str=(names_str if names_str else "нет"),
+            ),
         )
 
     async def set_setting(self, event: Message):
@@ -795,7 +801,7 @@ class UserbotManager:
                 time=city_time.strftime("%H:%M:%S"),
                 date=city_time.strftime("%d.%m.%Y"),
                 tz=tz_name,
-            )
+            ),
         )
         return None
 
@@ -866,7 +872,7 @@ class UserbotManager:
         await event.edit(phrase.ping.pong)
         pingtime = round(time() - t1, 2)
         await event.edit(
-            phrase.ping.ping.format(timedel=f"{timedel} сек.", ping=f"{pingtime} сек.")
+            phrase.ping.ping.format(timedel=f"{timedel} сек.", ping=f"{pingtime} сек."),
         )
 
     async def flip_text(self, event: Message):
@@ -1050,7 +1056,7 @@ async def main():
                 orjson.dumps(
                     {"api_id": api_id, "api_hash": api_hash},
                     option=orjson.OPT_INDENT_2,
-                )
+                ),
             )
         return await main()
 

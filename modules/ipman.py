@@ -108,7 +108,8 @@ async def get_proxy_list() -> list[str]:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                config.config.url.fp, timeout=aiohttp.ClientTimeout(total=5)
+                config.config.url.fp,
+                timeout=aiohttp.ClientTimeout(total=5),
             ) as response:
                 response.raise_for_status()
                 return [
@@ -120,7 +121,9 @@ async def get_proxy_list() -> list[str]:
 
 
 async def get_working_proxies(
-    proxy_type: str = None, count: int = 5, max_concurrency: int = 100
+    proxy_type: str = None,
+    count: int = 5,
+    max_concurrency: int = 100,
 ) -> list[tuple[str, str, float]]:
     """Возвращает список кортежей ("proxy_type", "ip:port", latency) отсортированный по latency.
 

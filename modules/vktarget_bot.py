@@ -81,7 +81,7 @@ class VKMethods:
             f"&owner_id={owner_id}"
             f"&item_id={post_id}"
             f"&access_token={self.token}"
-            "&v=5.131"
+            "&v=5.131",
         )
         self.logger.info(f"Ответ вк: {resp}")
         if resp.get("response") and resp.get("response").get("likes") is not None:
@@ -100,7 +100,7 @@ class VKMethods:
             "https://api.vk.com/method/groups.join"
             f"?group_id={group_id}"
             f"&access_token={self.token}"
-            "&v=5.131"
+            "&v=5.131",
         )
         self.logger.info(f"Ответ вк: {resp}")
         if resp.get("response") == 1:
@@ -119,7 +119,7 @@ class VKMethods:
             "https://api.vk.com/method/friends.add"
             f"?user_id={user_id}"
             f"&access_token={self.token}"
-            "&v=5.131"
+            "&v=5.131",
         )
         self.logger.info(f"Ответ ВК: {resp}")
         if resp.get("response") == 1:
@@ -138,7 +138,7 @@ class VKMethods:
             "https://api.vk.com/method/wall.getById"
             f"?posts={post_id}"
             f"&access_token={self.token}"
-            "&v=5.131"
+            "&v=5.131",
         )
         self.logger.info(f"Ответ ВК: {resp}")
         if "response" in resp:
