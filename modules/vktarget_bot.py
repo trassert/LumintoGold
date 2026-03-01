@@ -172,9 +172,8 @@ class VKTargetRefactored:
             await asyncio.sleep(5)
             while self._active:
                 base_wait = await self.settings.get("vktarget.poll_wait")
-                delay = base_wait + (self._empty_count * 10) + random.uniform(-2, 2)
-                delay = max(15, min(delay, 300))
-                await asyncio.sleep(delay)
+                delay = base_wait * 60 + random.uniform(-30, 30)
+                await asyncio.sleep(max(10, delay))
                 if not self._active:
                     break
                 if not self._lock.locked():
