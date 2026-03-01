@@ -51,12 +51,12 @@ class ClickBeeAutomation:
         self._lock = asyncio.Lock()
         self._handler = None
         self._task_iter = _CyclicIterator(TASK_BUTTONS)
-        self.bot: str = self.settings.sync_get("clickbee.username")
     async def start(self) -> None:
         if self._active:
             return
         self._active = True
         self._task_iter.reset()
+        self.bot: str = await self.settings.get("clickbee.username")
         self._register_handler()
         logger.info("ClickBee запущен")
         await asyncio.sleep(2)
