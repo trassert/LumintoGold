@@ -12,10 +12,6 @@ from . import settings
 
 logger.info(f"Загружен модуль {__name__}!")
 TASK_BUTTONS = ["🤖 Join Bots", "💻 Visit Sites", "📢 Join Channels"]
-BOTS = [
-    "ClickBeeDOGEBot",
-    "ClickBeeLTCBot",
-]
 
 
 class _CyclicIterator:
@@ -55,20 +51,16 @@ class ClickBeeAutomation:
         self._lock = asyncio.Lock()
         self._handler = None
         self._task_iter = _CyclicIterator(TASK_BUTTONS)
-        self._bot_iter = _CyclicIterator(BOTS)
-        self._current_bot: str = BOTS[0]
-
+        self.bot: str = self.settings.sync_get("clickbee.username")
     async def start(self) -> None:
         if self._active:
             return
         self._active = True
         self._task_iter.reset()
-        self._bot_iter.reset()
-        self._current_bot = self._bot_iter.next()
         self._register_handler()
-        logger.info(f"ClickBee запущен, начинаю с бота {self._current_bot}")
+        logger.info("ClickBee запущен")
         await asyncio.sleep(2)
-        await self.client.send_message(self._current_bot, self._task_iter.next())
+        await self.client.send_message(self.bot, self._task_iter.next())
 
     def stop(self) -> None:
         self._active = False
@@ -95,7 +87,7 @@ class ClickBeeAutomation:
             if sender is None:
                 return
             username = getattr(sender, "username", None)
-            if username != self._current_bot:
+            if username != self.bot:
                 return
             async with self._lock:
                 await self._process_message(event)
@@ -103,7 +95,7 @@ class ClickBeeAutomation:
         self._handler = _on_message
         self.client.add_event_handler(
             self._handler,
-            events.NewMessage(chats=BOTS, incoming=True),
+            events.NewMessage(chats=self.bot, incoming=True),
         )
 
     def _unregister_handler(self) -> None:
@@ -251,22 +243,16 @@ class ClickBeeAutomation:
         await event.respond(task)
 
     async def _switch_bot(self, event: Message) -> None:
-        """Переключается на следующего бота из списка. Между ботами спит."""
+        """Сон."""
         if not self._active:
             return
         self._task_iter.reset()
-        next_bot = self._bot_iter.next()
-        if next_bot == self._current_bot:
-            next_bot = self._bot_iter.next()
         sleep_time = await self.settings.get("clickbee.sleep_between", 300)
         jitter = random.randint(-30, 30)
         actual_sleep = max(30, sleep_time + jitter)
-        logger.info(f"ClickBee: Переключаюсь на {next_bot}, сплю {actual_sleep}с")
+        logger.info(f"ClickBee: Сплю {actual_sleep}с")
         await asyncio.sleep(actual_sleep)
         if not self._active:
             return
-        self._current_bot = next_bot
-        self._unregister_handler()
-        self._register_handler()
         first_task = self._task_iter.next()
-        await self.client.send_message(self._current_bot, first_task)
+        await self.client.send_message(self.bot, first_task)
