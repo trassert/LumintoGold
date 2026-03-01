@@ -201,14 +201,13 @@ class ClickBeeAutomation:
         if not url:
             logger.warning("ClickBee: URL не найден, пропускаю сайт")
             return await self._next_task(event)
-        clean_url = re.sub(r"\?.*", "", url)
-        site_wait = await self.settings.get("clickbee.site_wait", 120)
+        site_wait = await self.settings.get("clickbee.site_wait")
         if SELENIUM_AVAILABLE and self._browser:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 None,
                 self._browser.visit,
-                clean_url,
+                url,
                 site_wait + random.randint(3, 10),
             )
         else:
