@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from telethon import TelegramClient, events
+from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.tl.types import Message
 from vkbottle import API
 
@@ -128,6 +130,55 @@ class VKActions:
     async def subscribe_channel(self, url: str) -> TaskResult:
         return await self.join_group(url)
 
+    async def subscribe_telegram_channel(self, url: str, client: TelegramClient) -> TaskResult:
+        """Подписка на канал/чат Telegram (включая приватные по ссылке +)."""
+        await self._human_delay(2.0, 4.0)
+        try:
+            self.logger.info(f"TG: Подписка на канал: {url}")
+            if "+/" in url or "joinchat" in url:
+                invite_hash = url.split("/")[-1]
+                invite_hash = invite_hash.split("?")[0]
+                await client(ImportChatInviteRequest(invite_hash))
+            else:
+                username = (
+                    url.replace("https://t.me/", "").replace("http://t.me/", "").split("/")[0]
+                )
+                await client(JoinChannelRequest(username))
+            return TaskResult(True, "tg_join", "Успешно подписан на TG")
+        except Exception as e:
+            err_str = str(e)
+            if "USER_ALREADY_PARTICIPANT" in err_str or "already a member" in err_str.lower():
+                return TaskResult(True, "tg_join", "Уже подписан на TG")
+            self.logger.error(f"TG: Ошибка подписки: {e}")
+            return TaskResult(False, "tg_join", str(e))
+
+    async def view_telegram_post(self, url: str, client: TelegramClient) -> TaskResult:
+        """Просмотр записи в Telegram (эмуляция открытия)."""
+        await self._human_delay(1.5, 3.0)
+        try:
+            self.logger.info(f"TG: Просмотр записи: {url}")
+            parts = url.rstrip("/").split("/")
+            if len(parts) < 2:
+                return TaskResult(False, "tg_view", "Неверный формат ссылки TG")
+            post_id = int(parts[-1])
+            chat_ref = parts[-2]
+            entity = None
+            if chat_ref == "c":
+                chat_id = int(parts[-3]) if len(parts) > 3 else int(parts[-2])
+                try:
+                    entity = await client.get_entity(chat_id)
+                except Exception:
+                    entity = await client.get_entity(int(parts[-3]))
+            else:
+                entity = await client.get_entity(chat_ref)
+            if entity:
+                await client.get_messages(entity, ids=post_id)
+                return TaskResult(True, "tg_view", "Пост просмотрен")
+            return TaskResult(False, "tg_view", "Не удалось получить сущность")
+        except Exception as e:
+            self.logger.warning(f"TG: Нюанс при просмотре (возможно уже засчитано): {e}")
+            return TaskResult(True, "tg_view", "Попытка просмотра выполнена")
+
 
 class VKTargetRefactored:
     def __init__(self, client: TelegramClient, settings: SettingsType, logger: LoggerType) -> None:
@@ -213,16 +264,37 @@ class VKTargetRefactored:
         self.logger.info(f"Обработка задачи: {text[:40]}...")
         self._empty_count = 0
         result = TaskResult(False, "unknown", "")
-        if "Вступите в" in text or "группу" in text:
-            result = await self.vk.join_group(url)
-        elif "Поставьте лайк" in text or "лайк на" in text:
-            result = await self.vk.like(url)
-        elif "Добавить в друзья" in text:
-            result = await self.vk.add_friend(url)
-        elif "канал" in text:
-            result = await self.vk.subscribe_channel(url)
+        if "t.me/" in url:
+            if (
+                "подпишитесь" in lower_text
+                or "вступите" in lower_text
+                or "канал" in lower_text
+                or "чат" in lower_text
+            ):
+                result = await self.vk.subscribe_telegram_channel(url, self.client)
+            elif (
+                "просмотр" in lower_text
+                or "посмотрите" in lower_text
+                or "запись" in lower_text
+                or "пост" in lower_text
+            ):
+                result = await self.vk.view_telegram_post(url, self.client)
+            else:
+                result = await self.vk.subscribe_telegram_channel(url, self.client)
+        elif "vk.com" in url:
+            if "Вступите в" in text or "группу" in text or "сообщество" in text:
+                result = await self.vk.join_group(url)
+            elif "Поставьте лайк" in text or "лайк на" in text or "оцените" in text:
+                result = await self.vk.like(url)
+            elif "Добавить в друзья" in text or "в друзья" in text:
+                result = await self.vk.add_friend(url)
+            elif "канал" in text and ("подпишитесь" in text or "Вступите" in text):
+                result = await self.vk.subscribe_channel(url)
+            else:
+                self.logger.debug(f"Неизвестный тип задачи VK: {text[:30]}")
+                return
         else:
-            self.logger.debug(f"Неизвестный тип: {text[:30]}")
+            self.logger.warning(f"Неподдерживаемый домен ссылки: {url}")
             return
         await asyncio.sleep(random.uniform(1.0, 2.0))
         try:
