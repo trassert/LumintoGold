@@ -169,7 +169,7 @@ class VKTargetRefactored:
         async def handler(event: Message) -> None:
             await self._process_message(event)
 
-        self.logger.info("✅ VKTarget Automation запущен (vkbottle + telethon read-only)")
+        self.logger.info("VKTarget Automation запущен")
         self._poll_task = asyncio.create_task(self._poll_loop())
 
     def stop(self) -> None:
@@ -205,6 +205,9 @@ class VKTargetRefactored:
         if not text:
             return
         await event.mark_read()
+        if "Начали поиск заданий" in text:
+            self.logger.info("Заданий нет, сплю..")
+            return
         self.logger.info(f"Получено задание: {text[:60]}...")
         links = re.findall(r"\]\(([^)]+)\)", text)
         if not links:

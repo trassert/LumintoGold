@@ -23,7 +23,7 @@ from telethon.tl.types import (
 from vkbottle import Bot
 from vkbottle.tools import PhotoWallUploader
 
-from modules import phrase, vktarget_bot
+from modules import phrase
 
 logger.remove()
 logger.add(
@@ -1025,7 +1025,7 @@ class UserbotManager:
     async def run(self):
         try:
             await self.init()
-            await self.client.run_until_disconnected()  # type: ignore
+            await self.client.run_until_disconnected()
         except Exception:
             logger.exception(f"Критическая ошибка в {self.phone}")
 
@@ -1083,6 +1083,7 @@ if __name__ == "__main__":
         settings,
         task_gen,
         tz,
+        vktarget_bot,
     )
 
     try:
