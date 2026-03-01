@@ -40,7 +40,7 @@ default = {
     "clickbee.enabled": False,
     "clickbee.site_wait": 50,
     "clickbee.sleep_between": 300,
-    "clickbee.username": "ClickBeeDOGEBot"
+    "clickbee.username": "ClickBeeDOGEBot",
 }
 
 

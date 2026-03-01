@@ -247,7 +247,13 @@ class VKTargetRefactored:
         lower_text = text.lower()
         if any(
             k in lower_text
-            for k in ["начали поиск", "нет доступных", "задания закончились", "скрыли данное", "ты в главном"]
+            for k in [
+                "начали поиск",
+                "нет доступных",
+                "задания закончились",
+                "скрыли данное",
+                "ты в главном",
+            ]
         ):
             self.logger.debug("Заданий нет, жду...")
             self._empty_count += 1

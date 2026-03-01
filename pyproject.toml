@@ -17,9 +17,11 @@ dependencies = [
     "pytz>=2025.2",
     "pyyaml>=6.0.3",
     "ruff>=0.14.14",
+    "selenium>=4.41.0",
     "telethon>=1.42.0",
     "uvloop>=0.22.1",
     "vkbottle>=4.6.2",
+    "webdriver-manager>=4.0.2",
 ]
 
 [tool.ruff]
