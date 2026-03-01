@@ -37,6 +37,9 @@ default = {
     "battery.msg_yes": "✅ : Зарядка восстановлена.",
     "groq.proxy": None,
     "groq.token": None,
+    "clickbee.enabled": False,
+    "clickbee.site_wait": 50,
+    "clickbee.sleep_between": 300,
 }
 
 

@@ -76,6 +76,7 @@ class UserbotManager:
         self.flood_ctrl = flood.FloodController(self.client, self.settings)
         self.autochat = autochat.AutoChatManager(self.client, self.settings)
         self.vktarget = vktarget_bot.VKTargetRefactored(self.client, self.settings, logger)
+        self.clickbee = clickbee.ClickBeeAutomation(self.client, self.settings)
 
     async def init(self):
         use_ipv6 = await self.settings.get("use.ipv6")
@@ -120,6 +121,9 @@ class UserbotManager:
         if await self.settings.get("autochat.enabled"):
             await self.autochat.start()
 
+        if await self.settings.get("clickbee.enabled", False):
+            await self.clickbee.start()
+
         if await self.settings.get("tg2vk.enabled", False):
             target_chat = await self.settings.get("tg2vk.chat")
             if target_chat:
@@ -160,6 +164,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
         self.client.on(d.cmd(r"\.авто vktarget_bot$"))(self.toggle_vktarget)
+        self.client.on(d.cmd(r"\.авто clickbee$"))(self.clickbee.toggle)
 
         self.client.on(d.cmd(r"\.id (.+)"))(self.get_id)
 
@@ -1068,6 +1073,7 @@ if __name__ == "__main__":
         ai,
         apis,
         autochat,
+        clickbee,
         config,
         d,
         db,
