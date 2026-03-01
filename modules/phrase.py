@@ -35,7 +35,6 @@ class battmon:
 
 
 class tg2vk:
-    no_vkbottle = "⏩ : Модуль vkbottle не установлен.\nУстановите: `pip install vkbottle`"
     missing_config = (
         "⏩ : Не заданы chat, vk_group или vk_token.\nИспользуйте `.set tg2vk.chat ...`"
     )
@@ -207,7 +206,6 @@ class misc:
     no_valid_clients = "Нет ни одного валидного клиента."
     uvloop_missing = "Uvloop не найден! Установите его: pip install uvloop"
     shutting_down = "Закрываю бота..."
-    vkbottle_missing = "Нету vkbottle! Транслятор tg->vk не будет работать."
 
 
 class blacklist:

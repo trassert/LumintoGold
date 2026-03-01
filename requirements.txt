@@ -2,10 +2,10 @@ orjson
 telethon
 loguru
 psutil
-bestconfig
 cryptg
 geopy
 pytz
 groq
 aiohttp
 aiofiles==24.1.0
+vkbottle

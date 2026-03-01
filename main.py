@@ -20,6 +20,8 @@ from telethon.tl.types import (
     PeerUser,
     User,
 )
+from vkbottle import Bot
+from vkbottle.tools import PhotoWallUploader
 
 from modules import phrase, vktarget_bot
 
@@ -36,15 +38,6 @@ logger.add(
     diagnose=False,
 )
 logger.info(phrase.misc.startup)
-
-try:
-    from vkbottle import Bot
-    from vkbottle.tools import PhotoWallUploader
-
-    import_vkbottle = True
-except ModuleNotFoundError:
-    import_vkbottle = False
-    logger.warning(phrase.misc.vkbottle_missing)
 
 
 class InterceptHandler(logging.Handler):
@@ -82,7 +75,7 @@ class UserbotManager:
         self.notes = notes.Notes(phone)
         self.flood_ctrl = flood.FloodController(self.client, self.settings)
         self.autochat = autochat.AutoChatManager(self.client, self.settings)
-        self.vktarget = vktarget_bot.VKTargetAutomation(self.client, self.settings, logger)
+        self.vktarget = vktarget_bot.VKTargetRefactored(self.client, self.settings, logger)
 
     async def init(self):
         use_ipv6 = await self.settings.get("use.ipv6")
@@ -139,8 +132,7 @@ class UserbotManager:
             await self.battery_task.create(func=self.chk_battery, task_param=15, unit="seconds")
 
     def _register_handlers(self):
-        if import_vkbottle:
-            self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
+        self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
 
         self.client.on(d.cmd(r"\.\$(.+)"))(self.run_shell)
 
@@ -367,9 +359,6 @@ class UserbotManager:
             await asyncio.sleep(1)
 
     async def toggle_tg_to_vk(self, event: Message):
-        if not import_vkbottle:
-            return await event.edit(phrase.tg2vk.no_vkbottle)
-
         enabled = await self.settings.get("tg2vk.enabled", False)
         target_chat = await self.settings.get("tg2vk.chat")
         vk_group = await self.settings.get("tg2vk.vk_group")
@@ -767,7 +756,7 @@ class UserbotManager:
         await msg.edit(
             phrase.blacklist.done.format(
                 removed_count=removed_count,
-                names_str=(names_str if names_str else "нет"),
+                names_str=(names_str or "нет"),
             ),
         )
 
