@@ -259,6 +259,7 @@ class VKTargetRefactored:
             return
         links = re.findall(r"\]\(([^)]+)\)", text)
         if not links:
+            self.logger.warning(f"Ссылка не найдена в тексте: {text[:30]}...")
             return
         url = links[0].strip()
         self.logger.info(f"Обработка задачи: {text[:40]}...")
