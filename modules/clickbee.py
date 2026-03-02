@@ -12,7 +12,7 @@ from telethon.tl.functions.messages import ImportChatInviteRequest
 from . import settings
 
 logger.info(f"Загружен модуль {__name__}!")
-TASK_BUTTONS = ["🤖 Join Bots", "📢 Join Channels"]
+TASK_BUTTONS = ["🤖 Join Bots", "📢 Join Channels", "📄 View Posts"]
 MAX_RETRIES = 3
 BOT_CONVERSATION_TIMEOUT = 45
 
@@ -118,6 +118,7 @@ class ClickBeeAutomation:
             ("then forward any message", self._handle_forward_check),
             ("FORWARD a message from that bot", self._handle_forward_bot),
             ("and join it", self._handle_join_channel),
+            ("Read this post",     self._handle_view_post),
         ]
         text_lower = text.lower()
         for keyword, handler in handlers:
@@ -129,6 +130,16 @@ class ClickBeeAutomation:
         if "new task" in text_lower or "task available" in text_lower:
             return await self._handle_new_task(event)
         return None
+
+    async def _handle_view_post(self, event: Message) -> None:
+        """Ждём и нажимаем ✅ Watched."""
+        wait = random.randint(10, 20)
+        logger.info(f"ClickBee: Читаю пост, жду {wait}с")
+        await asyncio.sleep(wait)
+        clicked = await self._click_button(event, "✅")
+        if not clicked:
+            await self._click_button(event, "Watched")
+        await self._next_task(event)
 
     async def _handle_earned(self, event: Message) -> None:
         logger.info(f"ClickBee: Получена награда — {event.text.strip()}")
