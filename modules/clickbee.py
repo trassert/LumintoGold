@@ -1,7 +1,6 @@
 import asyncio
 import random
 import re
-import threading
 from contextlib import suppress
 
 from loguru import logger
@@ -12,62 +11,27 @@ from telethon.tl.functions.messages import ImportChatInviteRequest
 
 from . import settings
 
-try:
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options as ChromeOptions
+from playwright.async_api import async_playwright
 
-    SELENIUM_AVAILABLE = True
-except ImportError:
-    SELENIUM_AVAILABLE = False
-    logger.warning("Selenium не установлен — сайты будут открываться с обычным sleep-таймером")
 logger.info(f"Загружен модуль {__name__}!")
 TASK_BUTTONS = ["🤖 Join Bots", "💻 Visit Sites", "📢 Join Channels"]
 MAX_RETRIES = 3
 BOT_CONVERSATION_TIMEOUT = 45
 
 
-class _BrowserWorker:
-    """Управляет headless-браузером в отдельном потоке."""
-
-    def __init__(self, wait_time: int = 120) -> None:
-        self._wait_time = wait_time
-        self._driver: webdriver.Chrome | None = None
-
-    def _build_driver(self) -> "webdriver.Chrome":
-        opts = ChromeOptions()
-        opts.add_argument("--headless=new")
-        opts.add_argument("--no-sandbox")
-        opts.add_argument("--disable-dev-shm-usage")
-        opts.add_argument("--disable-gpu")
-        opts.add_argument("--no-proxy-server")
-        opts.add_argument("--disable-blink-features=AutomationControlled")
-        opts.add_experimental_option("excludeSwitches", ["enable-automation"])
-        opts.add_experimental_option("useAutomationExtension", False)
-        opts.add_argument(
-            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        )
-        return webdriver.Chrome(options=opts)
-
-    def visit(self, url: str, wait_override: int | None = None) -> None:
-        """Открывает страницу и держит вкладку открытой нужное время."""
-        if not SELENIUM_AVAILABLE:
-            raise RuntimeError("Selenium недоступен")
-        wait = wait_override or self._wait_time
-        logger.info(f"[Browser] Открываю {url}, жду {wait}с")
-        try:
-            self._driver = self._build_driver()
-            self._driver.get(url)
-            for _ in range(3):
-                self._driver.execute_script(f"window.scrollTo(0, {random.randint(200, 600)});")
-                threading.Event().wait(random.uniform(2, 5))
-            threading.Event().wait(max(0, wait - 15))
-        except Exception as exc:
-            logger.warning(f"[Browser] Ошибка при открытии {url}: {exc}")
-        finally:
-            with suppress(Exception):
-                self._driver.quit()
-            self._driver = None
+async def visit(url: str, wait) -> None:
+    wait = wait * 1000
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url, timeout=60000)
+        elapsed = 0
+        while elapsed < wait:
+            await page.mouse.wheel(0, random.randint(100, 400))
+            interval = random.randint(8000, 12000)
+            await page.wait_for_timeout(interval)
+            elapsed += interval
+        await browser.close()
 
 
 class _CyclicIterator:
@@ -94,13 +58,6 @@ class _CyclicIterator:
 
 class ClickBeeAutomation:
     """Авто-заработок на ClickBee-ботах.
-    Улучшения по сравнению с оригиналом:
-    - Selenium для реального открытия сайтов (обход таймеров)
-    - Retry-механизм для нестабильных шагов
-    - Надёжное вступление в приват-каналы (поддержка t.me/+HASH и joinchat)
-    - Улучшенная пересылка от ботов с повторными попытками
-    - Защита от зависания: asyncio.wait_for вокруг conversation
-    - Корректная логика смены категории (cycle_complete вместо магических чисел)
     """
 
     def __init__(self, client: TelegramClient, user_settings: "settings.UBSettings") -> None:
@@ -110,7 +67,6 @@ class ClickBeeAutomation:
         self._lock = asyncio.Lock()
         self._handler = None
         self._task_iter = _CyclicIterator(TASK_BUTTONS)
-        self._browser: _BrowserWorker | None = None
         self._retry_count: int = 0
 
     async def start(self) -> None:
@@ -120,9 +76,6 @@ class ClickBeeAutomation:
         self._retry_count = 0
         self._task_iter.reset()
         self.bot: str = await self.settings.get("clickbee.username")
-        site_wait = await self.settings.get("clickbee.site_wait", 120)
-        if SELENIUM_AVAILABLE:
-            self._browser = _BrowserWorker(wait_time=site_wait)
         self._register_handler()
         logger.info("ClickBee запущен")
         await asyncio.sleep(random.uniform(1.5, 3))
@@ -203,17 +156,7 @@ class ClickBeeAutomation:
             logger.warning("ClickBee: URL не найден, пропускаю сайт")
             return await self._next_task(event)
         site_wait = await self.settings.get("clickbee.site_wait")
-        if SELENIUM_AVAILABLE and self._browser:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                self._browser.visit,
-                url,
-                site_wait + random.randint(3, 10),
-            )
-        else:
-            logger.info(f"ClickBee: Симулирую посещение {clean_url}, жду {site_wait}с")
-            await asyncio.sleep(site_wait + random.randint(3, 10))
+        await visit(url, site_wait + random.randint(3, 10))
         await self._next_task(event)
         return None
 
