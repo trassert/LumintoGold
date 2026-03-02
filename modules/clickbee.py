@@ -118,7 +118,7 @@ class ClickBeeAutomation:
             ("then forward any message", self._handle_forward_check),
             ("FORWARD a message from that bot", self._handle_forward_bot),
             ("and join it", self._handle_join_channel),
-            ("Read this post",     self._handle_view_post),
+            ("Read this post", self._handle_view_post),
         ]
         text_lower = text.lower()
         for keyword, handler in handlers:
@@ -304,17 +304,27 @@ class ClickBeeAutomation:
 
     @staticmethod
     def _parse_bot_username(text: str) -> str | None:
-        """Извлекает username бота из markdown-ссылки."""
+        """Извлекает username бота из текста, сохраняя параметры."""
+
         patterns = [
-            r"t\.me/([A-Za-z0-9_]{5,32})(?:\?|/|$)",
-            r"@([A-Za-z0-9_]{5,32})",
+            r"(?:https?://)?t\.me/([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)",
+            r"(?:https?://)?telegram\.me/([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)",
+            r"@([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)",
+            r"\[.*?\]\((?:https?://)?t\.me/([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)\)",
+            r"\[.*?\]\((?:https?://)?telegram\.me/([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)\)",
         ]
-        for line in text.split("\n"):
-            if "Open the bot" in line or "Open bot" in line or "t.me/" in line:
-                for pattern in patterns:
-                    m = re.search(pattern, line)
-                    if m:
-                        return m.group(1)
+
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                username = match.group(1)
+                if "_bot" in username.lower() or "bot" in username.lower() or "🔗" in text:
+                    return username
+
+        fallback = re.search(r"([a-zA-Z0-9_]{5,32}_bot)(?:[?\s/#)\]]|$)", text, re.IGNORECASE)
+        if fallback:
+            return fallback.group(1)
+
         return None
 
     @staticmethod
