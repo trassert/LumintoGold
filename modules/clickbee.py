@@ -11,27 +11,10 @@ from telethon.tl.functions.messages import ImportChatInviteRequest
 
 from . import settings
 
-from playwright.async_api import async_playwright
-
 logger.info(f"Загружен модуль {__name__}!")
-TASK_BUTTONS = ["🤖 Join Bots", "💻 Visit Sites", "📢 Join Channels"]
+TASK_BUTTONS = ["🤖 Join Bots", "📢 Join Channels"]
 MAX_RETRIES = 3
 BOT_CONVERSATION_TIMEOUT = 45
-
-
-async def visit(url: str, wait) -> None:
-    wait = wait * 1000
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.goto(url, timeout=60000)
-        elapsed = 0
-        while elapsed < wait:
-            await page.mouse.wheel(0, random.randint(100, 400))
-            interval = random.randint(8000, 12000)
-            await page.wait_for_timeout(interval)
-            elapsed += interval
-        await browser.close()
 
 
 class _CyclicIterator:
@@ -57,8 +40,7 @@ class _CyclicIterator:
 
 
 class ClickBeeAutomation:
-    """Авто-заработок на ClickBee-ботах.
-    """
+    """Авто-заработок на ClickBee-ботах."""
 
     def __init__(self, client: TelegramClient, user_settings: "settings.UBSettings") -> None:
         self.client = client
@@ -131,7 +113,6 @@ class ClickBeeAutomation:
         await event.mark_read()
         await asyncio.sleep(random.uniform(1.5, 4))
         handlers = [
-            ("browse the website", self._handle_website),
             ("You've earned", self._handle_earned),
             ("NO TASKS", self._handle_no_tasks),
             ("then forward any message", self._handle_forward_check),
@@ -147,17 +128,6 @@ class ClickBeeAutomation:
             return await self._handle_error(event)
         if "new task" in text_lower or "task available" in text_lower:
             return await self._handle_new_task(event)
-        return None
-
-    async def _handle_website(self, event: Message) -> None:
-        """Открываем сайт реальным браузером (Selenium) или просто ждём."""
-        url = self._extract_button_url(event, "Open")
-        if not url:
-            logger.warning("ClickBee: URL не найден, пропускаю сайт")
-            return await self._next_task(event)
-        site_wait = await self.settings.get("clickbee.site_wait")
-        await visit(url, site_wait + random.randint(3, 10))
-        await self._next_task(event)
         return None
 
     async def _handle_earned(self, event: Message) -> None:
