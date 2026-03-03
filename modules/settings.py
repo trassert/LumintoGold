@@ -44,6 +44,7 @@ default = {
     "clickbee.username": "ClickBeeDOGEBot",
     "clickbee.site_wait": 120,
     "default.currency": "RUB",
+    "token.exchangerate": "",
 }
 
 
