@@ -772,7 +772,7 @@ class UserbotManager:
 
     async def set_int_setting(self, event: Message):
         key, value = event.pattern_match.group(1).split(" ", maxsplit=1)
-        await self.settings.set(key, int(value))
+        await self.settings.set(key, float(value))
         await event.edit(phrase.setting.setint.format(key=key, value=value))
 
     async def time_by_city(self, event: Message):
@@ -802,12 +802,14 @@ class UserbotManager:
     async def typing(self, event: Message):
         text = event.pattern_match.group(1).strip()
         bep = ""
+        delay = float(await self.settings.get("typing.delay"))
+        typings = await self.settings.get("typings")
         while bep != text:
-            await event.edit(bep + await self.settings.get("typings"))
-            await asyncio.sleep(await self.settings.get("typing.delay"))
+            await event.edit(bep + typings)
+            await asyncio.sleep(delay)
             bep += text[len(bep)]
             await event.edit(bep)
-            await asyncio.sleep(await self.settings.get("typing.delay"))
+            await asyncio.sleep(delay)
 
     async def words(self, event: Message):
         args = format.get_args(event.text.lower())
