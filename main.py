@@ -1129,7 +1129,6 @@ async def main():
         manager_tasks=_manager_tasks,
         launch_manager_func=_launch_manager,
         save_config_func=_save_client_config,
-        phrase=phrase,
     )
 
     await asyncio.gather(
