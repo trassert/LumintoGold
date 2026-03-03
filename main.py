@@ -34,18 +34,26 @@ _prompt_session = PromptSession()
 
 
 def _pt_sink(message):
-    safe_msg = message.rstrip()
-    if not safe_msg.startswith("\n"):
-        safe_msg = "\n" + safe_msg
-    print_formatted_text(ANSI(safe_msg), end="")
+    """
+    Sink для loguru.
+    Гарантирует, что сообщение начинается с новой строки и не ломает ввод.
+    """
+
+    clean_msg = message.rstrip()
+    if not clean_msg:
+        return
+
+    try:
+        print_formatted_text(ANSI(f"\n{clean_msg}"), end="")
+    except Exception:
+        pass
 
 
 logger.remove()
 logger.add(
     _pt_sink,
     format=(
-        "[{time:HH:mm:ss} <level>{level}</level>]: "
-        "<green>{file}:{function}</green> <cyan>></cyan> {message}"
+        "[{time:HH:mm:ss} <level>{level}</level>]: <green>{file}:{function}</green> > {message}"
     ),
     level="INFO",
     colorize=True,
@@ -1119,7 +1127,7 @@ async def _read_line_async(msg: str = "") -> str:
             if msg:
                 print_formatted_text(ANSI(f"{msg}"), end="")
 
-            return await _prompt_session.prompt_async(ANSI("> "))
+            return await _prompt_session.prompt_async(ANSI("> "), multiline=False)
     except (EOFError, KeyboardInterrupt):
         return ""
 
@@ -1150,16 +1158,85 @@ async def cli_loop() -> None:
             else:
                 print_formatted_text(ANSI(f"Активные клиенты ({len(_managers)}):"))
                 for phone, mgr in _managers.items():
-                    status = "✅" if mgr.client.is_connected() else "❌"
-                    print_formatted_text(ANSI(f"  • {phone} {status}"))
-        elif cmd == "help":
-            print_formatted_text(ANSI(_CLI_HELP))
-        elif cmd in ("exit", "quit"):
-            print_formatted_text(ANSI("Завершение работы..."))
+                    connected = mgr.client.is_connected()
+                    status = "✅" if connected else "❌"
+                    print_formatted_text(ANSI(f"  • {phone}  {status}"))
 
-            break
+        elif cmd == "addclient":
+            try:
+                phone = (await _read_line_async("Номер телефона: ")).strip()
+                api_id = int((await _read_line_async("api_id: ")).strip())
+                api_hash = (await _read_line_async("api_hash: ")).strip()
+            except (ValueError, EOFError) as e:
+                print_formatted_text(ANSI(f"Ошибка ввода: {e}"))
+                continue
+
+            if phone in _managers:
+                print_formatted_text(ANSI(f"Клиент {phone} уже запущен."))
+                continue
+
+            await _save_client_config(phone, api_id, api_hash)
+            ok = await _launch_manager(phone, api_id, api_hash)
+            if ok:
+                print_formatted_text(ANSI(f"Клиент {phone} запускается..."))
+            else:
+                print_formatted_text(ANSI(f"Клиент {phone} уже существует."))
+
+        elif cmd == "stop":
+            phone = arg.strip()
+            if not phone:
+                print_formatted_text(ANSI("Укажите номер: stop +7900..."))
+                continue
+            mgr = _managers.get(phone)
+            if not mgr:
+                print_formatted_text(ANSI(f"Клиент {phone} не найден."))
+                continue
+
+            await mgr.stop()
+            task = _manager_tasks.get(phone)
+            if task and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+            _managers.pop(phone, None)
+            _manager_tasks.pop(phone, None)
+            print_formatted_text(ANSI(f"Клиент {phone} остановлен."))
+
+        elif cmd == "stopall":
+            phones = list(_managers.keys())
+            for phone in phones:
+                mgr = _managers.get(phone)
+                if mgr:
+                    await mgr.stop()
+                task = _manager_tasks.get(phone)
+                if task and not task.done():
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+
+            _managers.clear()
+            _manager_tasks.clear()
+            print_formatted_text(ANSI(f"Остановлено клиентов: {len(phones)}."))
+
+        elif cmd in ("exit", "quit"):
+            print_formatted_text(ANSI("Завершение работы…"))
+            for phone in list(_managers.keys()):
+                mgr = _managers.get(phone)
+                if mgr:
+                    await mgr.stop()
+            for task in list(_manager_tasks.values()):
+                task.cancel()
+
+            loop = asyncio.get_running_loop()
+            loop.stop()
+            return
+
+        elif cmd in ("help", "?"):
+            print_formatted_text(ANSI(_CLI_HELP))
+
         else:
-            print_formatted_text(ANSI(f"Неизвестная команда: {cmd}"))
+            print_formatted_text(ANSI(f"Неизвестная команда: '{cmd}'"))
 
 
 async def main():
