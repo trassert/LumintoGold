@@ -1,17 +1,89 @@
 import re
 
-from babel import Locale
 from loguru import logger
 
 from . import phrase
 
 logger.info(f"Загружен модуль {__name__}!")
 
-_NAMES: dict[str, str] = {}
-for code, name in Locale("ru").currencies.items():
-    _NAMES[name.lower()] = code
-for code, name in Locale("en").currencies.items():
-    _NAMES[name.lower()] = code
+_NAMES: dict[str, str] = {
+    "rub": "RUB",
+    "рубль": "RUB",
+    "рубли": "RUB",
+    "рублей": "RUB",
+    "руб": "RUB",
+    "usd": "USD",
+    "доллар": "USD",
+    "доллары": "USD",
+    "долларов": "USD",
+    "бакс": "USD",
+    "баксов": "USD",
+    "eur": "EUR",
+    "евро": "EUR",
+    "gbp": "GBP",
+    "фунт": "GBP",
+    "фунты": "GBP",
+    "фунтов": "GBP",
+    "jpy": "JPY",
+    "йена": "JPY",
+    "йены": "JPY",
+    "йен": "JPY",
+    "cny": "CNY",
+    "юань": "CNY",
+    "юани": "CNY",
+    "юаней": "CNY",
+    "chf": "CHF",
+    "франк": "CHF",
+    "франки": "CHF",
+    "франков": "CHF",
+    "kzt": "KZT",
+    "тенге": "KZT",
+    "uah": "UAH",
+    "гривна": "UAH",
+    "гривны": "UAH",
+    "гривен": "UAH",
+    "try": "TRY",
+    "лира": "TRY",
+    "лиры": "TRY",
+    "лир": "TRY",
+    "byn": "BYN",
+    "белорусский рубль": "BYN",
+    "aed": "AED",
+    "дирхам": "AED",
+    "дирхамы": "AED",
+    "pln": "PLN",
+    "злотый": "PLN",
+    "злотые": "PLN",
+    "злотых": "PLN",
+    "czk": "CZK",
+    "крона": "CZK",
+    "кроны": "CZK",
+    "крон": "CZK",
+    "sek": "SEK",
+    "шведская крона": "SEK",
+    "nok": "NOK",
+    "норвежская крона": "NOK",
+    "dkk": "DKK",
+    "датская крона": "DKK",
+    "cad": "CAD",
+    "канадский доллар": "CAD",
+    "aud": "AUD",
+    "австралийский доллар": "AUD",
+    "hkd": "HKD",
+    "гонконгский доллар": "HKD",
+    "sgd": "SGD",
+    "сингапурский доллар": "SGD",
+    "inr": "INR",
+    "рупия": "INR",
+    "рупии": "INR",
+    "рупий": "INR",
+    "mxn": "MXN",
+    "песо": "MXN",
+    "brl": "BRL",
+    "реал": "BRL",
+    "реалы": "BRL",
+    "реалов": "BRL",
+}
 
 
 def normalize_currency(value: str) -> str | None:

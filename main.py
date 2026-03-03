@@ -256,7 +256,10 @@ class UserbotManager:
         else:
             return await event.edit(phrase.currency.invalid)
         result = await apis.conv_currency(
-            currency, count, await self.settings.get("default.currency"), token=await self.settings.get("token.exchangerate")
+            currency,
+            count,
+            await self.settings.get("default.currency"),
+            token=await self.settings.get("token.exchangerate"),
         )
         return await event.edit(result)
 
