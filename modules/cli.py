@@ -42,6 +42,7 @@ class CLI:
         """Читает посимвольно чтобы обновлять _current_input в реальном времени."""
         global _current_input
         import tty, termios, os
+
         fd = sys.stdin.fileno()
         old = termios.tcgetattr(fd)
         try:
@@ -74,7 +75,7 @@ class CLI:
                     buf.append(c)
                     with _lock:
                         _current_input = "".join(buf)
-                        sys.stdout.write(c)
+                        sys.stdout.write(f"\r\033[K{_PROMPT}{_current_input}")
                         sys.stdout.flush()
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
@@ -151,17 +152,24 @@ class CLI:
         cmd = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
         match cmd:
-            case "clients":    await self._cmd_clients()
-            case "ping":       await self._cmd_ping()
-            case "addclient":  await self._cmd_addclient()
-            case "stop":       await self._cmd_stop(arg)
-            case "stopall":    await self._cmd_stopall()
-            case "exit"|"quit":
+            case "clients":
+                await self._cmd_clients()
+            case "ping":
+                await self._cmd_ping()
+            case "addclient":
+                await self._cmd_addclient()
+            case "stop":
+                await self._cmd_stop(arg)
+            case "stopall":
+                await self._cmd_stopall()
+            case "exit" | "quit":
                 await self._cmd_stopall()
                 self._print("Bye.")
                 return False
-            case "help"|"?":   self._print(_HELP)
-            case _:            self._print(f"Unknown command: {cmd!r}. Type 'help'.")
+            case "help" | "?":
+                self._print(_HELP)
+            case _:
+                self._print(f"Unknown command: {cmd!r}. Type 'help'.")
         return True
 
     async def run(self) -> None:
