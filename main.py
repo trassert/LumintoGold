@@ -1113,8 +1113,7 @@ def _cli_prompt(msg: str = "") -> str:
 async def _read_line_async(msg: str = "") -> str:
     """Неблокирующее чтение с защитой от перекрытия логами."""
     prompt = (msg + "\n> ") if msg else "> "
-    with patch_stdout():
-        return await _prompt_session.prompt_async(prompt)
+    return await _prompt_session.prompt_async(prompt)
 
 
 async def cli_loop() -> None:
