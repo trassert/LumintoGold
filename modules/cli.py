@@ -1,6 +1,5 @@
 import asyncio
 import sys
-import threading
 
 
 _PROMPT = ">>> "
@@ -13,47 +12,11 @@ stopall       - stop all clients
 exit / quit   - shutdown
 help / ?      - this help"""
 
-# Пока пользователь набирает строку — логи копятся в очереди.
-# Как только строка отправлена — очередь сбрасывается перед следующим промптом.
-_log_queue: list[str] = []
-_waiting_input = False
-_lock = threading.Lock()
-
 
 def loguru_sink(message: str) -> None:
     """logger.add(loguru_sink, enqueue=False) вместо stderr."""
-    msg = message.rstrip("\n")
-    with _lock:
-        if _waiting_input:
-            _log_queue.append(msg)
-        else:
-            sys.stdout.write(msg + "\n")
-            sys.stdout.flush()
-
-
-def _flush_log_queue() -> None:
-    with _lock:
-        for msg in _log_queue:
-            sys.stdout.write(msg + "\n")
-        _log_queue.clear()
+    sys.stdout.write(message)
     sys.stdout.flush()
-
-
-def _set_waiting(value: bool) -> None:
-    global _waiting_input
-    with _lock:
-        _waiting_input = value
-
-
-def _blocking_input(prompt: str) -> str:
-    _flush_log_queue()
-    _set_waiting(True)
-    try:
-        return input(prompt)
-    except EOFError:
-        return ""
-    finally:
-        _set_waiting(False)
 
 
 class CLI:
@@ -64,15 +27,19 @@ class CLI:
         self._save_config = save_config_func
 
     def _print(self, text: str) -> None:
-        with _lock:
-            sys.stdout.write(text + "\n")
-            sys.stdout.flush()
+        sys.stdout.write(text + "\n")
+        sys.stdout.flush()
 
     async def _readline(self) -> str:
-        return await asyncio.get_running_loop().run_in_executor(None, _blocking_input, _PROMPT)
+        sys.stdout.write(_PROMPT)
+        sys.stdout.flush()
+        return await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readline)
 
     async def _ask(self, prompt: str) -> str:
-        return await asyncio.get_running_loop().run_in_executor(None, _blocking_input, prompt)
+        sys.stdout.write(prompt)
+        sys.stdout.flush()
+        line = await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readline)
+        return line.rstrip("\n")
 
     async def _cmd_clients(self):
         if not self._managers:
@@ -151,7 +118,7 @@ class CLI:
     async def run(self) -> None:
         while True:
             line = await self._readline()
-            if not line and line is not None:
+            if not line.strip():
                 continue
             if not await self._dispatch(line):
                 break
