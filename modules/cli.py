@@ -1,6 +1,8 @@
 import asyncio
 import sys
-import threading
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.output import create_output
 
 
 _PROMPT = ">>> "
@@ -13,29 +15,30 @@ stopall       — stop all clients
 exit / quit   — shutdown
 help / ?      — this help"""
 
-
-class _SafeSink:
-    """Loguru sink that erases the prompt before writing and redraws it after."""
-
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._prompt_active = False
-
-    def set_prompt_active(self, value: bool) -> None:
-        with self._lock:
-            self._prompt_active = value
-
-    def write(self, message: str) -> None:
-        with self._lock:
-            if self._prompt_active:
-                sys.stderr.write(f"\r\033[K{message}")
-                sys.stderr.write(_PROMPT)
-            else:
-                sys.stderr.write(message)
-            sys.stderr.flush()
+_pt_output = create_output()
+_session: PromptSession | None = None
+_loop: asyncio.AbstractEventLoop | None = None
 
 
-safe_sink = _SafeSink()
+def _write_safe(message: str) -> None:
+    """Thread-safe запись через prompt_toolkit output."""
+    if _session is None or _loop is None:
+        sys.stderr.write(message)
+        sys.stderr.flush()
+        return
+
+    def _do_write() -> None:
+        _session.app.output.write_raw(message)
+        _session.app.output.flush()
+
+    _loop.call_soon_threadsafe(_do_write)
+
+
+def loguru_sink(message: str) -> None:
+    """Передаётся напрямую в logger.add() вместо stderr.
+    InterceptHandler оставить без изменений — stdlib logging уже
+    идёт через loguru, и значит тоже попадёт сюда автоматически."""
+    _write_safe(message)
 
 
 class CLI:
@@ -50,46 +53,27 @@ class CLI:
         self._tasks = manager_tasks
         self._launch = launch_manager_func
         self._save_config = save_config_func
-        self._running = False
 
     def _print(self, text: str) -> None:
-        safe_sink.set_prompt_active(False)
-        sys.stdout.write(f"\r\033[K{text}\n")
-        sys.stdout.flush()
+        _write_safe(text + "\n")
 
-    def _show_prompt(self) -> None:
-        safe_sink.set_prompt_active(True)
-        sys.stdout.write(_PROMPT)
-        sys.stdout.flush()
-
-    async def _readline(self) -> str:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, sys.stdin.readline)
+    async def _ask(self, prompt: str) -> str:
+        assert _session is not None
+        return await _session.prompt_async(prompt)
 
     async def _cmd_clients(self) -> None:
         if not self._managers:
             self._print("No active clients.")
             return
-        lines = "\n".join(f"  {p}" for p in self._managers)
-        self._print(f"Active clients:\n{lines}")
+        self._print("Active clients:\n" + "\n".join(f"  {p}" for p in self._managers))
 
     async def _cmd_ping(self) -> None:
         self._print("pong")
 
     async def _cmd_addclient(self) -> None:
-        safe_sink.set_prompt_active(False)
-
-        sys.stdout.write("Phone: ")
-        sys.stdout.flush()
-        phone = (await self._readline()).strip()
-
-        sys.stdout.write("API ID: ")
-        sys.stdout.flush()
-        api_id_raw = (await self._readline()).strip()
-
-        sys.stdout.write("API Hash: ")
-        sys.stdout.flush()
-        api_hash = (await self._readline()).strip()
+        phone = (await self._ask("Phone: ")).strip()
+        api_id_raw = (await self._ask("API ID: ")).strip()
+        api_hash = (await self._ask("API Hash: ")).strip()
 
         try:
             api_id = int(api_id_raw)
@@ -163,18 +147,13 @@ class CLI:
         return True
 
     async def run(self) -> None:
-        self._running = True
-        self._show_prompt()
-        while self._running:
+        global _session, _loop
+        _loop = asyncio.get_running_loop()
+        _session = PromptSession(output=_pt_output)
+        while True:
             try:
-                line = await self._readline()
+                line = await _session.prompt_async(_PROMPT)
             except (EOFError, KeyboardInterrupt):
                 break
-            if not line:
+            if not await self._dispatch(line):
                 break
-            safe_sink.set_prompt_active(False)
-            keep_running = await self._dispatch(line)
-            if not keep_running:
-                self._running = False
-                break
-            self._show_prompt()
