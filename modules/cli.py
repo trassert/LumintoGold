@@ -2,7 +2,7 @@ import asyncio
 import sys
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.output import create_output
+from prompt_toolkit.patch_stdout import patch_stdout
 
 
 _PROMPT = ">>> "
@@ -15,30 +15,14 @@ stopall       — stop all clients
 exit / quit   — shutdown
 help / ?      — this help"""
 
-_pt_output = create_output()
-_session: PromptSession | None = None
-_loop: asyncio.AbstractEventLoop | None = None
-
-
-def _write_safe(message: str) -> None:
-    """Thread-safe запись через prompt_toolkit output."""
-    if _session is None or _loop is None:
-        sys.stderr.write(message)
-        sys.stderr.flush()
-        return
-
-    def _do_write() -> None:
-        _session.app.output.write_raw(message)
-        _session.app.output.flush()
-
-    _loop.call_soon_threadsafe(_do_write)
-
 
 def loguru_sink(message: str) -> None:
-    """Передаётся напрямую в logger.add() вместо stderr.
-    InterceptHandler оставить без изменений — stdlib logging уже
-    идёт через loguru, и значит тоже попадёт сюда автоматически."""
-    _write_safe(message)
+    """logger.add(loguru_sink, enqueue=False) вместо stderr.
+    enqueue=False обязателен — тогда loguru пишет в том же потоке/корутине,
+    что и вызывающий код, и patch_stdout корректно перехватывает вывод.
+    InterceptHandler оставить без изменений."""
+    sys.stderr.write(message)
+    sys.stderr.flush()
 
 
 class CLI:
@@ -53,13 +37,15 @@ class CLI:
         self._tasks = manager_tasks
         self._launch = launch_manager_func
         self._save_config = save_config_func
+        self._session: PromptSession | None = None
 
     def _print(self, text: str) -> None:
-        _write_safe(text + "\n")
+        sys.stdout.write(text + "\n")
+        sys.stdout.flush()
 
     async def _ask(self, prompt: str) -> str:
-        assert _session is not None
-        return await _session.prompt_async(prompt)
+        assert self._session is not None
+        return await self._session.prompt_async(prompt)
 
     async def _cmd_clients(self) -> None:
         if not self._managers:
@@ -147,13 +133,12 @@ class CLI:
         return True
 
     async def run(self) -> None:
-        global _session, _loop
-        _loop = asyncio.get_running_loop()
-        _session = PromptSession(output=_pt_output)
-        while True:
-            try:
-                line = await _session.prompt_async(_PROMPT)
-            except (EOFError, KeyboardInterrupt):
-                break
-            if not await self._dispatch(line):
-                break
+        self._session = PromptSession()
+        with patch_stdout(raw=True):
+            while True:
+                try:
+                    line = await self._session.prompt_async(_PROMPT)
+                except (EOFError, KeyboardInterrupt):
+                    break
+                if not await self._dispatch(line):
+                    break

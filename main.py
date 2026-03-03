@@ -36,7 +36,7 @@ logger.add(
     colorize=True,
     backtrace=False,
     diagnose=False,
-    enqueue=True,
+    enqueue=False,
 )
 logger.info(phrase.misc.startup)
 
