@@ -8,6 +8,7 @@ dependencies = [
     "aiofiles>=24.1.0",
     "aiohttp>=3.13.2",
     "aiohttp-socks>=0.11.0",
+    "babel>=2.18.0",
     "cryptg>=0.5.2",
     "geopy>=2.4.1",
     "groq>=1.0.0",

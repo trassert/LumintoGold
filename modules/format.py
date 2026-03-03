@@ -1,10 +1,21 @@
 import re
 
+from babel import Locale
 from loguru import logger
 
 from . import phrase
 
 logger.info(f"Загружен модуль {__name__}!")
+
+_NAMES: dict[str, str] = {}
+for code, name in Locale("ru").currencies.items():
+    _NAMES[name.lower()] = code
+for code, name in Locale("en").currencies.items():
+    _NAMES[name.lower()] = code
+
+
+def normalize_currency(value: str) -> str | None:
+    return _NAMES.get(value.strip().lower(), value)
 
 
 def f2vk(text: str) -> str:

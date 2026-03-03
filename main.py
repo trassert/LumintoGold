@@ -250,9 +250,9 @@ class UserbotManager:
     async def currencyconventer(self, event: Message):
         arg = event.pattern_match.group(1).strip().split()
         if len(arg) == 2 and arg[1].isdigit():
-            currency, count = arg[0], int(arg[1])
+            currency, count = format.normalize_currency(arg[0]), int(arg[1])
         elif len(arg) == 1:
-            currency, count = arg[0], 1
+            currency, count = format.normalize_currency(arg[0]), 1
         else:
             return await event.edit(phrase.currency.invalid)
         result = await apis.conv_currency(
