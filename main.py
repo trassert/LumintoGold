@@ -1096,15 +1096,25 @@ _CLI_HELP = """
 """.strip()
 
 
-async def _read_line_async() -> str:
-    """Неблокирующее чтение строки из stdin."""
+def _cli_prompt(msg: str = "") -> str:
+    """Выводит сообщение и читает строку с префиксом '> '."""
+    if msg:
+        stderr.write(msg + "\n")
+        stderr.flush()
+    stderr.write("> ")
+    stderr.flush()
+    return input()
+
+
+async def _read_line_async(msg: str = "") -> str:
+    """Неблокирующее чтение строки из stdin с опциональным промптом."""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, input)
+    return await loop.run_in_executor(None, _cli_prompt, msg)
 
 
 async def cli_loop() -> None:
     """Интерактивный CLI, работающий параллельно с клиентами."""
-    logger.info("\n[CLI] Введите 'help' для списка команд.\n")
+    logger.info("Введите 'help' для списка команд.")
     while True:
         try:
             raw = await _read_line_async()
@@ -1127,7 +1137,7 @@ async def cli_loop() -> None:
                 logger.info(f"Активные клиенты ({len(_managers)}):")
                 for phone, mgr in _managers.items():
                     connected = mgr.client.is_connected()
-                    status = "✅ онлайн" if connected else "❌ офлайн"
+                    status = "✅" if connected else "❌"
                     logger.info(f"  • {phone}  {status}")
 
         elif cmd == "addclient":
@@ -1214,9 +1224,9 @@ async def main():
 
     if not client_files:
         logger.warning(phrase.misc.no_clients)
-        number = input(phrase.misc.input_number)
-        api_id = int(input(phrase.misc.input_api_id))
-        api_hash = input(phrase.misc.input_api_hash)
+        number = await _read_line_async(phrase.misc.input_number)
+        api_id = int(await _read_line_async(phrase.misc.input_api_id))
+        api_hash = await _read_line_async(phrase.misc.input_api_hash)
         await _save_client_config(number, api_id, api_hash)
         return await main()
 
