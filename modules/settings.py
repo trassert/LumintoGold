@@ -43,6 +43,7 @@ default = {
     "clickbee.sleep_between": 300,
     "clickbee.username": "ClickBeeDOGEBot",
     "clickbee.site_wait": 120,
+    "default.currency": "RUB",
 }
 
 

@@ -26,3 +26,16 @@ async def get_weather(city, token=""):
         f"● Влажность: {data['main']['humidity']}%\n"
         f"● Ветер: {data['wind']['speed']} м/с"
     )
+
+
+async def conv_currency(currency: str, count: int = 1, default_type: str = "RUB") -> str:
+    url = f"https://api.exchangerate.host/convert?from={currency.upper()}&to={default_type.upper()}&amount={count}"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            data = await resp.json()
+    if not data.get("success"):
+        return f"Не удалось конвертировать {currency.upper()} → {default_type.upper()}"
+    result = data["result"]
+    return phrase.currency.done.format(
+        count1=count, cur1=currency.upper(), count2=result, cur2=default_type.upper()
+    )

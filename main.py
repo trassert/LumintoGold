@@ -182,6 +182,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.прокси(.*)"))(self.fp)
         self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
         self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
+        self.client.on(d.cmd(r"\.кв (.+)"))(self.currencyconventer)
         self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
         self.client.on(d.cmd(r"\.ии ([\s\S]+)"))(self.ai_resp)
         self.client.on(d.cmd(r"\.т ([\s\S]+)"))(self.typing)
@@ -245,6 +246,19 @@ class UserbotManager:
         with contextlib.suppress(Exception):
             await self.client.disconnect()
         logger.info(f"Клиент ({self.phone}) остановлен.")
+
+    async def currencyconventer(self, event: Message):
+        arg = event.pattern_match.group(1).strip().split()
+        if len(arg) == 2 and arg[1].isdigit():
+            currency, count = arg[0], int(arg[1])
+        elif len(arg) == 1:
+            currency, count = arg[0], 1
+        else:
+            return await event.edit(phrase.currency.invalid)
+        result = await apis.conv_currency(
+            currency, count, await self.settings.get("default.currency")
+        )
+        return await event.edit(result)
 
     async def fp(self, event: Message):
         arg = event.pattern_match.group(1).strip().lower()
