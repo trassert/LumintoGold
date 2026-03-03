@@ -1,15 +1,10 @@
 import asyncio
 import contextlib
 import logging
-from prompt_toolkit import print_formatted_text
 import random
 import re
-from prompt_toolkit import PromptSession
-from prompt_toolkit.patch_stdout import patch_stdout
-
+import sys as _sys
 from pathlib import Path
-from sys import stderr
-from prompt_toolkit.formatted_text import ANSI
 from time import time
 
 import aiofiles
@@ -29,29 +24,11 @@ from vkbottle import Bot
 from vkbottle.tools import PhotoWallUploader
 
 from modules import phrase
-
-_prompt_session = PromptSession()
-
-
-def _pt_sink(message):
-    """
-    Sink для loguru.
-    Гарантирует, что сообщение начинается с новой строки и не ломает ввод.
-    """
-
-    clean_msg = message.rstrip()
-    if not clean_msg:
-        return
-
-    try:
-        print_formatted_text(ANSI(f"\n{clean_msg}"), end="")
-    except Exception:
-        pass
-
+from modules.cli import CLI
 
 logger.remove()
 logger.add(
-    _pt_sink,
+    _sys.stderr,
     format=(
         "[{time:HH:mm:ss} <level>{level}</level>]: <green>{file}:{function}</green> > {message}"
     ),
@@ -67,7 +44,11 @@ logger.info(phrase.misc.startup)
 class InterceptHandler(logging.Handler):
     def emit(self, record):
         level = "TRACE" if record.levelno == 5 else record.levelname
+        # Erase the prompt, print the log line, reprint the prompt.
+        _sys.stdout.write("\r\033[K")
         logger.opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
+        _sys.stdout.write(">>> ")
+        _sys.stdout.flush()
 
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
@@ -1120,137 +1101,19 @@ _CLI_HELP = """
 """.strip()
 
 
-async def _read_line_async(msg: str = "") -> str:
-    """Чтение ввода. msg выводится ДО промпта."""
-    try:
-        with patch_stdout(raw=True):
-            if msg:
-                print_formatted_text(ANSI(f"{msg}"), end="")
-
-            return await _prompt_session.prompt_async(ANSI("> "), multiline=False)
-    except (EOFError, KeyboardInterrupt):
-        return ""
-
-
-async def cli_loop() -> None:
-    """Интерактивный CLI."""
-
-    print_formatted_text(ANSI("\n✨ CLI готов. Введите 'help' для списка команд.\n"))
-
-    while True:
-        try:
-            raw = await _read_line_async()
-        except Exception:
-            await asyncio.sleep(0.5)
-            continue
-
-        line = raw.strip()
-        if not line:
-            continue
-
-        parts = line.split(maxsplit=1)
-        cmd = parts[0].lower()
-        arg = parts[1] if len(parts) > 1 else ""
-
-        if cmd == "clients":
-            if not _managers:
-                print_formatted_text(ANSI("Нет активных клиентов."))
-            else:
-                print_formatted_text(ANSI(f"Активные клиенты ({len(_managers)}):"))
-                for phone, mgr in _managers.items():
-                    connected = mgr.client.is_connected()
-                    status = "✅" if connected else "❌"
-                    print_formatted_text(ANSI(f"  • {phone}  {status}"))
-
-        elif cmd == "addclient":
-            try:
-                phone = (await _read_line_async("Номер телефона: ")).strip()
-                api_id = int((await _read_line_async("api_id: ")).strip())
-                api_hash = (await _read_line_async("api_hash: ")).strip()
-            except (ValueError, EOFError) as e:
-                print_formatted_text(ANSI(f"Ошибка ввода: {e}"))
-                continue
-
-            if phone in _managers:
-                print_formatted_text(ANSI(f"Клиент {phone} уже запущен."))
-                continue
-
-            await _save_client_config(phone, api_id, api_hash)
-            ok = await _launch_manager(phone, api_id, api_hash)
-            if ok:
-                print_formatted_text(ANSI(f"Клиент {phone} запускается..."))
-            else:
-                print_formatted_text(ANSI(f"Клиент {phone} уже существует."))
-
-        elif cmd == "stop":
-            phone = arg.strip()
-            if not phone:
-                print_formatted_text(ANSI("Укажите номер: stop +7900..."))
-                continue
-            mgr = _managers.get(phone)
-            if not mgr:
-                print_formatted_text(ANSI(f"Клиент {phone} не найден."))
-                continue
-
-            await mgr.stop()
-            task = _manager_tasks.get(phone)
-            if task and not task.done():
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
-
-            _managers.pop(phone, None)
-            _manager_tasks.pop(phone, None)
-            print_formatted_text(ANSI(f"Клиент {phone} остановлен."))
-
-        elif cmd == "stopall":
-            phones = list(_managers.keys())
-            for phone in phones:
-                mgr = _managers.get(phone)
-                if mgr:
-                    await mgr.stop()
-                task = _manager_tasks.get(phone)
-                if task and not task.done():
-                    task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await task
-
-            _managers.clear()
-            _manager_tasks.clear()
-            print_formatted_text(ANSI(f"Остановлено клиентов: {len(phones)}."))
-
-        elif cmd in ("exit", "quit"):
-            print_formatted_text(ANSI("Завершение работы…"))
-            for phone in list(_managers.keys()):
-                mgr = _managers.get(phone)
-                if mgr:
-                    await mgr.stop()
-            for task in list(_manager_tasks.values()):
-                task.cancel()
-            loop = asyncio.get_running_loop()
-            loop.stop()
-            return
-
-        elif cmd in ("help", "?"):
-            print_formatted_text(ANSI(_CLI_HELP))
-
-        else:
-            print_formatted_text(ANSI(f"Неизвестная команда: '{cmd}'"))
-
-
 async def main():
     pathes.clients.mkdir(exist_ok=True)
     client_files = [f for f in pathes.clients.iterdir() if f.suffix == ".json"]
 
     if not client_files:
         logger.warning(phrase.misc.no_clients)
-        number = await _read_line_async(phrase.misc.input_number)
-        api_id = int(await _read_line_async(phrase.misc.input_api_id))
-        api_hash = await _read_line_async(phrase.misc.input_api_hash)
+        number = input(phrase.misc.input_number)
+        api_id = int(input(phrase.misc.input_api_id))
+        api_hash = input(phrase.misc.input_api_hash)
         await _save_client_config(number, api_id, api_hash)
         return await main()
 
-    logger.info(f"Клиенты: {[f.name for f in client_files]}")
+    logger.info(f"Clients: {[f.name for f in client_files]}")
 
     for cf in client_files:
         result = await config.load_client(pathes.clients, cf.name)
@@ -1261,8 +1124,16 @@ async def main():
     if not _managers:
         return logger.error(phrase.misc.no_valid_clients)
 
+    cli = CLI(
+        managers=_managers,
+        manager_tasks=_manager_tasks,
+        launch_manager_func=_launch_manager,
+        save_config_func=_save_client_config,
+        phrase=phrase,
+    )
+
     await asyncio.gather(
-        cli_loop(),
+        cli.run(),
         *_manager_tasks.values(),
         return_exceptions=True,
     )
