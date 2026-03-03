@@ -1221,7 +1221,7 @@ async def cli_loop() -> None:
                 logger.info(_CLI_HELP)
 
             else:
-            logger.info(f"Неизвестная команда: '{cmd}'. Введите 'help'.")
+                logger.info(f"Неизвестная команда: '{cmd}'. Введите 'help'.")
 
 
 async def main():
