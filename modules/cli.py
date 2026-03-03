@@ -1,6 +1,9 @@
 import asyncio
 import sys
+import threading
 
+
+_PROMPT = ">>> "
 _HELP = """\
 clients       — list active clients
 ping          — check CLI is alive
@@ -10,7 +13,29 @@ stopall       — stop all clients
 exit / quit   — shutdown
 help / ?      — this help"""
 
-_PROMPT = ">>> "
+
+class _SafeSink:
+    """Loguru sink that erases the prompt before writing and redraws it after."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._prompt_active = False
+
+    def set_prompt_active(self, value: bool) -> None:
+        with self._lock:
+            self._prompt_active = value
+
+    def write(self, message: str) -> None:
+        with self._lock:
+            if self._prompt_active:
+                sys.stderr.write(f"\r\033[K{message}")
+                sys.stderr.write(_PROMPT)
+            else:
+                sys.stderr.write(message)
+            sys.stderr.flush()
+
+
+safe_sink = _SafeSink()
 
 
 class CLI:
@@ -20,25 +45,22 @@ class CLI:
         manager_tasks: dict,
         launch_manager_func,
         save_config_func,
-        phrase,
-    ):
+    ) -> None:
         self._managers = managers
         self._tasks = manager_tasks
         self._launch = launch_manager_func
         self._save_config = save_config_func
-        self._phrase = phrase
         self._running = False
-        self._print_lock = asyncio.Lock()
 
-    async def _write(self, text: str) -> None:
-        async with self._print_lock:
-            sys.stdout.write(f"\r{text}\n{_PROMPT}")
-            sys.stdout.flush()
+    def _print(self, text: str) -> None:
+        safe_sink.set_prompt_active(False)
+        sys.stdout.write(f"\r\033[K{text}\n")
+        sys.stdout.flush()
 
-    async def _prompt(self) -> None:
-        async with self._print_lock:
-            sys.stdout.write(_PROMPT)
-            sys.stdout.flush()
+    def _show_prompt(self) -> None:
+        safe_sink.set_prompt_active(True)
+        sys.stdout.write(_PROMPT)
+        sys.stdout.flush()
 
     async def _readline(self) -> str:
         loop = asyncio.get_running_loop()
@@ -46,66 +68,62 @@ class CLI:
 
     async def _cmd_clients(self) -> None:
         if not self._managers:
-            await self._write("No active clients.")
+            self._print("No active clients.")
             return
-        lines = [f"  {phone}" for phone in self._managers]
-        await self._write("Active clients:\n" + "\n".join(lines))
+        lines = "\n".join(f"  {p}" for p in self._managers)
+        self._print(f"Active clients:\n{lines}")
 
     async def _cmd_ping(self) -> None:
-        await self._write("pong")
+        self._print("pong")
 
     async def _cmd_addclient(self) -> None:
-        async with self._print_lock:
-            sys.stdout.write("Phone: ")
-            sys.stdout.flush()
+        safe_sink.set_prompt_active(False)
+
+        sys.stdout.write("Phone: ")
+        sys.stdout.flush()
         phone = (await self._readline()).strip()
 
-        async with self._print_lock:
-            sys.stdout.write("API ID: ")
-            sys.stdout.flush()
+        sys.stdout.write("API ID: ")
+        sys.stdout.flush()
         api_id_raw = (await self._readline()).strip()
 
-        async with self._print_lock:
-            sys.stdout.write("API Hash: ")
-            sys.stdout.flush()
+        sys.stdout.write("API Hash: ")
+        sys.stdout.flush()
         api_hash = (await self._readline()).strip()
 
         try:
             api_id = int(api_id_raw)
         except ValueError:
-            await self._write("Invalid API ID.")
+            self._print("Invalid API ID.")
             return
 
         if phone in self._managers:
-            await self._write(f"Client {phone} is already running.")
+            self._print(f"Client {phone} is already running.")
             return
 
         await self._save_config(phone, api_id, api_hash)
         launched = await self._launch(phone, api_id, api_hash)
-        if launched:
-            await self._write(f"Client {phone} started.")
-        else:
-            await self._write(f"Failed to start client {phone}.")
+        self._print(f"Client {phone} started." if launched else f"Failed to start {phone}.")
 
     async def _cmd_stop(self, phone: str) -> None:
         if not phone:
-            await self._write("Usage: stop <phone>")
+            self._print("Usage: stop <phone>")
             return
         manager = self._managers.get(phone)
         if not manager:
-            await self._write(f"No such client: {phone}")
+            self._print(f"No such client: {phone}")
             return
         await manager.stop()
         self._managers.pop(phone, None)
         task = self._tasks.pop(phone, None)
         if task and not task.done():
             task.cancel()
-        await self._write(f"Client {phone} stopped.")
+        self._print(f"Client {phone} stopped.")
 
     async def _cmd_stopall(self) -> None:
         phones = list(self._managers.keys())
         if not phones:
-            await self._write("No active clients.")
+            self._print("No active clients.")
             return
         for phone in phones:
             manager = self._managers.pop(phone, None)
@@ -114,10 +132,7 @@ class CLI:
             task = self._tasks.pop(phone, None)
             if task and not task.done():
                 task.cancel()
-        await self._write(f"Stopped {len(phones)} client(s).")
-
-    async def _cmd_help(self) -> None:
-        await self._write(_HELP)
+        self._print(f"Stopped {len(phones)} client(s).")
 
     async def _dispatch(self, line: str) -> bool:
         parts = line.strip().split(maxsplit=1)
@@ -139,17 +154,17 @@ class CLI:
                 await self._cmd_stopall()
             case "exit" | "quit":
                 await self._cmd_stopall()
-                await self._write("Bye.")
+                self._print("Bye.")
                 return False
             case "help" | "?":
-                await self._cmd_help()
+                self._print(_HELP)
             case _:
-                await self._write(f"Unknown command: {cmd}. Type 'help' for a list.")
+                self._print(f"Unknown command: {cmd!r}. Type 'help'.")
         return True
 
     async def run(self) -> None:
         self._running = True
-        await self._prompt()
+        self._show_prompt()
         while self._running:
             try:
                 line = await self._readline()
@@ -157,7 +172,9 @@ class CLI:
                 break
             if not line:
                 break
+            safe_sink.set_prompt_active(False)
             keep_running = await self._dispatch(line)
             if not keep_running:
                 self._running = False
                 break
+            self._show_prompt()

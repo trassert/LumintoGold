@@ -24,11 +24,11 @@ from vkbottle import Bot
 from vkbottle.tools import PhotoWallUploader
 
 from modules import phrase
-from modules.cli import CLI
+from modules.cli import CLI, safe_sink
 
 logger.remove()
 logger.add(
-    _sys.stderr,
+    safe_sink.write,
     format=(
         "[{time:HH:mm:ss} <level>{level}</level>]: <green>{file}:{function}</green> > {message}"
     ),
