@@ -1227,7 +1227,6 @@ async def cli_loop() -> None:
                     await mgr.stop()
             for task in list(_manager_tasks.values()):
                 task.cancel()
-
             loop = asyncio.get_running_loop()
             loop.stop()
             return
