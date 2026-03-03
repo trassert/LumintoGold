@@ -33,7 +33,7 @@ logger.add(
         "[{time:HH:mm:ss} <level>{level}</level>]: <green>{file}:{function}</green> > {message}"
     ),
     level="INFO",
-    colorize=False,
+    colorize=True,
     backtrace=False,
     diagnose=False,
     enqueue=False,
