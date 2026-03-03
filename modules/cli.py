@@ -1,6 +1,7 @@
 import asyncio
+import readline
 import sys
-
+import threading
 
 _PROMPT = ">>> "
 _HELP = """\
@@ -12,11 +13,17 @@ stopall       - stop all clients
 exit / quit   - shutdown
 help / ?      - this help"""
 
+_write_lock = threading.Lock()
+
 
 def loguru_sink(message: str) -> None:
     """logger.add(loguru_sink, enqueue=False) вместо stderr."""
-    sys.stdout.write(message)
-    sys.stdout.flush()
+    with _write_lock:
+        buf = readline.get_line_buffer()
+        sys.stdout.write(f"\r\033[K{message.rstrip(chr(10))}\n")
+        if buf:
+            sys.stdout.write(f"{_PROMPT}{buf}")
+        sys.stdout.flush()
 
 
 class CLI:
@@ -25,21 +32,18 @@ class CLI:
         self._tasks = manager_tasks
         self._launch = launch_manager_func
         self._save_config = save_config_func
+        self._shutting_down = False
 
     def _print(self, text: str) -> None:
-        sys.stdout.write(text + "\n")
-        sys.stdout.flush()
+        with _write_lock:
+            sys.stdout.write(text + "\n")
+            sys.stdout.flush()
 
     async def _readline(self) -> str:
-        sys.stdout.write(_PROMPT)
-        sys.stdout.flush()
-        return await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readline)
+        return await asyncio.get_running_loop().run_in_executor(None, input, _PROMPT)
 
     async def _ask(self, prompt: str) -> str:
-        sys.stdout.write(prompt)
-        sys.stdout.flush()
-        line = await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readline)
-        return line.rstrip("\n")
+        return await asyncio.get_running_loop().run_in_executor(None, input, prompt)
 
     async def _cmd_clients(self):
         if not self._managers:
@@ -102,23 +106,53 @@ class CLI:
         cmd = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
         match cmd:
-            case "clients":    await self._cmd_clients()
-            case "ping":       await self._cmd_ping()
-            case "addclient":  await self._cmd_addclient()
-            case "stop":       await self._cmd_stop(arg)
-            case "stopall":    await self._cmd_stopall()
-            case "exit"|"quit":
+            case "clients":
+                await self._cmd_clients()
+            case "ping":
+                await self._cmd_ping()
+            case "addclient":
+                await self._cmd_addclient()
+            case "stop":
+                await self._cmd_stop(arg)
+            case "stopall":
+                await self._cmd_stopall()
+            case "exit" | "quit":
                 await self._cmd_stopall()
                 self._print("Bye.")
                 return False
-            case "help"|"?":   self._print(_HELP)
-            case _:            self._print(f"Unknown command: {cmd!r}. Type 'help'.")
+            case "help" | "?":
+                self._print(_HELP)
+            case _:
+                self._print(f"Unknown command: {cmd!r}. Type 'help'.")
         return True
 
     async def run(self) -> None:
+        import signal
+
+        loop = asyncio.get_running_loop()
+        loop.add_signal_handler(signal.SIGINT, lambda: loop.create_task(self._shutdown()))
         while True:
-            line = await self._readline()
+            try:
+                line = await self._readline()
+            except EOFError:
+                break
+            if self._shutting_down:
+                break
             if not line.strip():
                 continue
             if not await self._dispatch(line):
                 break
+
+    async def _shutdown(self) -> None:
+        if self._shutting_down:
+            return
+        self._shutting_down = True
+        await self._cmd_stopall()
+        self._print("Bye.")
+        for task in asyncio.all_tasks():
+            if task is not asyncio.current_task():
+                task.cancel()
+        import os
+        import signal
+
+        os.kill(os.getpid(), signal.SIGTERM)

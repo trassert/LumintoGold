@@ -3,7 +3,6 @@ import contextlib
 import logging
 import random
 import re
-import sys as _sys
 from pathlib import Path
 from time import time
 
@@ -11,6 +10,7 @@ import aiofiles
 import orjson
 from loguru import logger
 from telethon import TelegramClient, errors, events, functions, types
+from telethon.helpers import TotalList
 from telethon.tl.custom import Message
 from telethon.tl.custom.participantpermissions import ParticipantPermissions
 from telethon.tl.functions.account import UpdateStatusRequest
@@ -44,11 +44,7 @@ logger.info(phrase.misc.startup)
 class InterceptHandler(logging.Handler):
     def emit(self, record):
         level = "TRACE" if record.levelno == 5 else record.levelname
-        # Erase the prompt, print the log line, reprint the prompt.
-        _sys.stdout.write("\r\033[K")
         logger.opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
-        _sys.stdout.write(">>> ")
-        _sys.stdout.flush()
 
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
@@ -101,7 +97,7 @@ class UserbotManager:
             self.ai_chat = self.ai_client.chat(self.phone)
         except Exception:
             logger.warning("Установите Groq-токен (.иитокен <токен>)")
-        await self.client.start(phone=self.phone)
+        await self.client.start(phone=self.phone)  # ty:ignore[invalid-await]
         logger.info(f"Запущен клиент ({self.phone})")
         self._register_handlers()
 
@@ -703,7 +699,7 @@ class UserbotManager:
 
     async def anim(self, event: Message):
         name = event.text.split(" ", maxsplit=1)[1]
-        animation = await db.get_animation(name)
+        animation: dict = await db.get_animation(name)
         if not animation:
             return await event.edit(phrase.anim.no)
         for title in animation["text"]:
@@ -724,7 +720,7 @@ class UserbotManager:
             if user.deleted:
                 on_delete = True
             else:
-                messages = await self.client.get_messages(user.id, limit=10)
+                messages: TotalList = await self.client.get_messages(user.id, limit=10)
                 if all(isinstance(msg, MessageService) for msg in messages):
                     on_delete = True
             if on_delete:
@@ -1089,27 +1085,15 @@ async def _save_client_config(phone: str, api_id: int, api_hash: str) -> None:
         )
 
 
-_CLI_HELP = """
-Доступные команды:
-  clients              — список активных клиентов
-  ping                 — проверка работы CLI
-  addclient            — добавить нового клиента без перезапуска
-  stop <номер>         — остановить клиента по номеру телефона
-  stopall              — остановить всех клиентов
-  exit / quit          — завершить работу бота
-  help / ?             — эта справка
-""".strip()
-
-
 async def main():
     pathes.clients.mkdir(exist_ok=True)
     client_files = [f for f in pathes.clients.iterdir() if f.suffix == ".json"]
 
     if not client_files:
         logger.warning(phrase.misc.no_clients)
-        number = input(phrase.misc.input_number)
-        api_id = int(input(phrase.misc.input_api_id))
-        api_hash = input(phrase.misc.input_api_hash)
+        number = input(phrase.misc.input_number)  # noqa: ASYNC250
+        api_id = int(input(phrase.misc.input_api_id))  # noqa: ASYNC250
+        api_hash = input(phrase.misc.input_api_hash)  # noqa: ASYNC250
         await _save_client_config(number, api_id, api_hash)
         return await main()
 

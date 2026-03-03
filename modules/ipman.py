@@ -121,7 +121,7 @@ async def get_proxy_list() -> list[str]:
 
 
 async def get_working_proxies(
-    proxy_type: str = None,
+    proxy_type: str | None = None,
     count: int = 5,
     max_concurrency: int = 100,
 ) -> list[tuple[str, str, float]]:

@@ -1,9 +1,13 @@
-import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aiofiles
 import orjson
 from loguru import logger
+
+from . import pathes
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger.info(f"Загружен модуль {__name__}!")
 
@@ -45,26 +49,28 @@ default = {
 
 
 class UBSettings:
-    def __init__(self, number: str, path: str = "") -> None:
-        self.filename = os.path.join(path, f"{number}.json")
-        self._data = None
+    def __init__(self, number: str, path: Path = pathes.clients) -> None:
+        self.filename = path / f"{number}.json"
+        self._data: dict = None
 
     async def _ensure_loaded(self, forced=False) -> None:
-        if self._data is None or forced:
-            if os.path.exists(self.filename):
-                async with aiofiles.open(self.filename, "rb") as f:
-                    contents = await f.read()
-                    self._data = orjson.loads(contents)
-            else:
-                self._data = {}
+        if not (self._data is None or forced):
+            return
+        if not self.filename.exists():
+            self._data = {}
+            return
+        async with aiofiles.open(self.filename, "rb") as f:
+            contents = await f.read()
+            self._data = orjson.loads(contents)
 
     def _sync_ensure_loaded(self, forced=False) -> None:
-        if self._data is None or forced:
-            if os.path.exists(self.filename):
-                with open(self.filename, "rb") as f:
-                    self._data = orjson.loads(f.read())
-            else:
-                self._data = {}
+        if not (self._data is None or forced):
+            return
+        if not self.filename.exists():
+            self._data = {}
+            return
+        with open(self.filename, "rb") as f:
+            self._data = orjson.loads(f.read())
 
     async def make(self, api_id: int, api_hash: str) -> None:
         self._data = {"api_id": api_id, "api_hash": api_hash}

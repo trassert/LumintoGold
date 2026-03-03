@@ -124,7 +124,7 @@ def default_path() -> Path:
     return Path("/")
 
 
-def disk_free(path: str | None = None) -> None:
+def disk_free(path: str | None = None) -> list[str]:
     p = Path(path) if path else default_path()
     p = p if p.exists() else Path.cwd()
 

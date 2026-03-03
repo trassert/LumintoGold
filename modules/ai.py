@@ -16,8 +16,8 @@ logger.info(f"Загружен модуль {__name__}!")
 class GroqClient:
     def __init__(
         self,
-        api_key: str = None,
-        proxy: str = None,
+        api_key: str | None = None,
+        proxy: str | None = None,
         chats_dir: Path = pathes.ai,
         chat_model: str = "openai/gpt-oss-120b",
         voice_model: str = "whisper-large-v3-turbo",

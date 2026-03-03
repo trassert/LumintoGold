@@ -23,15 +23,15 @@ RandomDelay = tuple[int, int] | None
 class Generator:
     _instances: dict[str, "Generator"] = {}  # noqa: UP037
 
-    def __init__(self, key_name: str, filename: str = pathes.tasks) -> None:
+    def __init__(self, key_name: str, filename: Path = pathes.tasks) -> None:
         logger.info(f"Инициализирован таск-ген {key_name}")
         self.key_name: str = key_name
-        self.filename: str = filename
+        self.filename: Path = filename
         self._task: asyncio.Task | None = None
         self._task_type: TaskType | None = None
         self._task_param: TaskParam | None = None
         self._random_delay: RandomDelay = None
-        self._next_run_timestamp: float | None = None
+        self._next_run_timestamp: float = None
         Generator._instances[key_name] = self
 
     def _get_random_delay(self) -> float:
