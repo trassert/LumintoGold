@@ -49,6 +49,10 @@ class InterceptHandler(logging.Handler):
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
 
+_managers: dict[str, "UserbotManager"] = {}
+_manager_tasks: dict[str, asyncio.Task] = {}
+
+
 class UserbotManager:
     def __init__(self, phone: str, api_id: int, api_hash: str):
         self.phone = phone
@@ -77,6 +81,7 @@ class UserbotManager:
         self.autochat = autochat.AutoChatManager(self.client, self.settings)
         self.vktarget = vktarget_bot.VKTargetRefactored(self.client, self.settings, logger)
         self.clickbee = clickbee.ClickBeeAutomation(self.client, self.settings)
+        self._stopped = False
 
     async def init(self):
         use_ipv6 = await self.settings.get("use.ipv6")
@@ -91,7 +96,7 @@ class UserbotManager:
             self.ai_chat = self.ai_client.chat(self.phone)
         except Exception:
             logger.warning("Установите Groq-токен (.иитокен <токен>)")
-        await self.client.start(phone=self.phone)  # type: ignore
+        await self.client.start(phone=self.phone)
         logger.info(f"Запущен клиент ({self.phone})")
         self._register_handlers()
 
@@ -224,6 +229,21 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
 
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
+
+    async def stop(self):
+        """Disconnect the client and cancel background tasks."""
+        if self._stopped:
+            return
+        self._stopped = True
+        logger.info(f"Останавливаю клиент ({self.phone})…")
+        for task in (self.iris_task, self.online_task, self.iceyes_task, self.battery_task):
+            with contextlib.suppress(Exception):
+                task.stop()
+        with contextlib.suppress(Exception):
+            self.vktarget.stop()
+        with contextlib.suppress(Exception):
+            await self.client.disconnect()
+        logger.info(f"Клиент ({self.phone}) остановлен.")
 
     async def fp(self, event: Message):
         arg = event.pattern_match.group(1).strip().lower()
@@ -700,7 +720,7 @@ class UserbotManager:
                 on_delete = True
             else:
                 messages = await self.client.get_messages(user.id, limit=10)
-                if all(isinstance(msg, MessageService) for msg in messages):  # type: ignore
+                if all(isinstance(msg, MessageService) for msg in messages):
                     on_delete = True
             if on_delete:
                 if user.first_name:
@@ -1035,6 +1055,157 @@ class UserbotManager:
             await self.client.run_until_disconnected()
         except Exception:
             logger.exception(f"Критическая ошибка в {self.phone}")
+        finally:
+            _managers.pop(self.phone, None)
+            _manager_tasks.pop(self.phone, None)
+
+
+async def _launch_manager(phone: str, api_id: int, api_hash: str) -> bool:
+    """Создаёт и запускает UserbotManager в фоне. Возвращает False если уже запущен."""
+    if phone in _managers:
+        return False
+    manager = UserbotManager(phone, api_id, api_hash)
+    _managers[phone] = manager
+    task = asyncio.create_task(manager.run(), name=f"ub_{phone}")
+    _manager_tasks[phone] = task
+    return True
+
+
+async def _save_client_config(phone: str, api_id: int, api_hash: str) -> None:
+    """Сохраняет конфиг клиента в clients/<phone>.json."""
+    pathes.clients.mkdir(exist_ok=True)
+    config_path = pathes.clients / f"{phone}.json"
+    async with aiofiles.open(config_path, "wb") as f:
+        await f.write(
+            orjson.dumps(
+                {"api_id": api_id, "api_hash": api_hash},
+                option=orjson.OPT_INDENT_2,
+            )
+        )
+
+
+_CLI_HELP = """
+Доступные команды:
+  clients              — список активных клиентов
+  ping                 — проверка работы CLI
+  addclient            — добавить нового клиента без перезапуска
+  stop <номер>         — остановить клиента по номеру телефона
+  stopall              — остановить всех клиентов
+  exit / quit          — завершить работу бота
+  help / ?             — эта справка
+""".strip()
+
+
+async def _read_line_async() -> str:
+    """Неблокирующее чтение строки из stdin."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, input)
+
+
+async def cli_loop() -> None:
+    """Интерактивный CLI, работающий параллельно с клиентами."""
+    logger.info("\n[CLI] Введите 'help' для списка команд.\n")
+    while True:
+        try:
+            raw = await _read_line_async()
+        except (EOFError, KeyboardInterrupt):
+            await asyncio.sleep(1)
+            continue
+
+        line = raw.strip()
+        if not line:
+            continue
+
+        parts = line.split(maxsplit=1)
+        cmd = parts[0].lower()
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "clients":
+            if not _managers:
+                logger.info("Нет активных клиентов.")
+            else:
+                logger.info(f"Активные клиенты ({len(_managers)}):")
+                for phone, mgr in _managers.items():
+                    connected = mgr.client.is_connected()
+                    status = "✅ онлайн" if connected else "❌ офлайн"
+                    logger.info(f"  • {phone}  {status}")
+
+        elif cmd == "addclient":
+            try:
+                logger.info("Номер телефона (например, +79001234567): ")
+                phone = (await _read_line_async()).strip()
+                logger.info("api_id: ", end="", flush=True)
+                api_id = int((await _read_line_async()).strip())
+                logger.info("api_hash: ", end="", flush=True)
+                api_hash = (await _read_line_async()).strip()
+            except (ValueError, EOFError) as e:
+                logger.info(f"Ошибка ввода: {e}")
+                continue
+
+            if phone in _managers:
+                logger.info(f"Клиент {phone} уже запущен.")
+                continue
+
+            await _save_client_config(phone, api_id, api_hash)
+            ok = await _launch_manager(phone, api_id, api_hash)
+            if ok:
+                logger.info(f"Клиент {phone} запускается (авторизация пройдёт в фоне).")
+            else:
+                logger.info(f"Клиент {phone} уже существует.")
+
+        elif cmd == "stop":
+            phone = arg.strip()
+            if not phone:
+                logger.info("Укажите номер телефона: stop +79001234567")
+                continue
+            mgr = _managers.get(phone)
+            if not mgr:
+                logger.info(f"Клиент {phone} не найден. Используйте 'clients' для списка.")
+                continue
+            await mgr.stop()
+            task = _manager_tasks.get(phone)
+            if task and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            _managers.pop(phone, None)
+            _manager_tasks.pop(phone, None)
+            logger.info(f"Клиент {phone} остановлен.")
+
+        elif cmd == "stopall":
+            phones = list(_managers.keys())
+            for phone in phones:
+                mgr = _managers.get(phone)
+                if mgr:
+                    await mgr.stop()
+                task = _manager_tasks.get(phone)
+                if task and not task.done():
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+            _managers.clear()
+            _manager_tasks.clear()
+            logger.info(f"Остановлено клиентов: {len(phones)}.")
+
+        elif cmd in ("exit", "quit"):
+            logger.info("Завершение работы…")
+
+            phones = list(_managers.keys())
+            for phone in phones:
+                mgr = _managers.get(phone)
+                if mgr:
+                    await mgr.stop()
+
+            for task in list(_manager_tasks.values()):
+                task.cancel()
+            asyncio.get_event_loop().stop()
+            return
+
+        elif cmd in ("help", "?"):
+            logger.info(_CLI_HELP)
+
+        else:
+            logger.info(f"Неизвестная команда: '{cmd}'. Введите 'help'.")
 
 
 async def main():
@@ -1046,27 +1217,25 @@ async def main():
         number = input(phrase.misc.input_number)
         api_id = int(input(phrase.misc.input_api_id))
         api_hash = input(phrase.misc.input_api_hash)
-        config_path = pathes.clients / f"{number}.json"
-        async with aiofiles.open(config_path, "wb") as f:
-            await f.write(
-                orjson.dumps(
-                    {"api_id": api_id, "api_hash": api_hash},
-                    option=orjson.OPT_INDENT_2,
-                ),
-            )
+        await _save_client_config(number, api_id, api_hash)
         return await main()
 
     logger.info(f"Клиенты: {[f.name for f in client_files]}")
-    tasks = []
+
     for cf in client_files:
         result = await config.load_client(pathes.clients, cf.name)
         if result:
             phone, api_id, api_hash = result
-            tasks.append(UserbotManager(phone, api_id, api_hash).run())
+            await _launch_manager(phone, api_id, api_hash)
 
-    if not tasks:
+    if not _managers:
         return logger.error(phrase.misc.no_valid_clients)
-    await asyncio.gather(*tasks)
+
+    await asyncio.gather(
+        cli_loop(),
+        *_manager_tasks.values(),
+        return_exceptions=True,
+    )
     return None
 
 
