@@ -13,20 +13,47 @@ stopall       - stop all clients
 exit / quit   - shutdown
 help / ?      - this help"""
 
+# Пока пользователь набирает строку — логи копятся в очереди.
+# Как только строка отправлена — очередь сбрасывается перед следующим промптом.
+_log_queue: list[str] = []
+_waiting_input = False
 _lock = threading.Lock()
-_current_input = ""
-
-
-def _write(text: str) -> None:
-    """Стираем промпт, пишем текст, возвращаем промпт с буфером."""
-    with _lock:
-        sys.stdout.write(f"\r\033[K{text}\n{_PROMPT}{_current_input}")
-        sys.stdout.flush()
 
 
 def loguru_sink(message: str) -> None:
     """logger.add(loguru_sink, enqueue=False) вместо stderr."""
-    _write(message.rstrip("\n"))
+    msg = message.rstrip("\n")
+    with _lock:
+        if _waiting_input:
+            _log_queue.append(msg)
+        else:
+            sys.stdout.write(msg + "\n")
+            sys.stdout.flush()
+
+
+def _flush_log_queue() -> None:
+    with _lock:
+        for msg in _log_queue:
+            sys.stdout.write(msg + "\n")
+        _log_queue.clear()
+    sys.stdout.flush()
+
+
+def _set_waiting(value: bool) -> None:
+    global _waiting_input
+    with _lock:
+        _waiting_input = value
+
+
+def _blocking_input(prompt: str) -> str:
+    _flush_log_queue()
+    _set_waiting(True)
+    try:
+        return input(prompt)
+    except EOFError:
+        return ""
+    finally:
+        _set_waiting(False)
 
 
 class CLI:
@@ -35,61 +62,17 @@ class CLI:
         self._tasks = manager_tasks
         self._launch = launch_manager_func
         self._save_config = save_config_func
-        self._line_queue: asyncio.Queue[str] = asyncio.Queue()
-        self._loop: asyncio.AbstractEventLoop | None = None
-
-    def _input_thread(self) -> None:
-        """Читает посимвольно чтобы обновлять _current_input в реальном времени."""
-        global _current_input
-        import tty, termios, os
-
-        fd = sys.stdin.fileno()
-        old = termios.tcgetattr(fd)
-        try:
-            tty.setcbreak(fd)
-            buf = []
-            while True:
-                ch = os.read(fd, 1)
-                if not ch:
-                    break
-                c = ch.decode("utf-8", errors="replace")
-                if c in ("\r", "\n"):
-                    line = "".join(buf)
-                    buf.clear()
-                    with _lock:
-                        _current_input = ""
-                        sys.stdout.write(f"\r\033[K")
-                        sys.stdout.flush()
-                    self._loop.call_soon_threadsafe(self._line_queue.put_nowait, line)
-                elif c in ("\x7f", "\x08"):  # backspace
-                    if buf:
-                        buf.pop()
-                        with _lock:
-                            _current_input = "".join(buf)
-                            sys.stdout.write(f"\r\033[K{_PROMPT}{_current_input}")
-                            sys.stdout.flush()
-                elif c == "\x03":  # Ctrl+C
-                    self._loop.call_soon_threadsafe(self._line_queue.put_nowait, None)
-                    break
-                elif c >= " ":
-                    buf.append(c)
-                    with _lock:
-                        _current_input = "".join(buf)
-                        sys.stdout.write(f"\r\033[K{_PROMPT}{_current_input}")
-                        sys.stdout.flush()
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old)
-
-    async def _readline(self) -> str | None:
-        return await self._line_queue.get()
-
-    async def _ask(self, prompt: str) -> str:
-        _write(prompt)
-        result = await self._readline()
-        return result or ""
 
     def _print(self, text: str) -> None:
-        _write(text)
+        with _lock:
+            sys.stdout.write(text + "\n")
+            sys.stdout.flush()
+
+    async def _readline(self) -> str:
+        return await asyncio.get_running_loop().run_in_executor(None, _blocking_input, _PROMPT)
+
+    async def _ask(self, prompt: str) -> str:
+        return await asyncio.get_running_loop().run_in_executor(None, _blocking_input, prompt)
 
     async def _cmd_clients(self):
         if not self._managers:
@@ -152,36 +135,23 @@ class CLI:
         cmd = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
         match cmd:
-            case "clients":
-                await self._cmd_clients()
-            case "ping":
-                await self._cmd_ping()
-            case "addclient":
-                await self._cmd_addclient()
-            case "stop":
-                await self._cmd_stop(arg)
-            case "stopall":
-                await self._cmd_stopall()
-            case "exit" | "quit":
+            case "clients":    await self._cmd_clients()
+            case "ping":       await self._cmd_ping()
+            case "addclient":  await self._cmd_addclient()
+            case "stop":       await self._cmd_stop(arg)
+            case "stopall":    await self._cmd_stopall()
+            case "exit"|"quit":
                 await self._cmd_stopall()
                 self._print("Bye.")
                 return False
-            case "help" | "?":
-                self._print(_HELP)
-            case _:
-                self._print(f"Unknown command: {cmd!r}. Type 'help'.")
+            case "help"|"?":   self._print(_HELP)
+            case _:            self._print(f"Unknown command: {cmd!r}. Type 'help'.")
         return True
 
     async def run(self) -> None:
-        self._loop = asyncio.get_running_loop()
-        t = threading.Thread(target=self._input_thread, daemon=True)
-        t.start()
-        with _lock:
-            sys.stdout.write(_PROMPT)
-            sys.stdout.flush()
         while True:
             line = await self._readline()
-            if line is None:
-                break
+            if not line and line is not None:
+                continue
             if not await self._dispatch(line):
                 break
