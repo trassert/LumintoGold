@@ -57,7 +57,7 @@ _manager_tasks: dict[str, asyncio.Task] = {}
 class UserbotManager:
     def __init__(self, phone: str, api_id: int, api_hash: str):
         self.phone = phone
-        self.settings = settings.UBSettings(phone, "clients")
+        self.settings = settings.UBSettings(phone, pathes.clients)
         self.session_path = Path("sessions") / phone
         self.voice_path = pathes.voice / phone
         self.client = TelegramClient(
