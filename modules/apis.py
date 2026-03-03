@@ -38,8 +38,8 @@ async def conv_currency(currency: str, count: int = 1, default_type: str = "RUB"
 
     if data.get("result", None) != "success":
         return phrase.currency.error
-    if default_type not in data["rates"]:
+    if default_type not in data["conversion_rates"]:
         return phrase.currency.no_currency.format(default_type)
 
-    result = round(data["rates"][default_type] * count, 2)
+    result = round(data["conversion_rates"][default_type] * count, 2)
     return phrase.currency.done.format(count1=count, cur1=currency, count2=result, cur2=default_type)
