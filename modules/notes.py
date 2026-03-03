@@ -1,14 +1,11 @@
 import asyncio
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import aiofiles
 from loguru import logger
 from telethon import TelegramClient
 
 from . import pathes
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 logger.info(f"Загружен модуль {__name__}!")
 

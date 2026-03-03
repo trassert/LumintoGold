@@ -1,13 +1,11 @@
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 import aiofiles
 import orjson
 from loguru import logger
 
 from . import pathes
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 logger.info(f"Загружен модуль {__name__}!")
 
