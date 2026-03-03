@@ -167,7 +167,7 @@ class password:
 
 class time:
     not_found = "❌ : Город {} не найден."
-    not_timezone = "❌ : Не удалось оп��еделить часовой пояс для {}."
+    not_timezone = "❌ : Не удалось определить часовой пояс для {}."
     location_info = "📍 {address}\n🕒 Время: {time}\n📅 Дата: {date}\n🌐 Пояс: {tz}"
 
 
