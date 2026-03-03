@@ -3,15 +3,15 @@ import readline
 import sys
 import threading
 
-_PROMPT = ">>> "
+_PROMPT = "> "
 _HELP = """\
-clients       - list active clients
-ping          - check CLI is alive
-addclient     - add a new client without restart
-stop <phone>  - stop client by phone number
-stopall       - stop all clients
-exit / quit   - shutdown
-help / ?      - this help"""
+clients       - Список активных клиентов
+ping          - Проверка CLI
+addclient     - Добавить клиента (интерактивно)
+stop <phone>  - Остановить клиента по номеру телефона
+stopall       - Остановить всех клиентов
+exit / quit   - Выход
+help / ?      - Показать эту справку"""
 
 _write_lock = threading.Lock()
 
@@ -118,7 +118,7 @@ class CLI:
                 await self._cmd_stopall()
             case "exit" | "quit":
                 await self._cmd_stopall()
-                self._print("Bye.")
+                self._print("Пока.")
                 return False
             case "help" | "?":
                 self._print(_HELP)
