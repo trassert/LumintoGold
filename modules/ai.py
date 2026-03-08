@@ -105,7 +105,6 @@ class GroqChatSession:
     async def send(self, user_message: str) -> str:
         if not self._history:
             await self.load()
-        self._history.append({"role": "user", "content": user_message})
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
@@ -117,8 +116,10 @@ class GroqChatSession:
             ai_reply = response.choices[0].message.content.strip()
         except Exception as e:
             ai_reply = f"[Ошибка Groq: {e}]"
-        self._history.append({"role": "assistant", "content": ai_reply})
-        await self._save()
+        else:
+            self._history.append({"role": "user", "content": user_message})
+            self._history.append({"role": "assistant", "content": ai_reply})
+            await self._save()
         return ai_reply
 
     async def clear(self) -> None:
