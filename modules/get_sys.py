@@ -107,7 +107,7 @@ def human(n: int) -> str:
     x = float(n)
     for u in units:
         if x < 1024 or u == units[-1]:
-            return f"{x:.2f} {u}"
+            return f"{round(x, 1)} {u}"
         x /= 1024
     return None
 

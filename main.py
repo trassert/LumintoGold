@@ -262,6 +262,9 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
 
         self.client.on(d.cmd(r"\.телемт$"))(self.telemt_info)
+        self.client.on(d.cmd(r"\.telemt$"))(self.telemt_info)
+        self.client.on(d.cmd(r"\+телемт юзер (.+)"))(self.telemt_adduser)
+        self.client.on(d.cmd(r"\+telemt user (.+)"))(self.telemt_adduser)
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
 
     async def stop(self):
@@ -284,17 +287,31 @@ class UserbotManager:
             await self.client.disconnect()
         logger.info(f"Клиент ({self.phone}) остановлен.")
 
+    async def telemt_adduser(self, event: Message):
+        username = event.pattern_match.group(1).strip()
+        if not re.match(r"^[a-zA-Z0-9_]{3,32}$", username):
+            return await event.edit(phrase.telemt.incorrect_username)
+        reg = telemt.CreateUserRequest(username=username)
+        user, secret, link = await self.telemt_client.create_user_with_link(
+            reg, link_mode="tls"
+        )
+        return await event.edit(
+            phrase.telemt.new_user.format(user=user.username, secret=secret, link=link)
+        )
+
     async def telemt_info(self, event: Message):
         users = await self.telemt_client.list_users()
         info = await self.telemt_client.get_system_info()
         users_list = [
-            f"» {user.username} - {get_sys.human(user.total_octets)}"
+            f"» **{user.username}** - {get_sys.human(user.total_octets)}"
             for user in users
         ]
-        return await event.reply(
-            f"Версия: {info.get('version')}, Архитектура: {info.get('target_arch')}\n"
-            "Пользователи:\n"
-            f"{'\n'.join(users_list)}",
+        return await event.edit(
+            phrase.telemt.info.format(
+                version=info.get("version"),
+                arch=info.get("target_arch"),
+                users="\n".join(users_list),
+            )
         )
 
     async def currencyconventer(self, event: Message):
