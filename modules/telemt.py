@@ -1,9 +1,8 @@
-import asyncio
-import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import aiohttp
+import orjson
 from aiohttp import ClientResponseError, ClientSession
 
 
@@ -106,7 +105,7 @@ class TelemtClient:
                 if not text:
                     data = {}
                 else:
-                    data = json.loads(text)
+                    data = orjson.loads(text)
                 if resp.status >= 400:
                     if "error" in data:
                         err_data = data["error"]
@@ -202,77 +201,46 @@ class TelemtClient:
         data, _ = await self._request("DELETE", endpoint)
         return data
 
-    def _get_link_from_user(self, user: UserInfo, mode: str) -> str | None:
-        """Вспомогательный метод для извлечения ссылки нужного типа."""
-        if not user.links:
-            return None
-        target_list = user.links.get(mode, [])
-        if not target_list:
-            return None
-        return target_list[0]
-
     async def create_user_with_link(
-        self,
-        user_req: CreateUserRequest,
-        link_mode: str = "tls",
-        retries: int = 10,
-        delay: float = 0.5,
+        self, user_req: CreateUserRequest, link_mode: str = "tls"
     ) -> tuple[UserInfo, str, str]:
+        """
+        Создает пользователя и сразу возвращает ссылку для подключения.
+
+        :param user_req: Данные пользователя.
+        :param link_mode: Тип ссылки ('classic', 'secure', 'tls'). По умолчанию 'tls' (EE-TLS).
+        :return: кортеж (UserInfo, secret, link_url)
+        """
 
         created_user, secret = await self.create_user(user_req)
 
-        full_user = None
-        raw_data = None
+        if not created_user.links or not self._get_link_from_user(
+            created_user, link_mode
+        ):
+            full_user = await self.get_user(user_req.username)
+            link = self._get_link_from_user(full_user, link_mode)
+            return full_user, secret, link
 
-        for attempt in range(retries):
-            try:
-                if attempt > 0:
-                    await asyncio.sleep(delay)
+        link = self._get_link_from_user(created_user, link_mode)
+        return created_user, secret, link
 
-                session = await self._get_session()
-                url = f"{self.base_url}{self.api_prefix}/users/{user_req.username}"
-                headers = {"Content-Type": "application/json; charset=utf-8"}
-                if self.auth_token:
-                    headers["Authorization"] = self.auth_token
+    def _get_link_from_user(self, user: UserInfo, mode: str) -> str:
+        """Вспомогательный метод для извлечения ссылки нужного типа."""
+        if not user.links:
+            raise ValueError(
+                "Ссылки не сгенерированы сервером (проверьте конфиг [general.links])"
+            )
 
-                async with session.get(url, headers=headers) as resp:
-                    text = await resp.text()
-                    import json
+        links_map = {
+            "classic": user.links.get("classic", []),
+            "secure": user.links.get("secure", []),
+            "tls": user.links.get("tls", []),
+        }
 
-                    response_json = json.loads(text)
+        target_list = links_map.get(mode)
+        if not target_list:
+            raise ValueError(
+                f"Ссылки типа '{mode}' не найдены. Доступны: {list(links_map.keys())}"
+            )
 
-                    if not response_json.get("ok"):
-                        raise TelemtAPIError("ok")
-
-                    raw_data = response_json.get("data")
-
-                    print(
-                        f"[DEBUG Attempt {attempt + 1}] Raw links field: {raw_data.get('links')}"
-                    )
-
-                    full_user = UserInfo(**raw_data)
-
-                    links_dict = full_user.links or {}
-                    target_list = links_dict.get(link_mode, [])
-
-                    if target_list:
-                        print(f"[SUCCESS] Link found: {target_list[0]}")
-                        return full_user, secret, target_list[0]
-                    else:
-                        print(
-                            f"[WARN] List empty for mode '{link_mode}'. Available keys: {list(links_dict.keys())}"
-                        )
-
-            except TelemtAPIError as e:
-                if e.status_code == 404:
-                    continue
-                raise
-            except Exception as e:
-                print(f"[ERROR] Parsing error: {e}")
-                if attempt == retries - 1:
-                    raise
-
-        print(f"[CRITICAL] Final raw data received: {raw_data}")
-        raise ValueError(
-            f"Ссылки типа '{link_mode}' не найдены в ответе сервера после {retries} попыток. Проверь config.toml (tls_enabled) и логи выше."
-        )
+        return target_list[0]
