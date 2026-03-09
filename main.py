@@ -265,7 +265,7 @@ class UserbotManager:
         users_list = []
         for user in users:
             user.username = f"» {user.username} - {get_sys.human(user.total_octets)}"
-        return event.reply(
+        return await event.reply(
             f"Версия: {info.get('version')}, Архитектура: {info.get('target_arch')}\n"
             "Пользователи:\n"
             f"{'\n'.join(users_list)}",
