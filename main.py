@@ -265,6 +265,9 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.telemt$"))(self.telemt_info)
         self.client.on(d.cmd(r"\+телемт юзер (.+)"))(self.telemt_adduser)
         self.client.on(d.cmd(r"\+telemt user (.+)"))(self.telemt_adduser)
+        self.client.on(d.cmd(r"\-телемт юзер (.+)"))(self.telemt_deluser)
+        self.client.on(d.cmd(r"\-telemt user (.+)"))(self.telemt_deluser)
+
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
 
     async def stop(self):
@@ -296,8 +299,17 @@ class UserbotManager:
             reg, link_mode="tls"
         )
         return await event.edit(
-            phrase.telemt.new_user.format(user=user.username, secret=secret, link=link)
+            phrase.telemt.new_user.format(
+                user=user.username, secret=secret, link=link
+            )
         )
+
+    async def telemt_deluser(self, event: Message):
+        username = event.pattern_match.group(1).strip()
+        if not re.match(r"^[a-zA-Z0-9_]{3,32}$", username):
+            return await event.edit(phrase.telemt.incorrect_username)
+        user = await self.telemt_client.delete_user(username)
+        return await event.edit(phrase.telemt.del_user.format(user=user))
 
     async def telemt_info(self, event: Message):
         users = await self.telemt_client.list_users()

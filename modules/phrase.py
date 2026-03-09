@@ -250,3 +250,4 @@ class telemt:
         "Пользователи:\n{users}"
     )
     new_user = "✅ Пользователь: **{user}**\n🔑 Секрет: `{secret}`\n🔗 Ссылка: {link}"
+    del_user = "✅ Пользователь **{user}** удалён."
