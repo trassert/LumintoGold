@@ -141,6 +141,17 @@ class UserbotManager:
         if await self.settings.get("battery.status"):
             await self.battery_task.create(func=self.chk_battery, task_param=15, unit="seconds")
 
+        if await self.settings.get("telemt.token"):
+            self.telemt_client = telemt.TelemtClient(
+                base_url=await self.settings.get("telemt.url"),
+                auth_token=await self.settings.get("telemt.token"),
+            )
+            try:
+                await self.telemt_client.health_check()
+                logger.info("Успешно подключился к Telemt API")
+            except Exception:
+                logger.warning("Не удалось подключиться к Telemt API. Проверьте URL и токен.")
+
     def _register_handlers(self):
         self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
 
@@ -230,6 +241,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.к (.+)"))(self.calc)
         self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
 
+        self.client.on(d.cmd(r"\.телемт$"))(self.telemt_info)
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
 
     async def stop(self):
@@ -246,6 +258,18 @@ class UserbotManager:
         with contextlib.suppress(Exception):
             await self.client.disconnect()
         logger.info(f"Клиент ({self.phone}) остановлен.")
+
+    async def telemt_info(self, event: Message):
+        users = await self.telemt_client.list_users()
+        info = await self.telemt_client.get_system_info()
+        users_list = []
+        for user in users:
+            user.username = f"» {user.username} - {get_sys.human(user.total_octets)}"
+        return event.reply(
+            f"Версия: {info.get('version')}, Архитектура: {info.get('target_arch')}\n"
+            "Пользователи:\n"
+            f"{'\n'.join(users_list)}",
+        )
 
     async def currencyconventer(self, event: Message):
         arg = event.pattern_match.group(1).strip().split()
@@ -1160,6 +1184,7 @@ if __name__ == "__main__":
         pathes,
         settings,
         task_gen,
+        telemt,
         tz,
         vktarget_bot,
     )
