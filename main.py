@@ -44,7 +44,9 @@ logger.info(phrase.misc.startup)
 class InterceptHandler(logging.Handler):
     def emit(self, record):
         level = "TRACE" if record.levelno == 5 else record.levelname
-        logger.opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
+        logger.opt(depth=6, exception=record.exc_info).log(
+            level, record.getMessage()
+        )
 
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
@@ -80,7 +82,9 @@ class UserbotManager:
         self.notes = notes.Notes(phone)
         self.flood_ctrl = flood.FloodController(self.client, self.settings)
         self.autochat = autochat.AutoChatManager(self.client, self.settings)
-        self.vktarget = vktarget_bot.VKTargetRefactored(self.client, self.settings, logger)
+        self.vktarget = vktarget_bot.VKTargetRefactored(
+            self.client, self.settings, logger
+        )
         self.clickbee = clickbee.ClickBeeAutomation(self.client, self.settings)
         self._stopped = False
 
@@ -106,10 +110,14 @@ class UserbotManager:
 
         if await self.settings.get("luminto.reactions"):
             for chat in ("lumintoch", "trassert_ch"):
-                self.client.add_event_handler(self.reactions, events.NewMessage(chats=chat))
+                self.client.add_event_handler(
+                    self.reactions, events.NewMessage(chats=chat)
+                )
 
         if await self.settings.get("iris.farm"):
-            await self.iris_task.create(func=self.iris_farm, task_param=4, random_delay=(5, 360))
+            await self.iris_task.create(
+                func=self.iris_farm, task_param=4, random_delay=(5, 360)
+            )
 
         if await self.settings.get("iceyes.bonus"):
             await self.iceyes_task.create(
@@ -119,7 +127,9 @@ class UserbotManager:
             )
 
         if await self.settings.get("auto.online"):
-            await self.online_task.create(func=self.auto_online, task_param=30, unit="seconds")
+            await self.online_task.create(
+                func=self.auto_online, task_param=30, unit="seconds"
+            )
 
         if await self.settings.get("vktarget.enabled", False):
             await self.vktarget.start()
@@ -139,7 +149,9 @@ class UserbotManager:
                 )
 
         if await self.settings.get("battery.status"):
-            await self.battery_task.create(func=self.chk_battery, task_param=15, unit="seconds")
+            await self.battery_task.create(
+                func=self.chk_battery, task_param=15, unit="seconds"
+            )
 
         if await self.settings.get("telemt.token"):
             self.telemt_client = telemt.TelemtClient(
@@ -150,7 +162,9 @@ class UserbotManager:
                 await self.telemt_client.health_check()
                 logger.info("Успешно подключился к Telemt API")
             except Exception:
-                logger.warning("Не удалось подключиться к Telemt API. Проверьте URL и токен.")
+                logger.warning(
+                    "Не удалось подключиться к Telemt API. Проверьте URL и токен."
+                )
 
     def _register_handlers(self):
         self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
@@ -228,9 +242,15 @@ class UserbotManager:
         self.client.on(d.cmd(r"\-флудобщ (\d+) (\d+)$"))(
             lambda e: self.flood_ctrl.set_rule(e, "messages"),
         )
-        self.client.on(d.cmd(r"\+флудстики$"))(lambda e: self.flood_ctrl.unset_rule(e, "stickers"))
-        self.client.on(d.cmd(r"\+флудгиф$"))(lambda e: self.flood_ctrl.unset_rule(e, "gifs"))
-        self.client.on(d.cmd(r"\+флудобщ$"))(lambda e: self.flood_ctrl.unset_rule(e, "messages"))
+        self.client.on(d.cmd(r"\+флудстики$"))(
+            lambda e: self.flood_ctrl.unset_rule(e, "stickers")
+        )
+        self.client.on(d.cmd(r"\+флудгиф$"))(
+            lambda e: self.flood_ctrl.unset_rule(e, "gifs")
+        )
+        self.client.on(d.cmd(r"\+флудобщ$"))(
+            lambda e: self.flood_ctrl.unset_rule(e, "messages")
+        )
 
         self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.autochat.add_chat)
         self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.autochat.remove_chat)
@@ -250,7 +270,12 @@ class UserbotManager:
             return
         self._stopped = True
         logger.info(f"Останавливаю клиент ({self.phone})…")
-        for task in (self.iris_task, self.online_task, self.iceyes_task, self.battery_task):
+        for task in (
+            self.iris_task,
+            self.online_task,
+            self.iceyes_task,
+            self.battery_task,
+        ):
             with contextlib.suppress(Exception):
                 task.stop()
         with contextlib.suppress(Exception):
@@ -262,9 +287,10 @@ class UserbotManager:
     async def telemt_info(self, event: Message):
         users = await self.telemt_client.list_users()
         info = await self.telemt_client.get_system_info()
-        users_list = []
-        for user in users:
-            user.username = f"» {user.username} - {get_sys.human(user.total_octets)}"
+        users_list = [
+            f"» {user.username} - {get_sys.human(user.total_octets)}"
+            for user in users
+        ]
         return await event.reply(
             f"Версия: {info.get('version')}, Архитектура: {info.get('target_arch')}\n"
             "Пользователи:\n"
@@ -304,7 +330,9 @@ class UserbotManager:
         for proxy in proxies:
             ip, port = proxy[1].split(":")
             text += f"**{proxy[0]}** - `{ip}`:`{port}` ({proxy[2]} мс)\n"
-        return await event.edit(phrase.fp.result.format(count=len(proxies), proxys=text))
+        return await event.edit(
+            phrase.fp.result.format(count=len(proxies), proxys=text)
+        )
 
     async def help(self, event: Message):
         return await event.edit(phrase.help.text, link_preview=False)
@@ -319,7 +347,9 @@ class UserbotManager:
 
         try:
             me = await self.client.get_me()
-            admin_rights: ParticipantPermissions = await self.client.get_permissions(chat, me)
+            admin_rights: ParticipantPermissions = await self.client.get_permissions(
+                chat, me
+            )
             if not admin_rights.ban_users:
                 return await event.edit(phrase.clear.no_rights)
 
@@ -349,7 +379,9 @@ class UserbotManager:
             user: User = ban
             if user and user.deleted:
                 try:
-                    await self.client.edit_permissions(chat, user, view_messages=True)
+                    await self.client.edit_permissions(
+                        chat, user, view_messages=True
+                    )
                     unbanned += 1
                     if unbanned % 5 == 0:
                         await event.edit(phrase.clear.unban.format(count=unbanned))
@@ -358,7 +390,9 @@ class UserbotManager:
             await asyncio.sleep(await self.settings.get("typing.delay"))
 
         if kicked or unbanned:
-            await event.edit(phrase.clear.done.format(kicked=kicked, unbanned=unbanned))
+            await event.edit(
+                phrase.clear.done.format(kicked=kicked, unbanned=unbanned)
+            )
         else:
             await event.edit(phrase.clear.not_found)
         return None
@@ -398,16 +432,24 @@ class UserbotManager:
             pass
 
     async def _start_iris_farm(self):
-        await self.iris_task.create(func=self.iris_farm, task_param=4, random_delay=(5, 360))
+        await self.iris_task.create(
+            func=self.iris_farm, task_param=4, random_delay=(5, 360)
+        )
 
     async def _start_iceyes_bonus(self):
-        await self.iceyes_task.create(func=self.iceyes_bonus, task_param=1, random_delay=(1, 60))
+        await self.iceyes_task.create(
+            func=self.iceyes_bonus, task_param=1, random_delay=(1, 60)
+        )
 
     async def _start_auto_online(self):
-        await self.online_task.create(func=self.auto_online, task_param=30, unit="seconds")
+        await self.online_task.create(
+            func=self.auto_online, task_param=30, unit="seconds"
+        )
 
     async def _start_mon_batt(self):
-        await self.battery_task.create(func=self.chk_battery, task_param=15, unit="seconds")
+        await self.battery_task.create(
+            func=self.chk_battery, task_param=15, unit="seconds"
+        )
 
     async def _autochat_sender(self):
         chat_ids = await self.settings.get("autochat.chats", [])
@@ -500,9 +542,13 @@ class UserbotManager:
     async def iris_farm(self):
         target = -1002355128955
         try:
-            await self.client.send_message(target, random.choice(phrase.iris.farm_cmds))
+            await self.client.send_message(
+                target, random.choice(phrase.iris.farm_cmds)
+            )
         except Exception:
-            await self.client.send_message("iris_cm_bot", random.choice(phrase.iris.farm_cmds))
+            await self.client.send_message(
+                "iris_cm_bot", random.choice(phrase.iris.farm_cmds)
+            )
         logger.info(f"{self.phone} - сработала автоферма")
 
     async def iceyes_bonus(self):
@@ -526,7 +572,9 @@ class UserbotManager:
             if reply and reply.photo:
                 media = reply.photo
 
-        result = await self.notes.add(name, note_text, media=media, client=self.client)
+        result = await self.notes.add(
+            name, note_text, media=media, client=self.client
+        )
 
         if result is False:
             return await event.edit(phrase.notes.error.format(phrase.notes.err_cr))
@@ -667,7 +715,9 @@ class UserbotManager:
             return
         if isinstance(event.media, MessageMediaDocument) and event.media.voice:
             await event.delete()
-            msg = await self.settings.get("voice.message", phrase.voice.default_message)
+            msg = await self.settings.get(
+                "voice.message", phrase.voice.default_message
+            )
             await event.respond(msg)
 
     async def voice2text(self, event: Message):
@@ -761,7 +811,9 @@ class UserbotManager:
             if user.deleted:
                 on_delete = True
             else:
-                messages: TotalList = await self.client.get_messages(user.id, limit=10)
+                messages: TotalList = await self.client.get_messages(
+                    user.id, limit=10
+                )
                 if all(isinstance(msg, MessageService) for msg in messages):
                     on_delete = True
             if on_delete:
@@ -773,7 +825,9 @@ class UserbotManager:
                 if deleted_count % 5 == 0:
                     await msg.edit(phrase.pm.wait.format(deleted_count))
 
-        await event.edit(phrase.pm.cleared.format(chats=deleted_count, list=", ".join(deleted)))
+        await event.edit(
+            phrase.pm.cleared.format(chats=deleted_count, list=", ".join(deleted))
+        )
 
     async def clean_blacklist(self, event: Message):
         blocked = []
@@ -876,11 +930,19 @@ class UserbotManager:
     async def words(self, event: Message):
         args = format.get_args(event.text.lower())
         arg_len = next(
-            (int(x.replace("л", "")) for x in args if "л" in x and x.replace("л", "").isdigit()),
+            (
+                int(x.replace("л", ""))
+                for x in args
+                if "л" in x and x.replace("л", "").isdigit()
+            ),
             None,
         )
         arg_count = next(
-            (int(x.replace("в", "")) for x in args if "в" in x and x.replace("в", "").isdigit()),
+            (
+                int(x.replace("в", ""))
+                for x in args
+                if "в" in x and x.replace("в", "").isdigit()
+            ),
             None,
         )
 
@@ -898,7 +960,9 @@ class UserbotManager:
                 except Exception:
                     await asyncio.sleep(await self.settings.get("typing.delay"))
                     with contextlib.suppress(Exception):
-                        msg = await event.reply(phrase.words.except_all.format(total))
+                        msg = await event.reply(
+                            phrase.words.except_all.format(total)
+                        )
 
             if message.text:
                 for word in message.text.split():
@@ -930,7 +994,9 @@ class UserbotManager:
         await event.edit(phrase.ping.pong)
         pingtime = round(time() - t1, 2)
         await event.edit(
-            phrase.ping.ping.format(timedel=f"{timedel} сек.", ping=f"{pingtime} сек."),
+            phrase.ping.ping.format(
+                timedel=f"{timedel} сек.", ping=f"{pingtime} сек."
+            ),
         )
 
     async def flip_text(self, event: Message):
@@ -983,7 +1049,10 @@ class UserbotManager:
         if not re.fullmatch(r"[\d+\-*/().\s]+", expr):
             return await event.edit(phrase.calc.invalid_chars)
 
-        if any(c in expr for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"):
+        if any(
+            c in expr
+            for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+        ):
             return await event.edit(phrase.calc.forbidden)
 
         try:
@@ -1035,11 +1104,19 @@ class UserbotManager:
         if match := re.search(r"д(\d+)", args):
             length = int(match[1])
         letters = (
-            True if re.search(r"\+б", args) else (False if re.search(r"-б", args) else letters)
+            True
+            if re.search(r"\+б", args)
+            else (False if re.search(r"-б", args) else letters)
         )
-        digits = True if re.search(r"\+ц", args) else (False if re.search(r"-ц", args) else digits)
+        digits = (
+            True
+            if re.search(r"\+ц", args)
+            else (False if re.search(r"-ц", args) else digits)
+        )
         special = (
-            True if re.search(r"\+с", args) else (False if re.search(r"-с", args) else special)
+            True
+            if re.search(r"\+с", args)
+            else (False if re.search(r"-с", args) else special)
         )
 
         try:
@@ -1068,7 +1145,9 @@ class UserbotManager:
 
             while proc.stdout and not proc.stdout.at_eof():
                 try:
-                    chunk = await asyncio.wait_for(proc.stdout.read(1024), timeout=1.0)
+                    chunk = await asyncio.wait_for(
+                        proc.stdout.read(1024), timeout=1.0
+                    )
                     if not chunk:
                         break
                     decoded = chunk.decode("utf-8", errors="replace")

@@ -25,7 +25,7 @@ dependencies = [
 
 [tool.ruff]
 unsafe-fixes = true
-line-length = 100
+line-length = 85
 indent-width = 4
 target-version = "py312"
 
