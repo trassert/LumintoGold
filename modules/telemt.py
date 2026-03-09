@@ -215,41 +215,64 @@ class TelemtClient:
         self,
         user_req: CreateUserRequest,
         link_mode: str = "tls",
-        retries: int = 5,
-        delay: float = 0.2,
+        retries: int = 10,
+        delay: float = 0.5,
     ) -> tuple[UserInfo, str, str]:
-        """
-        Создает пользователя и получает ссылку, обрабатывая задержку синхронизации конфига.
-        """
 
         created_user, secret = await self.create_user(user_req)
+
         full_user = None
+        raw_data = None
 
         for attempt in range(retries):
             try:
                 if attempt > 0:
                     await asyncio.sleep(delay)
 
-                full_user = await self.get_user(user_req.username)
+                session = await self._get_session()
+                url = f"{self.base_url}{self.api_prefix}/users/{user_req.username}"
+                headers = {"Content-Type": "application/json; charset=utf-8"}
+                if self.auth_token:
+                    headers["Authorization"] = self.auth_token
 
-                link = self._get_link_from_user(full_user, link_mode)
-                if link:
-                    return full_user, secret, link
+                async with session.get(url, headers=headers) as resp:
+                    text = await resp.text()
+                    import json
 
-                if attempt == retries - 1:
-                    raise ValueError(
-                        f"Ссылки типа '{link_mode}' не сгенерированы сервером после {retries} попыток."
+                    response_json = json.loads(text)
+
+                    if not response_json.get("ok"):
+                        raise TelemtAPIError("ok")
+
+                    raw_data = response_json.get("data")
+
+                    print(
+                        f"[DEBUG Attempt {attempt + 1}] Raw links field: {raw_data.get('links')}"
                     )
 
-            except TelemtAPIError as e:
-                if e.status_code == 404 and "User not found" in e.error.message:
-                    continue
-                raise e
+                    full_user = UserInfo(**raw_data)
 
-        raise TelemtAPIError(
-            error=ApiError(
-                code="sync_timeout",
-                message=f"Сервер не увидел созданного пользователя '{user_req.username}' после {retries} попыток. Возможно, проблема с записью конфиг-файла или правами доступа.",
-            ),
-            status_code=408,
+                    links_dict = full_user.links or {}
+                    target_list = links_dict.get(link_mode, [])
+
+                    if target_list:
+                        print(f"[SUCCESS] Link found: {target_list[0]}")
+                        return full_user, secret, target_list[0]
+                    else:
+                        print(
+                            f"[WARN] List empty for mode '{link_mode}'. Available keys: {list(links_dict.keys())}"
+                        )
+
+            except TelemtAPIError as e:
+                if e.status_code == 404:
+                    continue
+                raise
+            except Exception as e:
+                print(f"[ERROR] Parsing error: {e}")
+                if attempt == retries - 1:
+                    raise
+
+        print(f"[CRITICAL] Final raw data received: {raw_data}")
+        raise ValueError(
+            f"Ссылки типа '{link_mode}' не найдены в ответе сервера после {retries} попыток. Проверь config.toml (tls_enabled) и логи выше."
         )
