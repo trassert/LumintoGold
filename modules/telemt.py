@@ -1,3 +1,4 @@
+import asyncio
 import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -211,16 +212,44 @@ class TelemtClient:
         return target_list[0]
 
     async def create_user_with_link(
-        self, user_req: CreateUserRequest, link_mode: str = "tls"
+        self,
+        user_req: CreateUserRequest,
+        link_mode: str = "tls",
+        retries: int = 5,
+        delay: float = 0.2,
     ) -> tuple[UserInfo, str, str]:
+        """
+        Создает пользователя и получает ссылку, обрабатывая задержку синхронизации конфига.
+        """
+
         created_user, secret = await self.create_user(user_req)
-        link = self._get_link_from_user(created_user, link_mode)
-        if not link:
-            full_user = await self.get_user(user_req.username)
-            link = self._get_link_from_user(full_user, link_mode)
-            if not link:
-                raise ValueError(
-                    f"Сервер не сгенерировал ссылки типа '{link_mode}'. "
-                    f"Проверьте config.toml: раздел [general.links], параметр {link_mode}_enabled=true и public_host."
-                )
-        return full_user if not link else created_user, secret, link
+        full_user = None
+
+        for attempt in range(retries):
+            try:
+                if attempt > 0:
+                    await asyncio.sleep(delay)
+
+                full_user = await self.get_user(user_req.username)
+
+                link = self._get_link_from_user(full_user, link_mode)
+                if link:
+                    return full_user, secret, link
+
+                if attempt == retries - 1:
+                    raise ValueError(
+                        f"Ссылки типа '{link_mode}' не сгенерированы сервером после {retries} попыток."
+                    )
+
+            except TelemtAPIError as e:
+                if e.status_code == 404 and "User not found" in e.error.message:
+                    continue
+                raise e
+
+        raise TelemtAPIError(
+            error=ApiError(
+                code="sync_timeout",
+                message=f"Сервер не увидел созданного пользователя '{user_req.username}' после {retries} попыток. Возможно, проблема с записью конфиг-файла или правами доступа.",
+            ),
+            status_code=408,
+        )
