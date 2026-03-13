@@ -30,42 +30,42 @@ class AutoChatManager:
             self._task = None
 
 
-async def _worker(self):
-    "Воркер авточата."
-    current_chats = []
+    async def _worker(self):
+        "Воркер авточата."
+        current_chats = []
 
-    while self._running:
-        chat_ids = await self.settings.get("autochat.chats", [])
-        ad_chat = await self.settings.get("autochat.ad_chat")
-        ad_id = await self.settings.get("autochat.ad_id")
-        delay = await self.settings.get("autochat.delay", 1000)
+        while self._running:
+            chat_ids = await self.settings.get("autochat.chats", [])
+            ad_chat = await self.settings.get("autochat.ad_chat")
+            ad_id = await self.settings.get("autochat.ad_id")
+            delay = await self.settings.get("autochat.delay", 1000)
 
-        if not (chat_ids and ad_chat and ad_id):
-            await asyncio.sleep(60)
-            continue
+            if not (chat_ids and ad_chat and ad_id):
+                await asyncio.sleep(60)
+                continue
 
-        if not current_chats:
-            current_chats = chat_ids.copy()
+            if not current_chats:
+                current_chats = chat_ids.copy()
 
-            logger.info(
-                f"Автопост: доступно чатов - {len(current_chats)}"
-            )
+                logger.info(
+                    f"Автопост: доступно чатов - {len(current_chats)}"
+                )
 
-        random_index = random.randrange(len(current_chats))
-        chat_id = current_chats.pop(random_index)
+            random_index = random.randrange(len(current_chats))
+            chat_id = current_chats.pop(random_index)
 
-        try:
-            await self.client.forward_messages(chat_id, int(ad_id), ad_chat)
-            logger.info(
-                f"Автопост: сообщение отправлено в {chat_id} (ост.: {len(current_chats)})"
-            )
-        except Exception:
-            logger.exception(f"Автопост: ошибка при отправке в {chat_id}")
+            try:
+                await self.client.forward_messages(chat_id, int(ad_id), ad_chat)
+                logger.info(
+                    f"Автопост: сообщение отправлено в {chat_id} (ост.: {len(current_chats)})"
+                )
+            except Exception:
+                logger.exception(f"Автопост: ошибка при отправке в {chat_id}")
 
-        for _ in range(delay):
-            if not self._running:
-                return
-            await asyncio.sleep(1)
+            for _ in range(delay):
+                if not self._running:
+                    return
+                await asyncio.sleep(1)
 
     async def toggle(self, event: Message):
         enabled = not await self.settings.get("autochat.enabled", False)
