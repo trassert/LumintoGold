@@ -66,7 +66,7 @@ class UserbotManager:
             session=str(self.session_path),
             api_id=api_id,
             api_hash=api_hash,
-            use_ipv6=False,
+            use_ipv6=config.config.use_ipv6,
             system_version="4.16.30-vxCUSTOM",
             device_model="LumintoGold",
             system_lang_code="ru",

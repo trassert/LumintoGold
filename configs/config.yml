@@ -6,3 +6,4 @@ url:
 
 battery_path: "/sys/class/power_supply/battery/status"
 wait_delete: 60
+use_ipv6: false
