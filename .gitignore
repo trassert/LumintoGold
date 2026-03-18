@@ -4,6 +4,7 @@ db/*
 notes/*
 
 tokens.yml
+config.yml
 
 **/__pycache__/
 .venv
