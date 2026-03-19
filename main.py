@@ -20,6 +20,7 @@ from telethon.tl.types import (
     PeerUser,
     User,
 )
+from telethon.network.connection import ConnectionTcpObfuscated
 from vkbottle import Bot
 from vkbottle.tools import PhotoWallUploader
 
@@ -73,6 +74,7 @@ class UserbotManager:
             lang_code="ru",
             connection_retries=-1,
             retry_delay=3,
+            connection=ConnectionTcpObfuscated
         )
         self.iris_task = task_gen.Generator(f"{phone}_iris")
         self.online_task = task_gen.Generator(f"{phone}_online")
