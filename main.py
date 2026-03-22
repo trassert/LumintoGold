@@ -11,6 +11,7 @@ import orjson
 from loguru import logger
 from telethon import TelegramClient, errors, events, functions, types
 from telethon.helpers import TotalList
+from telethon.network.connection import ConnectionTcpObfuscated
 from telethon.tl.custom import Message
 from telethon.tl.custom.participantpermissions import ParticipantPermissions
 from telethon.tl.functions.account import UpdateStatusRequest
@@ -20,7 +21,6 @@ from telethon.tl.types import (
     PeerUser,
     User,
 )
-from telethon.network.connection import ConnectionTcpObfuscated
 from vkbottle import Bot
 from vkbottle.tools import PhotoWallUploader
 
