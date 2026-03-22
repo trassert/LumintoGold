@@ -315,6 +315,7 @@ class UserbotManager:
 
     async def telemt_info(self, event: Message):
         users = await self.telemt_client.list_users()
+        logger.info(users)
         info = await self.telemt_client.get_system_info()
         users_list = [
             f"» **{user.username}** - {get_sys.human(user.total_octets)}"
