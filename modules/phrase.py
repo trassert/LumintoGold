@@ -245,9 +245,10 @@ class currency:
 
 class telemt:
     incorrect_username = "❌ Недопустимое имя пользователя."
-    info = (
-        "Версия: {version}, Архитектура: {arch}\n"
-        "Пользователи:\n{users}"
+    info = "Версия: {version}, Архитектура: {arch}\nПользователи:\n{users}"
+    new_user = (
+        "✅ Пользователь: **{user}**\n🔑 Секрет: `{secret}`\n"
+        "🧹 Подмена TLS: {tls}\n"
+        "🛡 Обфускация: {dd}"
     )
-    new_user = "✅ Пользователь: **{user}**\n🔑 Секрет: `{secret}`\n🔗 Ссылка: {link}"
     del_user = "✅ Пользователь **{user}** удалён. Необходима перезагрузка."

@@ -201,46 +201,39 @@ class TelemtClient:
         data, _ = await self._request("DELETE", endpoint)
         return data
 
-    async def create_user_with_link(
-        self, user_req: CreateUserRequest, link_mode: str = "tls"
-    ) -> tuple[UserInfo, str, str]:
+    def get_links_from_user(self, user: UserInfo) -> dict[str, str]:
         """
-        Создает пользователя и сразу возвращает ссылку для подключения.
-
-        :param user_req: Данные пользователя.
-        :param link_mode: Тип ссылки ('classic', 'secure', 'tls'). По умолчанию 'tls' (EE-TLS).
-        :return: кортеж (UserInfo, secret, link_url)
+        Возвращает словарь доступных ссылок: { 'secure': 'tg://...', 'tls': 'tg://...' }.
         """
+        if not user.links:
+            return {}
 
+        result = {}
+
+        if user.links.get("secure"):
+            result["secure"] = user.links["secure"][0]
+        if user.links.get("tls"):
+            result["tls"] = user.links["tls"][0]
+        if user.links.get("classic"):
+            result["classic"] = user.links["classic"][0]
+
+        return result
+
+    async def create_user_with_links(
+        self, user_req: CreateUserRequest
+    ) -> tuple[UserInfo, str, dict[str, str]]:
+        """
+        Создает пользователя и возвращает ВСЕ доступные ссылки.
+
+        :return: кортеж (UserInfo, secret, links_dict), где links_dict = {'secure': ..., 'tls': ...}
+        """
         created_user, secret = await self.create_user(user_req)
 
-        if not created_user.links or not self._get_link_from_user(
-            created_user, link_mode
-        ):
+        links = self.get_links_from_user(created_user)
+
+        if not links:
             full_user = await self.get_user(user_req.username)
-            link = self._get_link_from_user(full_user, link_mode)
-            return full_user, secret, link
+            links = self.get_links_from_user(full_user)
+            return full_user, secret, links
 
-        link = self._get_link_from_user(created_user, link_mode)
-        return created_user, secret, link
-
-    def _get_link_from_user(self, user: UserInfo, mode: str) -> str:
-        """Вспомогательный метод для извлечения ссылки нужного типа."""
-        if not user.links:
-            raise ValueError(
-                "Ссылки не сгенерированы сервером (проверьте конфиг [general.links])"
-            )
-
-        links_map = {
-            "classic": user.links.get("classic", []),
-            "secure": user.links.get("secure", []),
-            "tls": user.links.get("tls", []),
-        }
-
-        target_list = links_map.get(mode)
-        if not target_list:
-            raise ValueError(
-                f"Ссылки типа '{mode}' не найдены. Доступны: {list(links_map.keys())}"
-            )
-
-        return target_list[0]
+        return created_user, secret, links

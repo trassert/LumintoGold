@@ -74,7 +74,7 @@ class UserbotManager:
             lang_code="ru",
             connection_retries=-1,
             retry_delay=3,
-            connection=ConnectionTcpObfuscated
+            connection=ConnectionTcpObfuscated,
         )
         self.iris_task = task_gen.Generator(f"{phone}_iris")
         self.online_task = task_gen.Generator(f"{phone}_online")
@@ -297,12 +297,12 @@ class UserbotManager:
         if not re.match(r"^[a-zA-Z0-9_]{3,32}$", username):
             return await event.edit(phrase.telemt.incorrect_username)
         reg = telemt.CreateUserRequest(username=username)
-        user, secret, link = await self.telemt_client.create_user_with_link(
-            reg, link_mode="tls"
-        )
+        user, secret, links = await self.telemt_client.create_user_with_links(reg)
+        link_dd = links.get("secure", "Недоступно")
+        link_tls = links.get("tls", "Недоступно")
         return await event.edit(
             phrase.telemt.new_user.format(
-                user=user.username, secret=secret, link=link
+                user=user.username, secret=secret, tls=link_tls, dd=link_dd
             )
         )
 
