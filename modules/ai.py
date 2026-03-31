@@ -111,7 +111,7 @@ class GroqChatSession:
                 model=self.model,
                 messages=self._history,
                 temperature=0.7,
-                max_tokens=8192,
+                # max_tokens=8192,
                 top_p=1.0,
             )
             ai_reply = response.choices[0].message.content.strip()
