@@ -42,7 +42,9 @@ class _CyclicIterator:
 class ClickBeeAutomation:
     """Авто-заработок на ClickBee-ботах."""
 
-    def __init__(self, client: TelegramClient, user_settings: "settings.UBSettings") -> None:
+    def __init__(
+        self, client: TelegramClient, user_settings: "settings.UBSettings"
+    ) -> None:
         self.client = client
         self.settings = user_settings
         self._active = False
@@ -171,7 +173,9 @@ class ClickBeeAutomation:
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 async with self.client.conversation(
-                    mybot, timeout=BOT_CONVERSATION_TIMEOUT, total_timeout=BOT_CONVERSATION_TIMEOUT
+                    mybot,
+                    timeout=BOT_CONVERSATION_TIMEOUT,
+                    total_timeout=BOT_CONVERSATION_TIMEOUT,
                 ) as conv:
                     await conv.send_message("/start")
                     response = await asyncio.wait_for(
@@ -185,9 +189,13 @@ class ClickBeeAutomation:
                     logger.info(f"ClickBee: Сообщение переслано от {mybot}")
                     return None
             except TimeoutError:
-                logger.warning(f"ClickBee: {mybot} не ответил (попытка {attempt}/{MAX_RETRIES})")
+                logger.warning(
+                    f"ClickBee: {mybot} не ответил (попытка {attempt}/{MAX_RETRIES})"
+                )
             except Exception as exc:
-                logger.warning(f"ClickBee: Ошибка при работе с {mybot}: {exc} (попытка {attempt})")
+                logger.warning(
+                    f"ClickBee: Ошибка при работе с {mybot}: {exc} (попытка {attempt})"
+                )
             if attempt < MAX_RETRIES:
                 await asyncio.sleep(random.uniform(3, 7))
         logger.info(f"ClickBee: {mybot} недоступен, пропускаю задание")
@@ -202,7 +210,9 @@ class ClickBeeAutomation:
         if channel_link:
             success = await self._join_channel_safe(channel_link)
             if not success:
-                logger.warning(f"ClickBee: Не смог вступить в {channel_link}, ищу Skip")
+                logger.warning(
+                    f"ClickBee: Не смог вступить в {channel_link}, ищу Skip"
+                )
                 clicked = await self._click_button(event, "Skip")
                 if clicked:
                     return
@@ -213,10 +223,14 @@ class ClickBeeAutomation:
 
     async def _handle_error(self, event: Message) -> None:
         self._retry_count += 1
-        logger.warning(f"ClickBee: Ошибка от бота (попытка {self._retry_count}): {event.text[:80]}")
+        logger.warning(
+            f"ClickBee: Ошибка от бота (попытка {self._retry_count}): {event.text[:80]}"
+        )
         if self._retry_count >= MAX_RETRIES:
             self._retry_count = 0
-            logger.info("ClickBee: Превышен лимит ошибок, перехожу к следующей задаче")
+            logger.info(
+                "ClickBee: Превышен лимит ошибок, перехожу к следующей задаче"
+            )
             return await self._next_task(event)
         await asyncio.sleep(random.uniform(5, 10))
         current = self._task_iter.current()
@@ -318,10 +332,16 @@ class ClickBeeAutomation:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 username = match.group(1)
-                if "_bot" in username.lower() or "bot" in username.lower() or "🔗" in text:
+                if (
+                    "_bot" in username.lower()
+                    or "bot" in username.lower()
+                    or "🔗" in text
+                ):
                     return username
 
-        fallback = re.search(r"([a-zA-Z0-9_]{5,32}_bot)(?:[?\s/#)\]]|$)", text, re.IGNORECASE)
+        fallback = re.search(
+            r"([a-zA-Z0-9_]{5,32}_bot)(?:[?\s/#)\]]|$)", text, re.IGNORECASE
+        )
         if fallback:
             return fallback.group(1)
 

@@ -5,7 +5,42 @@ import orjson
 import yaml
 from loguru import logger
 
+from . import pathes
+
 logger.info(f"Загружен модуль {__name__}!")
+
+_default_config = {
+    "url": {
+        "geoapify": "https://api.geoapify.com/v1/geocode/reverse",
+        "openweathermap": "https://api.openweathermap.org/data/2.5/weather?q={city}&appid={apikey}&units=metric&lang=ru",
+        "fp": "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text",
+        "exchangerate": "https://v6.exchangerate-api.com/v6/{token}/latest/{currency}",
+    },
+    "battery_path": "/sys/class/power_supply/battery/status",
+    "wait_delete": 60,
+    "use_ipv6": False,
+}
+
+_default_tokens = {"admins": [79994442266]}
+
+if not pathes.config.exists():
+    logger.warning(f"Конфиг {pathes.config} не найден! Создаю шаблон..")
+    pathes.config.parent.mkdir(exist_ok=True)
+    pathes.config.write_text(
+        yaml.dump(
+            _default_config,
+            allow_unicode=True,
+        )
+    )
+if not pathes.tokens.exists():
+    logger.warning(f"Конфиг {pathes.tokens} не найден! Создаю шаблон..")
+    pathes.tokens.parent.mkdir(exist_ok=True)
+    pathes.tokens.write_text(
+        yaml.dump(
+            _default_tokens,
+            allow_unicode=True,
+        )
+    )
 
 
 class ConfigSection(dict):
@@ -17,7 +52,9 @@ class ConfigSection(dict):
             if isinstance(value, dict):
                 self[key] = ConfigSection(value)
             elif isinstance(value, list):
-                self[key] = [ConfigSection(i) if isinstance(i, dict) else i for i in value]
+                self[key] = [
+                    ConfigSection(i) if isinstance(i, dict) else i for i in value
+                ]
 
     def __getattr__(self, key):
         return self.get(key)
@@ -46,5 +83,7 @@ async def load_client(clients_dir: Path, client_file: str):
         phone = client_file.replace(".json", "")
         return phone, data["api_id"], data["api_hash"]
     except orjson.JSONDecodeError:
-        logger.error(f"{client_file} пуст или неправильно размечен! Отключаем клиента..")
+        logger.error(
+            f"{client_file} пуст или неправильно размечен! Отключаем клиента.."
+        )
         return None
