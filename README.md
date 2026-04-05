@@ -37,6 +37,7 @@
 - `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - Перезапустите консоль
 - `git clone https://github.com/trassert/LumintoGold.git`
+- `cd LumintoGold`
 - `uv sync`
 
 Запуск: `uv run main.py`  
@@ -47,6 +48,7 @@
 - Перезапустите консоль
 - `winget install --id Git.Git -e --source winget`
 - `git clone https://github.com/trassert/LumintoGold.git`
+- `cd LumintoGold`
 - `uv sync`
 
 Запуск: `uv run main.py`  
