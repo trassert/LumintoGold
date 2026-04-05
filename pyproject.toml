@@ -19,7 +19,7 @@ dependencies = [
     "pyyaml>=6.0.3",
     "ruff>=0.14.14",
     "telethon>=1.42.0",
-    "uvloop>=0.22.1",
+    "uvloop>=0.22.1; sys_platform != 'win32'",
     "vkbottle>=4.6.2",
 ]
 
