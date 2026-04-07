@@ -72,8 +72,8 @@ class ConfigManager:
         return getattr(self._data, key)
 
 
-config = ConfigManager(Path("configs") / "config.yml")
-tokens = ConfigManager(Path("configs") / "tokens.yml")
+config = ConfigManager(pathes.config)
+tokens = ConfigManager(pathes.tokens)
 
 
 async def load_client(clients_dir: Path, client_file: str):
