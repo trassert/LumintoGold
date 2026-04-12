@@ -22,14 +22,25 @@ class UserInfo:
     recent_unique_ips_list: list[str] = field(default_factory=list)
     links: dict | None = None
 
-    def __post_init__(self):
-        """Гарантируем, что списки всегда являются списками, даже если API вернет null"""
-        if self.active_unique_ips_list is None:
-            self.active_unique_ips_list = []
-        if self.recent_unique_ips_list is None:
-            self.recent_unique_ips_list = []
-        if self.links is None:
-            self.links = {}
+    def __init__(self, **kwargs):
+        self.username = kwargs.get("username")
+        self.current_connections = kwargs.get("current_connections", 0)
+        self.total_octets = kwargs.get("total_octets", 0)
+        self.user_ad_tag = kwargs.get("user_ad_tag")
+        self.max_tcp_conns = kwargs.get("max_tcp_conns")
+        self.expiration_rfc3339 = kwargs.get("expiration_rfc3339")
+        self.data_quota_bytes = kwargs.get("data_quota_bytes")
+        self.max_unique_ips = kwargs.get("max_unique_ips")
+        self.active_unique_ips = kwargs.get("active_unique_ips", 0)
+        self.recent_unique_ips = kwargs.get("recent_unique_ips", 0)
+        self.active_unique_ips_list = kwargs.get("active_unique_ips_list") or []
+        self.recent_unique_ips_list = kwargs.get("recent_unique_ips_list") or []
+        self.links = kwargs.get("links")
+
+    @staticmethod
+    def from_dict(data: dict) -> "UserInfo":
+        """Безопасное создание объекта из словаря API"""
+        return UserInfo(**data)
 
 
 @dataclass
@@ -64,11 +75,6 @@ class TelemtClient:
         auth_token: str | None = None,
         whitelist_check: bool = True,
     ):
-        """
-        Инициализация клиента.
-        :param base_url: URL API, например 'http://127.0.0.1:9091'
-        :param auth_token: Значение для заголовка Authorization (если настроено в конфиге сервера)
-        """
         self.base_url = base_url.rstrip("/")
         self.auth_token = auth_token
         self.session: ClientSession | None = None
@@ -130,110 +136,64 @@ class TelemtClient:
             raise Exception(f"Network error: {e}")
 
     async def health_check(self) -> dict:
-        """Проверка статуса API (/v1/health)"""
         data, _ = await self._request("GET", "/health")
         return data
 
     async def get_system_info(self) -> dict:
-        """Получение информации о системе (/v1/system/info)"""
         data, _ = await self._request("GET", "/system/info")
         return data
 
     async def list_users(self) -> list[UserInfo]:
-        """
-        Получить список всех пользователей (/v1/users).
-        Возвращает список объектов UserInfo.
-        """
         data, _ = await self._request("GET", "/users")
         users = []
         for user_dict in data:
-            try:
-                user_obj = UserInfo(**user_dict)
-                users.append(user_obj)
-            except TypeError as e:
-                print(
-                    f"⚠️ Предупреждение: Пропущено неизвестное поле у пользователя {user_dict.get('username')}: {e}"
-                )
-                safe_data = {
-                    k: v
-                    for k, v in user_dict.items()
-                    if k in UserInfo.__dataclass_fields__
-                }
-                users.append(UserInfo(**safe_data))
+            users.append(UserInfo.from_dict(user_dict))
         return users
 
     async def get_user(self, username: str) -> UserInfo:
-        """Получить конкретного пользователя (/v1/users/{username})"""
         endpoint = f"/users/{username}"
         data, _ = await self._request("GET", endpoint)
-        return UserInfo(**data)
+        return UserInfo.from_dict(data)
 
     async def create_user(self, user_req: CreateUserRequest) -> tuple[UserInfo, str]:
-        """
-        Создать нового пользователя (/v1/users POST).
-        Возвращает (UserInfo, secret).
-        Примечание: В ответе сервера поле secret лежит отдельно от объекта user.
-        """
         payload = {k: v for k, v in asdict(user_req).items() if v is not None}
         data, revision = await self._request("POST", "/users", payload=payload)
         user_data = data.get("user")
         secret = data.get("secret")
-        return UserInfo(**user_data), secret
+        return UserInfo.from_dict(user_data), secret
 
     async def update_user(self, username: str, **kwargs) -> UserInfo:
-        """
-        Обновить пользователя (PATCH /v1/users/{username}).
-        kwargs: любые поля из PatchUserRequest (secret, max_tcp_conns, etc.)
-        """
         endpoint = f"/users/{username}"
         payload = {k: v for k, v in kwargs.items() if v is not None}
         if not payload:
             raise ValueError("Нет полей для обновления")
         data, _ = await self._request("PATCH", endpoint, payload=payload)
-        return UserInfo(**data)
+        return UserInfo.from_dict(data)
 
     async def delete_user(self, username: str) -> str:
-        """
-        Удалить пользователя (/v1/users/{username} DELETE).
-        Возвращает имя удаленного пользователя.
-        """
         endpoint = f"/users/{username}"
         data, _ = await self._request("DELETE", endpoint)
         return data
 
     def get_links_from_user(self, user: UserInfo) -> dict[str, str]:
-        """
-        Возвращает словарь доступных ссылок: { 'secure': 'tg://...', 'tls': 'tg://...' }.
-        """
         if not user.links:
             return {}
-
         result = {}
-
         if user.links.get("secure"):
             result["secure"] = user.links["secure"][0]
         if user.links.get("tls"):
             result["tls"] = user.links["tls"][0]
         if user.links.get("classic"):
             result["classic"] = user.links["classic"][0]
-
         return result
 
     async def create_user_with_links(
         self, user_req: CreateUserRequest
     ) -> tuple[UserInfo, str, dict[str, str]]:
-        """
-        Создает пользователя и возвращает ВСЕ доступные ссылки.
-
-        :return: кортеж (UserInfo, secret, links_dict), где links_dict = {'secure': ..., 'tls': ...}
-        """
         created_user, secret = await self.create_user(user_req)
-
         links = self.get_links_from_user(created_user)
-
         if not links:
             full_user = await self.get_user(user_req.username)
             links = self.get_links_from_user(full_user)
             return full_user, secret, links
-
         return created_user, secret, links
