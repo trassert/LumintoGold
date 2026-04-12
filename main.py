@@ -155,18 +155,17 @@ class UserbotManager:
                 func=self.chk_battery, task_param=15, unit="seconds"
             )
 
-        if await self.settings.get("telemt.token"):
-            self.telemt_client = telemt.TelemtClient(
-                base_url=await self.settings.get("telemt.url"),
-                auth_token=await self.settings.get("telemt.token"),
+        self.telemt_client = telemt.TelemtClient(
+            base_url=await self.settings.get("telemt.url"),
+            auth_token=await self.settings.get("telemt.token"),
+        )
+        try:
+            await self.telemt_client.health_check()
+            logger.info("Успешно подключился к Telemt API")
+        except Exception:
+            logger.warning(
+                "Не удалось подключиться к Telemt API. Проверьте URL и токен."
             )
-            try:
-                await self.telemt_client.health_check()
-                logger.info("Успешно подключился к Telemt API")
-            except Exception:
-                logger.warning(
-                    "Не удалось подключиться к Telemt API. Проверьте URL и токен."
-                )
 
     def _register_handlers(self):
         self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)

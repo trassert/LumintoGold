@@ -46,7 +46,7 @@ default = {
     "default.currency": "RUB",
     "token.exchangerate": "",
     "telemt.url": "http://127.0.0.1:9091",
-    "telemt.token": None,
+    "telemt.token": "",
 }
 
 
