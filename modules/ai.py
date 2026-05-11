@@ -109,10 +109,13 @@ class GroqChatSession:
             self._history.append({"role": "user", "content": user_message})
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=self._history,
-                temperature=0.7,
-                # max_tokens=8192,
-                top_p=1.0,
+                messages=self.history,
+                temperature=1,
+                max_completion_tokens=2048,
+                top_p=1,
+                stream=True,
+                stop=None,
+                tools=[{"type": "browser_search"}],
             )
             ai_reply = response.choices[0].message.content.strip()
         except Exception as e:
