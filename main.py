@@ -774,7 +774,7 @@ class UserbotManager:
     async def ai_proxy(self, event: Message):
         arg = event.pattern_match.group(1).strip()
         self.ai_client.proxy = arg
-        await self.settiъngs.set("groq.proxy", arg)
+        await self.settings.set("groq.proxy", arg)
         self.ai_client.init_client()
         return await event.edit(phrase.voicerec.proxy)
 
