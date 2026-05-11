@@ -202,6 +202,7 @@ class UserbotManager:
 
         self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
         self.client.on(d.cmd(r"\.иипрокси (.+)"))(self.ai_proxy)
+        self.client.on(d.cmd(r"\.иипрокси$"))(self.ai_proxy_delete)
         self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
         self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
 
@@ -773,9 +774,15 @@ class UserbotManager:
     async def ai_proxy(self, event: Message):
         arg = event.pattern_match.group(1).strip()
         self.ai_client.proxy = arg
-        await self.settings.set("groq.proxy", arg)
+        await self.settiъngs.set("groq.proxy", arg)
         self.ai_client.init_client()
         return await event.edit(phrase.voicerec.proxy)
+
+    async def ai_proxy_delete(self, event: Message):
+        self.ai_client.proxy = None
+        await self.settings.set("groq.proxy", None)
+        self.ai_client.init_client()
+        return await event.edit(phrase.voicerec.delete_proxy)
 
     async def ai_token(self, event: Message):
         arg = event.pattern_match.group(1).strip()

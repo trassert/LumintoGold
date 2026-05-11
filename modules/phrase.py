@@ -4,6 +4,7 @@ class voicerec:
     not_recognized = "❌ : Не удалось распознать речь."
     error = "❌ : Ошибка: {error}"
     proxy = "🚀 : Groq прокси установлен."
+    delete_proxy = "🚀 : Groq прокси удалён."
     token = "🚀 : Groq токен установлен."
 
 
