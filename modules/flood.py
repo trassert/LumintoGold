@@ -16,11 +16,17 @@ logger.info(f"Загружен модуль {__name__}!")
 
 
 class FloodController:
-    def __init__(self, client: "TelegramClient", settings: "settings.UBSettings"):
+    def __init__(
+        self, client: "TelegramClient", settings: "settings.UBSettings"
+    ):
         self.client = client
         self.settings = settings
         self._flood_state: dict[str, list[float]] = {}
         self._flood_rules: dict[int, dict[str, dict]] = {}
+
+    @staticmethod
+    def _is_album_photo_message(event: Message) -> bool:
+        return bool(getattr(event, "grouped_id", None))
 
     async def load_rules(self, chat_id: int):
         if chat_id not in self._flood_rules:
@@ -36,6 +42,8 @@ class FloodController:
     async def monitor(self, event: Message):
         if event.is_private or not event.sender_id:
             return
+        if self._is_album_photo_message(event):
+            return
         chat_id = event.chat_id
         await self.load_rules(chat_id)
         rules = self._flood_rules[chat_id]
@@ -43,24 +51,38 @@ class FloodController:
 
         if rules["stickers"] and isinstance(event.media, MessageMediaDocument):
             doc = event.media.document
-            if doc and any(isinstance(a, DocumentAttributeSticker) for a in (doc.attributes or [])):
-                await self._check_flood(event, chat_id, "stickers", rules["stickers"], now)
+            if doc and any(
+                isinstance(a, DocumentAttributeSticker)
+                for a in (doc.attributes or [])
+            ):
+                await self._check_flood(
+                    event, chat_id, "stickers", rules["stickers"], now
+                )
 
         if rules["gifs"] and isinstance(event.media, MessageMediaDocument):
             doc = event.media.document
             if doc:
                 is_gif = any(
                     isinstance(a, DocumentAttributeAnimated)
-                    or (isinstance(a, DocumentAttributeVideo) and a.supports_streaming)
+                    or (
+                        isinstance(a, DocumentAttributeVideo)
+                        and a.supports_streaming
+                    )
                     for a in (doc.attributes or [])
                 )
                 if is_gif:
-                    await self._check_flood(event, chat_id, "gifs", rules["gifs"], now)
+                    await self._check_flood(
+                        event, chat_id, "gifs", rules["gifs"], now
+                    )
 
         if rules["messages"] and event.text and not event.media:
-            await self._check_flood(event, chat_id, "messages", rules["messages"], now)
+            await self._check_flood(
+                event, chat_id, "messages", rules["messages"], now
+            )
 
-    async def _check_flood(self, event, chat_id: int, flood_type: str, rule: dict, now: float):
+    async def _check_flood(
+        self, event, chat_id: int, flood_type: str, rule: dict, now: float
+    ):
         limit = rule.get("limit", 0)
         window = rule.get("window", 0)
         if limit <= 0 or window <= 0:
@@ -85,20 +107,27 @@ class FloodController:
             limit = int(event.pattern_match.group(1))
             window = int(event.pattern_match.group(2))
         except (ValueError, IndexError):
-            return await event.edit("❌ Неверный формат: `.флуд <лимит> <окно>`")
+            return await event.edit(
+                "❌ Неверный формат: `.флуд <лимит> <окно>`"
+            )
         chat_id = event.chat_id
         key = f"flood.{rule_type}.{chat_id}"
         await self.settings.set(key, {"limit": limit, "window": window})
         if chat_id not in self._flood_rules:
             self._flood_rules[chat_id] = {}
-        self._flood_rules[chat_id][rule_type] = {"limit": limit, "window": window}
+        self._flood_rules[chat_id][rule_type] = {
+            "limit": limit,
+            "window": window,
+        }
 
         phrase_map = {
             "stickers": phrase.flood.set_stickers,
             "gifs": phrase.flood.set_gifs,
             "messages": phrase.flood.set_messages,
         }
-        await event.edit(phrase_map[rule_type].format(limit=limit, window=window))
+        await event.edit(
+            phrase_map[rule_type].format(limit=limit, window=window)
+        )
         return None
 
     async def unset_rule(self, event: Message, rule_type: str):
