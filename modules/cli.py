@@ -27,7 +27,9 @@ def loguru_sink(message: str) -> None:
 
 
 class CLI:
-    def __init__(self, managers, manager_tasks, launch_manager_func, save_config_func):
+    def __init__(
+        self, managers, manager_tasks, launch_manager_func, save_config_func
+    ):
         self._managers = managers
         self._tasks = manager_tasks
         self._launch = launch_manager_func
@@ -40,16 +42,22 @@ class CLI:
             sys.stdout.flush()
 
     async def _readline(self) -> str:
-        return await asyncio.get_running_loop().run_in_executor(None, input, _PROMPT)
+        return await asyncio.get_running_loop().run_in_executor(
+            None, input, _PROMPT
+        )
 
     async def _ask(self, prompt: str) -> str:
-        return await asyncio.get_running_loop().run_in_executor(None, input, prompt)
+        return await asyncio.get_running_loop().run_in_executor(
+            None, input, prompt
+        )
 
     async def _cmd_clients(self):
         if not self._managers:
             self._print("No active clients.")
             return
-        self._print("Active clients:\n" + "\n".join(f"  {p}" for p in self._managers))
+        self._print(
+            "Active clients:\n" + "\n".join(f"  {p}" for p in self._managers)
+        )
 
     async def _cmd_ping(self):
         self._print("pong")
@@ -68,7 +76,11 @@ class CLI:
             return
         await self._save_config(phone, api_id, api_hash)
         launched = await self._launch(phone, api_id, api_hash)
-        self._print(f"Client {phone} started." if launched else f"Failed to start {phone}.")
+        self._print(
+            f"Client {phone} started."
+            if launched
+            else f"Failed to start {phone}."
+        )
 
     async def _cmd_stop(self, phone: str):
         if not phone:
@@ -130,11 +142,21 @@ class CLI:
         import signal
 
         loop = asyncio.get_running_loop()
-        loop.add_signal_handler(signal.SIGINT, lambda: loop.create_task(self._shutdown()))
-        while True:
+        try:
+            loop.add_signal_handler(
+                signal.SIGINT,
+                lambda: asyncio.create_task(self._shutdown()),
+            )
+        except NotImplementedError:
+            pass
+
+        while not self._shutting_down:
             try:
                 line = await self._readline()
             except EOFError:
+                break
+            except KeyboardInterrupt:
+                await self._shutdown()
                 break
             if self._shutting_down:
                 break
@@ -149,10 +171,3 @@ class CLI:
         self._shutting_down = True
         await self._cmd_stopall()
         self._print("Bye.")
-        for task in asyncio.all_tasks():
-            if task is not asyncio.current_task():
-                task.cancel()
-        import os
-        import signal
-
-        os.kill(os.getpid(), signal.SIGTERM)
