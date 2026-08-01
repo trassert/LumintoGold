@@ -388,13 +388,13 @@ class UserbotManager:
                                 peer=chat, user_id=uid, approved=False
                             )
                         )
-                        rejected += 1
-                        if rejected % 5 == 0:
-                            await event.edit(
-                                phrase.clear.reject.format(count=rejected)
-                            )
-                    except Exception as e:
-                        logger.error(f"Не могу отклонить заявку: {e}")
+                    except Exception:
+                        pass
+                    rejected += 1
+                    if rejected % 5 == 0:
+                        await event.edit(
+                            phrase.clear.reject.format(count=rejected)
+                        )
                 await asyncio.sleep(await self.settings.get("typing.delay"))
         except Exception as e:
             logger.error(f"Не удалось проверить заявки: {e}")
