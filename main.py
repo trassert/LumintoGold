@@ -369,7 +369,13 @@ class UserbotManager:
 
         try:
             invite_importers = await self.client(
-                GetChatInviteImportersRequest(peer=chat, limit=1000)
+                GetChatInviteImportersRequest(
+                    peer=chat,
+                    requested=True,
+                    offset_date=None,
+                    offset_user=types.InputUserEmpty(),
+                    limit=1000,
+                )
             )
             for importer in invite_importers.importers:
                 user = importer.user_id
