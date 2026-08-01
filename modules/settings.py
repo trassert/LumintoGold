@@ -5,7 +5,7 @@ import aiofiles
 import orjson
 from loguru import logger
 
-from . import pathes
+from . import config, pathes
 
 logger.info(f"Загружен модуль {__name__}!")
 
@@ -20,8 +20,8 @@ default = {
     "ai.model": None,
     "use.ipv6": False,
     "auto.online": False,
-    "token.geoapify": "",
-    "token.openweathermap": "",
+    "token.geoapify": config.tokens.default.geoapify,
+    "token.openweathermap": config.tokens.default.openweathermap,
     "flood.msg": "Варн\nФлуд",
     "autochat.chats": [],
     "autochat.ad_chat": -1002783775634,
@@ -38,13 +38,13 @@ default = {
     "battery.msg_no": "❌ : Нет зарядки!",
     "battery.msg_yes": "✅ : Зарядка восстановлена.",
     "groq.proxy": None,
-    "groq.token": None,
+    "token.groq": config.tokens.default.groq,
     "clickbee.enabled": False,
     "clickbee.sleep_between": 300,
     "clickbee.username": "ClickBeeDOGEBot",
     "clickbee.site_wait": 120,
     "default.currency": "RUB",
-    "token.exchangerate": "",
+    "token.exchangerate": config.tokens.default.exchangerate,
     "telemt.url": "http://127.0.0.1:9091",
     "telemt.token": "",
 }

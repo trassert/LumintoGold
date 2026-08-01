@@ -16,9 +16,7 @@ logger.info(f"Загружен модуль {__name__}!")
 
 
 class FloodController:
-    def __init__(
-        self, client: "TelegramClient", settings: "settings.UBSettings"
-    ):
+    def __init__(self, client: "TelegramClient", settings: "settings.UBSettings"):
         self.client = client
         self.settings = settings
         self._flood_state: dict[str, list[float]] = {}
@@ -107,9 +105,7 @@ class FloodController:
             limit = int(event.pattern_match.group(1))
             window = int(event.pattern_match.group(2))
         except (ValueError, IndexError):
-            return await event.edit(
-                "❌ Неверный формат: `.флуд <лимит> <окно>`"
-            )
+            return await event.edit("❌ Неверный формат: `.флуд <лимит> <окно>`")
         chat_id = event.chat_id
         key = f"flood.{rule_type}.{chat_id}"
         await self.settings.set(key, {"limit": limit, "window": window})
@@ -125,9 +121,7 @@ class FloodController:
             "gifs": phrase.flood.set_gifs,
             "messages": phrase.flood.set_messages,
         }
-        await event.edit(
-            phrase_map[rule_type].format(limit=limit, window=window)
-        )
+        await event.edit(phrase_map[rule_type].format(limit=limit, window=window))
         return None
 
     async def unset_rule(self, event: Message, rule_type: str):

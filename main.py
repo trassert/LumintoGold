@@ -95,7 +95,7 @@ class UserbotManager:
         self.client.use_ipv6 = use_ipv6
         try:
             self.ai_client = ai.GroqClient(
-                api_key=await self.settings.get("groq.token"),
+                api_key=await self.settings.get("token.groq"),
                 proxy=await self.settings.get("groq.proxy"),
                 chat_model=await self.settings.get("ai.model"),
             )
@@ -787,7 +787,7 @@ class UserbotManager:
     async def ai_token(self, event: Message):
         arg = event.pattern_match.group(1).strip()
         self.ai_client.api_key = arg
-        await self.settings.set("groq.token", arg)
+        await self.settings.set("token.groq", arg)
         self.ai_client.init_client()
         return await event.edit(phrase.voicerec.token)
 
@@ -1060,7 +1060,7 @@ class UserbotManager:
         await event.edit(phrase.ai.clear)
 
     async def ai_resp(self, event: Message):
-        if not await self.settings.get("groq.token"):
+        if not await self.settings.get("token.groq"):
             return await event.edit(phrase.ai.no_token)
         text = event.pattern_match.group(1).strip()
         try:

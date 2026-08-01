@@ -80,7 +80,9 @@ async def check_proxy_ping(proxy_type: str, ipport: str) -> float | None:
         if p_type == "http":
             proxy_url = f"http://{ipport}"
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(random.choice(test_urls), proxy=proxy_url) as resp:
+                async with session.get(
+                    random.choice(test_urls), proxy=proxy_url
+                ) as resp:
                     if resp.status != 200:
                         return None
         else:
@@ -88,9 +90,13 @@ async def check_proxy_ping(proxy_type: str, ipport: str) -> float | None:
             if p_type not in p_map:
                 return None
 
-            connector = ProxyConnector(proxy_type=p_map[p_type], host=host, port=port, rdns=True)
+            connector = ProxyConnector(
+                proxy_type=p_map[p_type], host=host, port=port, rdns=True
+            )
             try:
-                async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                async with aiohttp.ClientSession(
+                    connector=connector, timeout=timeout
+                ) as session:
                     async with session.get(random.choice(test_urls)) as resp:
                         if resp.status != 200:
                             return None
@@ -113,7 +119,9 @@ async def get_proxy_list() -> list[str]:
             ) as response:
                 response.raise_for_status()
                 return [
-                    line.strip() for line in (await response.text()).splitlines() if line.strip()
+                    line.strip()
+                    for line in (await response.text()).splitlines()
+                    if line.strip()
                 ]
     except Exception:
         logger.trace("Ошибка при получении списка прокси")

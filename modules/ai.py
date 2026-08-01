@@ -46,7 +46,9 @@ class GroqClient:
     def chat(self, chat_id: str) -> GroqChatSession:
         """Создаёт сессию чата для конкретного chat_id."""
         if self.client is None:
-            raise RuntimeError("Groq client not initialized. Call init_client() first.")
+            raise RuntimeError(
+                "Groq client not initialized. Call init_client() first."
+            )
         return GroqChatSession(
             chat_id=chat_id,
             client=self.client,
@@ -57,7 +59,9 @@ class GroqClient:
     async def transcribe_voice(self, number: str, voice_id: str) -> str:
         """Транскрибирует OGG-файл через Whisper."""
         if self.client is None:
-            raise RuntimeError("Groq client not initialized. Call init_client() first.")
+            raise RuntimeError(
+                "Groq client not initialized. Call init_client() first."
+            )
         voice_path = pathes.voice / number / f"voice_{voice_id}.ogg"
         if not voice_path.exists():
             raise FileNotFoundError(f"Voice file not found: {voice_path}")

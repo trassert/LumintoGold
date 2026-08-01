@@ -28,7 +28,9 @@ class Notes:
             raise ValueError("Invalid name")
         return name.lower()
 
-    async def add(self, name: str, text: str, client: TelegramClient, media=None) -> bool:
+    async def add(
+        self, name: str, text: str, client: TelegramClient, media=None
+    ) -> bool:
         try:
             norm_name = self._normalize_name(name)
             await self._ensure_user_dir()

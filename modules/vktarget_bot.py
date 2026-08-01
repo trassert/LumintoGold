@@ -79,7 +79,8 @@ class VKActions:
             owner_id, item_id, l_type = self._extract_ids_from_url(url)
             self.logger.info(f"Лайк: owner={owner_id}, id={item_id}, type={l_type}")
             resp = await self.api.request(
-                "likes.add", data={"type": l_type, "owner_id": owner_id, "item_id": item_id}
+                "likes.add",
+                data={"type": l_type, "owner_id": owner_id, "item_id": item_id},
             )
             if resp.get("response") and resp["response"].get("likes"):
                 return TaskResult(True, "like", "Успешно лайкнуто")
@@ -95,7 +96,9 @@ class VKActions:
             group_id = (
                 match.group(2)
                 if match
-                else (re.findall(r"\d+", url)[-1] if re.findall(r"\d+", url) else "0")
+                else (
+                    re.findall(r"\d+", url)[-1] if re.findall(r"\d+", url) else "0"
+                )
             )
             self.logger.info(f"Вступление в группу: {group_id}")
             resp = await self.api.request("groups.join", data={"group_id": group_id})
@@ -116,7 +119,9 @@ class VKActions:
             user_id = (
                 match.group(1)
                 if match
-                else (re.findall(r"\d+", url)[-1] if re.findall(r"\d+", url) else "0")
+                else (
+                    re.findall(r"\d+", url)[-1] if re.findall(r"\d+", url) else "0"
+                )
             )
             self.logger.info(f"Добавление в друзья: {user_id}")
             resp = await self.api.request("friends.add", data={"user_id": user_id})
@@ -130,7 +135,9 @@ class VKActions:
     async def subscribe_channel(self, url: str) -> TaskResult:
         return await self.join_group(url)
 
-    async def subscribe_telegram_channel(self, url: str, client: TelegramClient) -> TaskResult:
+    async def subscribe_telegram_channel(
+        self, url: str, client: TelegramClient
+    ) -> TaskResult:
         """Подписка на канал/чат Telegram (включая приватные по ссылке +)."""
         await self._human_delay(2.0, 4.0)
         try:
@@ -141,18 +148,25 @@ class VKActions:
                 await client(ImportChatInviteRequest(invite_hash))
             else:
                 username = (
-                    url.replace("https://t.me/", "").replace("http://t.me/", "").split("/")[0]
+                    url.replace("https://t.me/", "")
+                    .replace("http://t.me/", "")
+                    .split("/")[0]
                 )
                 await client(JoinChannelRequest(username))
             return TaskResult(True, "tg_join", "Успешно подписан на TG")
         except Exception as e:
             err_str = str(e)
-            if "USER_ALREADY_PARTICIPANT" in err_str or "already a member" in err_str.lower():
+            if (
+                "USER_ALREADY_PARTICIPANT" in err_str
+                or "already a member" in err_str.lower()
+            ):
                 return TaskResult(True, "tg_join", "Уже подписан на TG")
             self.logger.error(f"TG: Ошибка подписки: {e}")
             return TaskResult(False, "tg_join", str(e))
 
-    async def view_telegram_post(self, url: str, client: TelegramClient) -> TaskResult:
+    async def view_telegram_post(
+        self, url: str, client: TelegramClient
+    ) -> TaskResult:
         """Просмотр записи в Telegram (эмуляция открытия)."""
         await self._human_delay(1.5, 3.0)
         try:
@@ -176,12 +190,16 @@ class VKActions:
                 return TaskResult(True, "tg_view", "Пост просмотрен")
             return TaskResult(False, "tg_view", "Не удалось получить сущность")
         except Exception as e:
-            self.logger.warning(f"TG: Нюанс при просмотре (возможно уже засчитано): {e}")
+            self.logger.warning(
+                f"TG: Нюанс при просмотре (возможно уже засчитано): {e}"
+            )
             return TaskResult(True, "tg_view", "Попытка просмотра выполнена")
 
 
 class VKTargetRefactored:
-    def __init__(self, client: TelegramClient, settings: SettingsType, logger: LoggerType) -> None:
+    def __init__(
+        self, client: TelegramClient, settings: SettingsType, logger: LoggerType
+    ) -> None:
         self.client = client
         self.settings = settings
         self.logger = logger
@@ -202,7 +220,9 @@ class VKTargetRefactored:
         self._active = True
 
         @self.client.on(
-            events.NewMessage(chats="vktarget_bot", func=lambda e: e.text and not e.out)
+            events.NewMessage(
+                chats="vktarget_bot", func=lambda e: e.text and not e.out
+            )
         )
         async def handler(event: Message) -> None:
             async with self._lock:
@@ -312,10 +332,17 @@ class VKTargetRefactored:
             if self._active and not self._lock.locked():
                 await self.client.send_message("vktarget_bot", "Задания")
         except ValueError:
-            self.logger.warning(f"Кнопка '{btn_text}' не найдена. Возможно, сообщение обновилось.")
+            self.logger.warning(
+                f"Кнопка '{btn_text}' не найдена. Возможно, сообщение обновилось."
+            )
         except Exception as e:
-            if "GetBotCallbackAnswerRequest" in str(e) or "invalid" in str(e).lower():
-                self.logger.warning(f"Сообщение устарело, пропускаем клик. Ошибка: {e}")
+            if (
+                "GetBotCallbackAnswerRequest" in str(e)
+                or "invalid" in str(e).lower()
+            ):
+                self.logger.warning(
+                    f"Сообщение устарело, пропускаем клик. Ошибка: {e}"
+                )
             else:
                 self.logger.error(f"Ошибка клика: {e}")
             await asyncio.sleep(2)

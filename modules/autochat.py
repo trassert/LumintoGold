@@ -29,7 +29,6 @@ class AutoChatManager:
             await self._task
             self._task = None
 
-
     async def _worker(self):
         "Воркер авточата."
         current_chats = []
@@ -47,9 +46,7 @@ class AutoChatManager:
             if not current_chats:
                 current_chats = chat_ids.copy()
 
-                logger.info(
-                    f"Автопост: доступно чатов - {len(current_chats)}"
-                )
+                logger.info(f"Автопост: доступно чатов - {len(current_chats)}")
 
             random_index = random.randrange(len(current_chats))
             chat_id = current_chats.pop(random_index)

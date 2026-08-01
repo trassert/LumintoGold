@@ -1,0 +1,8 @@
+admins:
+  - 79994442266
+
+default:
+  geoapify: ""
+  openweathermap: ""
+  groq: null
+  exchangerate: ""
