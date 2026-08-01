@@ -380,7 +380,7 @@ class UserbotManager:
         for importer in invite_importers.importers:
             user = importer.user_id
             logger.info(f"Проверяю заявку от пользователя: {user}")
-            if user and user.deleted:
+            if user and importer.deleted:
                 # try:
                 await self.client(
                     HideChatJoinRequestRequest(
