@@ -380,7 +380,6 @@ class UserbotManager:
             for importer in invite_importers.importers:
                 uid = importer.user_id
                 user = await self.client.get_entity(uid)
-                logger.info(f"Проверяю заявку от пользователя: {uid}")
                 if uid and user.deleted:
                     try:
                         await self.client(
