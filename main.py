@@ -111,7 +111,7 @@ class UserbotManager:
             self.client.add_event_handler(self.block_voice, events.NewMessage())
 
         if await self.settings.get("luminto.reactions"):
-            for chat in ("lumintoch", "trassert_ch"):
+            for chat in ("lumintoch", "luminto_faq"):
                 self.client.add_event_handler(
                     self.reactions, events.NewMessage(chats=chat)
                 )
