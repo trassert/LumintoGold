@@ -21,7 +21,15 @@ _default_config = {
     "use_ipv6": False,
 }
 
-_default_tokens = {"admins": [79994442266]}
+_default_tokens = {
+    "admins": [79994442266],
+    "default": {
+        "geoapify": "",
+        "openweathermap": "",
+        "groq": None,
+        "exchangerate": "",
+    },
+}
 
 if not pathes.config.exists():
     logger.warning(f"Конфиг {pathes.config} не найден! Создаю шаблон..")
@@ -53,7 +61,8 @@ class ConfigSection(dict):
                 self[key] = ConfigSection(value)
             elif isinstance(value, list):
                 self[key] = [
-                    ConfigSection(i) if isinstance(i, dict) else i for i in value
+                    ConfigSection(i) if isinstance(i, dict) else i
+                    for i in value
                 ]
 
     def __getattr__(self, key):
