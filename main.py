@@ -366,6 +366,32 @@ class UserbotManager:
         kicked = 0
         unbanned = 0
         rejected = 0
+
+        try:
+            invite_importers = await self.client(
+                GetChatInviteImportersRequest(peer=chat, limit=1000)
+            )
+            for importer in invite_importers.importers:
+                user = importer.user_id
+                logger.info(f"Проверяю заявку от пользователя: {user}")
+                if user and user.deleted:
+                    try:
+                        await self.client(
+                            HideChatJoinRequestRequest(
+                                peer=chat, user_id=user.id, approved=False
+                            )
+                        )
+                        rejected += 1
+                        if rejected % 5 == 0:
+                            await event.edit(
+                                phrase.clear.reject.format(count=rejected)
+                            )
+                    except Exception as e:
+                        logger.trace(f"Не могу отклонить заявку: {e}")
+                await asyncio.sleep(await self.settings.get("typing.delay"))
+        except Exception as e:
+            logger.trace(f"Не удалось проверить заявки: {e}")
+
         async for user in self.client.iter_participants(chat):
             if user.deleted:
                 try:
@@ -393,29 +419,6 @@ class UserbotManager:
                 except Exception:
                     logger.trace("Не могу вынести из бана участника")
             await asyncio.sleep(await self.settings.get("typing.delay"))
-        try:
-            invite_importers = await self.client(
-                GetChatInviteImportersRequest(peer=chat, limit=100)
-            )
-            for importer in invite_importers.importers:
-                user = importer.user_id
-                if user and user.deleted:
-                    try:
-                        await self.client(
-                            HideChatJoinRequestRequest(
-                                peer=chat, user_id=user.id, approved=False
-                            )
-                        )
-                        rejected += 1
-                        if rejected % 5 == 0:
-                            await event.edit(
-                                phrase.clear.reject.format(count=rejected)
-                            )
-                    except Exception as e:
-                        logger.trace(f"Не могу отклонить заявку: {e}")
-                await asyncio.sleep(await self.settings.get("typing.delay"))
-        except Exception as e:
-            logger.trace(f"Не удалось проверить заявки: {e}")
         if kicked or unbanned or rejected:
             await event.edit(
                 phrase.clear.done.format(
