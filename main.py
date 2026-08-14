@@ -159,10 +159,10 @@ class UserbotManager:
     def _register_handlers(self):
         self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
         self.client.on(d.cmd(r"\.\$(.+)"))(self.run_shell)
-        self.client.on(d.cmd(r"\+нот (.+)\n([\s\S]+)"))(self.add_note)
-        self.client.on(d.cmd(r"\-нот (.+)"))(self.rm_note)
+        self.client.on(d.cmd(r"\+зам (.+)\n([\s\S]+)"))(self.add_note)
+        self.client.on(d.cmd(r"\-зам (.+)"))(self.rm_note)
         self.client.on(d.cmd(r"\!(.+)"))(self.chk_note)
-        self.client.on(d.cmd(r"\.ноты$"))(self.list_notes)
+        self.client.on(d.cmd(r"\.замы$"))(self.list_notes)
         self.client.on(d.cmd(r"\.чистка$"))(self.clean_pm)
         self.client.on(d.cmd(r"\.help$"))(self.help)
         self.client.on(d.cmd(r"\.помощь$"))(self.help)
