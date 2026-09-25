@@ -6,7 +6,9 @@ from telethon.tl.types.users import UserFull
 logger.info(f"Загружен модуль {__name__}!")
 
 
-def cmd(pattern, *, incoming=False, outgoing=True, **kwargs) -> events.NewMessage:
+def cmd(
+    pattern, *, incoming=False, outgoing=True, **kwargs
+) -> events.NewMessage:
     "Wrapper for events.NewMessage"
 
     return events.NewMessage(
@@ -17,7 +19,9 @@ def cmd(pattern, *, incoming=False, outgoing=True, **kwargs) -> events.NewMessag
     )
 
 
-async def get_info(client: TelegramClient, str: str, return_str=False) -> int | list:
+async def get_info(
+    client: TelegramClient, str: str, return_str=False
+) -> int | list:
     if str[-1] == ",":
         str = str[:-1]
     user: UserFull = await client(GetFullUserRequest(str))

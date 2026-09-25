@@ -13,7 +13,7 @@ async def _load_json_async(filepath: str) -> dict:
         async with aiofiles.open(filepath, "rb") as f:
             raw = await f.read()
         return orjson.loads(raw) if raw else {}
-    except (FileNotFoundError, orjson.JSONDecodeError, ValueError):
+    except FileNotFoundError, orjson.JSONDecodeError, ValueError:
         logger.error(f"Ошибка при чтении файла {filepath}")
         return {}
 

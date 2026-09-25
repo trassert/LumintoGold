@@ -73,9 +73,7 @@ class clear:
 
 class flood:
     set_stickers = "✅ : Установлено правило на флуд стикерами\nМакс: {limit} стикеров за {window} с."
-    set_gifs = (
-        "✅ : Установлено правило на флуд гифками\nМакс: {limit} гиф за {window} с."
-    )
+    set_gifs = "✅ : Установлено правило на флуд гифками\nМакс: {limit} гиф за {window} с."
     set_messages = "✅ : Установлено правило на флуд сообщениями\nМакс: {limit} сообщений за {window} с."
 
     unset_stickers = "❌ : Правило на флуд стикерами отключено."
@@ -164,7 +162,9 @@ class password:
 class time:
     not_found = "❌ : Город {} не найден."
     not_timezone = "❌ : Не удалось определить часовой пояс для {}."
-    location_info = "📍 {address}\n🕒 Время: {time}\n📅 Дата: {date}\n🌐 Пояс: {tz}"
+    location_info = (
+        "📍 {address}\n🕒 Время: {time}\n📅 Дата: {date}\n🌐 Пояс: {tz}"
+    )
 
 
 class setting:
@@ -175,7 +175,9 @@ class setting:
 class pm:
     wait = "Удалено {} чатов.."
 
-    cleared = "✅ : Чистка **ЛС** закончена! Удалено: {chats} чат(а/ов):\n{list}"
+    cleared = (
+        "✅ : Чистка **ЛС** закончена! Удалено: {chats} чат(а/ов):\n{list}"
+    )
 
 
 class anim:

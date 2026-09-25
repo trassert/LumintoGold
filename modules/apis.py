@@ -9,12 +9,14 @@ logger.info(f"Загружен модуль {__name__}!")
 async def get_weather(city, token=""):
     if token == "":
         return phrase.weather.no_token
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
+    async with (
+        aiohttp.ClientSession() as session,
+        session.get(
             config.config.url.openweathermap.format(city=city, apikey=token),
             timeout=aiohttp.ClientTimeout(total=5),
-        ) as response:
-            data = await response.json()
+        ) as response,
+    ):
+        data = await response.json()
 
     if data.get("cod") != 200:
         return phrase.weather.no_city
@@ -34,13 +36,17 @@ async def conv_currency(
     currency = currency.upper()
     default_type = default_type.upper()
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            config.config.url.exchangerate.format(token=token, currency=currency)
-        ) as resp:
-            data: dict = await resp.json()
+    async with (
+        aiohttp.ClientSession() as session,
+        session.get(
+            config.config.url.exchangerate.format(
+                token=token, currency=currency
+            )
+        ) as resp,
+    ):
+        data: dict = await resp.json()
 
-    if data.get("result", None) != "success":
+    if data.get("result") != "success":
         return phrase.currency.error
     if default_type not in data["conversion_rates"]:
         return phrase.currency.no_currency.format(default_type)

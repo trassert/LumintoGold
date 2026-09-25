@@ -11,7 +11,9 @@ logger.info(f"Загружен модуль {__name__}!")
 
 
 class Notes:
-    def __init__(self, number: str | int, base_dir: Path = pathes.notes) -> None:
+    def __init__(
+        self, number: str | int, base_dir: Path = pathes.notes
+    ) -> None:
         """Метод инициализации."""
         self.number = str(number)
         self.base_dir = base_dir
@@ -20,7 +22,9 @@ class Notes:
 
     async def _ensure_user_dir(self) -> None:
         if not self.user_dir.exists():
-            await asyncio.to_thread(self.user_dir.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(
+                self.user_dir.mkdir, parents=True, exist_ok=True
+            )
 
     def _normalize_name(self, name: str) -> str:
         if not name or "/" in name or "\\" in name:
@@ -76,7 +80,9 @@ class Notes:
     async def get_list(self) -> list[str]:
         if not self.user_dir.exists():
             return []
-        return sorted(f.stem for f in self.user_dir.iterdir() if f.suffix == ".txt")
+        return sorted(
+            f.stem for f in self.user_dir.iterdir() if f.suffix == ".txt"
+        )
 
     async def get_by_index(self, index: int) -> dict | None:
         names = await self.get_list()

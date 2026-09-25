@@ -25,8 +25,9 @@ except ModuleNotFoundError:
     logger.warning("Использую geoapify, так как timezonefinder не установлен.")
 
     async def get_timezone(lat, lon, api_key) -> str | None:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
                 config.config.url.geoapify,
                 params={
                     "lat": lat,
@@ -35,11 +36,12 @@ except ModuleNotFoundError:
                     "apiKey": api_key,
                 },
                 timeout=aiohttp.ClientTimeout(total=5),
-            ) as r:
-                if r.status != 200:
-                    return None
-                data = await r.json()
-                return data["results"][0]["timezone"]["name"]
+            ) as r,
+        ):
+            if r.status != 200:
+                return None
+            data = await r.json()
+            return data["results"][0]["timezone"]["name"]
 
 
 geolocator = Nominatim(user_agent="geo_assistant")

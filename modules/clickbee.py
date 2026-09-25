@@ -43,7 +43,7 @@ class ClickBeeAutomation:
     """Авто-заработок на ClickBee-ботах."""
 
     def __init__(
-        self, client: TelegramClient, user_settings: "settings.UBSettings"
+        self, client: TelegramClient, user_settings: settings.UBSettings
     ) -> None:
         self.client = client
         self.settings = user_settings
@@ -148,7 +148,9 @@ class ClickBeeAutomation:
         await self._next_task(event)
 
     async def _handle_no_tasks(self, event: Message) -> None:
-        logger.info(f"ClickBee: Нет задач в категории «{self._task_iter.current()}»")
+        logger.info(
+            f"ClickBee: Нет задач в категории «{self._task_iter.current()}»"
+        )
         if self._task_iter.cycle_complete:
             await self._switch_bot(event)
         else:
@@ -167,7 +169,9 @@ class ClickBeeAutomation:
         """Задание: переслать сообщение от стороннего бота."""
         mybot = self._parse_bot_username(event.text or "")
         if not mybot:
-            logger.warning("ClickBee: Не удалось определить имя бота, пропускаю")
+            logger.warning(
+                "ClickBee: Не удалось определить имя бота, пропускаю"
+            )
             return await self._skip_or_back(event)
         logger.info(f"ClickBee: Запрашиваю /start у {mybot}")
         for attempt in range(1, MAX_RETRIES + 1):
@@ -291,7 +295,9 @@ class ClickBeeAutomation:
                 logger.info(f"ClickBee: Вступил по инвайту {hash_part}")
                 return True
             except Exception as exc:
-                logger.warning(f"ClickBee: ImportChatInviteRequest failed: {exc}")
+                logger.warning(
+                    f"ClickBee: ImportChatInviteRequest failed: {exc}"
+                )
         return False
 
     @staticmethod

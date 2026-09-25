@@ -5,19 +5,19 @@ import random
 import re
 from pathlib import Path
 from time import time
+
 import aiofiles
 import orjson
 from loguru import logger
-from telethon.tl.functions.messages import GetChatInviteImportersRequest
 from telethon import TelegramClient, errors, events, functions, types
 from telethon.helpers import TotalList
 from telethon.network.connection import ConnectionTcpObfuscated
 from telethon.tl.custom import Message
+from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.messages import (
+    GetChatInviteImportersRequest,
     HideChatJoinRequestRequest,
 )
-from telethon.tl.custom.participantpermissions import ParticipantPermissions
-from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.types import (
     MessageMediaDocument,
     MessageService,
@@ -26,6 +26,7 @@ from telethon.tl.types import (
 )
 from vkbottle import Bot
 from vkbottle.tools import PhotoWallUploader
+
 from modules import phrase
 from modules.cli import CLI, loguru_sink
 
@@ -53,7 +54,7 @@ class InterceptHandler(logging.Handler):
 
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
-_managers: dict[str, "UserbotManager"] = {}
+_managers: dict[str, UserbotManager] = {}
 _manager_tasks: dict[str, asyncio.Task] = {}
 
 
@@ -381,14 +382,12 @@ class UserbotManager:
                 uid = importer.user_id
                 user = await self.client.get_entity(uid)
                 if uid and user.deleted:
-                    try:
+                    with contextlib.suppress(Exception):
                         await self.client(
                             HideChatJoinRequestRequest(
                                 peer=chat, user_id=uid, approved=False
                             )
                         )
-                    except Exception:
-                        pass
                     rejected += 1
                     if rejected % 5 == 0:
                         await event.edit(
@@ -992,9 +991,10 @@ class UserbotManager:
             if message.text:
                 for word in message.text.split():
                     clean = re.sub(r"\W+", "", word).strip()
-                    if clean and not clean.isdigit():
-                        if arg_len is None or len(clean) >= arg_len:
-                            words[clean.lower()] += 1
+                    if (clean and not clean.isdigit()) and (
+                        arg_len is None or len(clean) >= arg_len
+                    ):
+                        words[clean.lower()] += 1
             if total % 1000 == 0:
                 await asyncio.sleep(await self.settings.get("typing.delay"))
         freq = sorted(words, key=words.get, reverse=True)

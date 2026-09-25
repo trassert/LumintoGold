@@ -71,7 +71,7 @@ class UBSettings:
         if not self.filename.exists():
             self._data = {}
             return
-        with open(self.filename, "rb") as f:
+        with self.filename.open("rb") as f:
             self._data = orjson.loads(f.read())
 
     async def make(self, api_id: int, api_hash: str) -> None:

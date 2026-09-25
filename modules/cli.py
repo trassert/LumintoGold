@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import readline
 import sys
 import threading
@@ -42,10 +43,14 @@ class CLI:
             sys.stdout.flush()
 
     async def _readline(self) -> str:
-        return await asyncio.get_running_loop().run_in_executor(None, input, _PROMPT)
+        return await asyncio.get_running_loop().run_in_executor(
+            None, input, _PROMPT
+        )
 
     async def _ask(self, prompt: str) -> str:
-        return await asyncio.get_running_loop().run_in_executor(None, input, prompt)
+        return await asyncio.get_running_loop().run_in_executor(
+            None, input, prompt
+        )
 
     async def _cmd_clients(self):
         if not self._managers:
@@ -73,7 +78,9 @@ class CLI:
         await self._save_config(phone, api_id, api_hash)
         launched = await self._launch(phone, api_id, api_hash)
         self._print(
-            f"Client {phone} started." if launched else f"Failed to start {phone}."
+            f"Client {phone} started."
+            if launched
+            else f"Failed to start {phone}."
         )
 
     async def _cmd_stop(self, phone: str):
@@ -136,13 +143,11 @@ class CLI:
         import signal
 
         loop = asyncio.get_running_loop()
-        try:
+        with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(
                 signal.SIGINT,
                 lambda: asyncio.create_task(self._shutdown()),
             )
-        except NotImplementedError:
-            pass
 
         while not self._shutting_down:
             try:

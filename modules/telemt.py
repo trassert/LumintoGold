@@ -38,7 +38,7 @@ class UserInfo:
         self.links = kwargs.get("links")
 
     @staticmethod
-    def from_dict(data: dict) -> "UserInfo":
+    def from_dict(data: dict) -> UserInfo:
         """Безопасное создание объекта из словаря API"""
         return UserInfo(**data)
 
@@ -108,10 +108,7 @@ class TelemtClient:
                 method, url, json=payload, headers=headers
             ) as resp:
                 text = await resp.text()
-                if not text:
-                    data = {}
-                else:
-                    data = orjson.loads(text)
+                data = {} if not text else orjson.loads(text)
                 if resp.status >= 400:
                     if "error" in data:
                         err_data = data["error"]
@@ -133,7 +130,7 @@ class TelemtClient:
                     return data.get("data"), data.get("revision")
                 return data, None
         except aiohttp.ClientError as e:
-            raise Exception(f"Network error: {e}")
+            raise Exception(f"Network error: {e}") from e
 
     async def health_check(self) -> dict:
         data, _ = await self._request("GET", "/health")
@@ -155,7 +152,9 @@ class TelemtClient:
         data, _ = await self._request("GET", endpoint)
         return UserInfo.from_dict(data)
 
-    async def create_user(self, user_req: CreateUserRequest) -> tuple[UserInfo, str]:
+    async def create_user(
+        self, user_req: CreateUserRequest
+    ) -> tuple[UserInfo, str]:
         payload = {k: v for k, v in asdict(user_req).items() if v is not None}
         data, revision = await self._request("POST", "/users", payload=payload)
         user_data = data.get("user")

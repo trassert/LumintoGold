@@ -42,11 +42,11 @@ target-version = "py314"
 [tool.ruff.lint]
 select = [
     "E4", "E7", "E9", "W", "F", "Q", "I", "UP",
-    "PERF", "ASYNC", "C4", "ISC", "RET", "FURB", "FLY", "TRY", "PTH",
+    "PERF", "ASYNC", "C4", "ISC", "RET", "FURB", "FLY", "PTH",
     "B", "SIM", "PIE", "RSE", "LOG"
 ]
 
-ignore = []
+ignore = ["PERF401", "ASYNC250"]
 
 fixable = ["ALL"]
 unfixable = []

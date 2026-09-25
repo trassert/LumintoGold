@@ -51,14 +51,16 @@ async def get_ip_info(ip: str) -> dict:
     }
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
                 f"http://ip-api.com/json/{ip}",
                 params={"lang": "ru"},
                 timeout=aiohttp.ClientTimeout(total=5),
-            ) as response:
-                response.raise_for_status()
-                return await response.json()
+            ) as response,
+        ):
+            response.raise_for_status()
+            return await response.json()
     except Exception:
         logger.trace("Ошибка при получении информации об IP")
 
@@ -80,11 +82,11 @@ async def check_proxy_ping(proxy_type: str, ipport: str) -> float | None:
         if p_type == "http":
             proxy_url = f"http://{ipport}"
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(
+                resp = await session.get(
                     random.choice(test_urls), proxy=proxy_url
-                ) as resp:
-                    if resp.status != 200:
-                        return None
+                )
+                if resp.status != 200:
+                    return None
         else:
             p_map = {"socks5": ProxyType.SOCKS5, "socks4": ProxyType.SOCKS4}
             if p_type not in p_map:
@@ -94,12 +96,14 @@ async def check_proxy_ping(proxy_type: str, ipport: str) -> float | None:
                 proxy_type=p_map[p_type], host=host, port=port, rdns=True
             )
             try:
-                async with aiohttp.ClientSession(
-                    connector=connector, timeout=timeout
-                ) as session:
-                    async with session.get(random.choice(test_urls)) as resp:
-                        if resp.status != 200:
-                            return None
+                async with (
+                    aiohttp.ClientSession(
+                        connector=connector, timeout=timeout
+                    ) as session,
+                    session.get(random.choice(test_urls)) as resp,
+                ):
+                    if resp.status != 200:
+                        return None
             finally:
                 await connector.close()
 
@@ -112,17 +116,19 @@ async def check_proxy_ping(proxy_type: str, ipport: str) -> float | None:
 
 async def get_proxy_list() -> list[str]:
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
                 config.config.url.fp,
                 timeout=aiohttp.ClientTimeout(total=5),
-            ) as response:
-                response.raise_for_status()
-                return [
-                    line.strip()
-                    for line in (await response.text()).splitlines()
-                    if line.strip()
-                ]
+            ) as response,
+        ):
+            response.raise_for_status()
+            return [
+                line.strip()
+                for line in (await response.text()).splitlines()
+                if line.strip()
+            ]
     except Exception:
         logger.trace("Ошибка при получении списка прокси")
         return []

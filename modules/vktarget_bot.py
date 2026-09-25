@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import random
 import re
@@ -32,10 +33,8 @@ class VKActions:
         pass
 
     async def close(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             await self.api.ctx_api_interceptor.close_session()
-        except Exception:
-            pass
 
     @staticmethod
     async def _human_delay(min_s: float = 1.5, max_s: float = 3.5) -> None:
@@ -54,13 +53,15 @@ class VKActions:
             content_type = "market"
         elif "/clip" in url:
             content_type = "clip"
-        clean_path = re.sub(r"/(wall|video|photo|audio|market|clip|note)/", "/", url)
+        clean_path = re.sub(
+            r"/(wall|video|photo|audio|market|clip|note)/", "/", url
+        )
         parts = clean_path.split("/")[-1].split("_")
         owner_raw = parts[0]
         item_id = parts[1] if len(parts) > 1 else "0"
         if owner_raw.startswith("id"):
             owner_id = owner_raw[2:]
-        elif owner_raw.startswith("club") or owner_raw.startswith("public"):
+        elif owner_raw.startswith(("club", "public")):
             nums = re.findall(r"\d+", owner_raw)
             owner_id = "-" + nums[0] if nums else "0"
         elif "-" in owner_raw:
@@ -77,7 +78,9 @@ class VKActions:
         await self._human_delay(2.0, 4.0)
         try:
             owner_id, item_id, l_type = self._extract_ids_from_url(url)
-            self.logger.info(f"Лайк: owner={owner_id}, id={item_id}, type={l_type}")
+            self.logger.info(
+                f"Лайк: owner={owner_id}, id={item_id}, type={l_type}"
+            )
             resp = await self.api.request(
                 "likes.add",
                 data={"type": l_type, "owner_id": owner_id, "item_id": item_id},
@@ -86,7 +89,7 @@ class VKActions:
                 return TaskResult(True, "like", "Успешно лайкнуто")
             return TaskResult(True, "like", "Уже лайкнуто или ок")
         except Exception as e:
-            self.logger.error(f"Ошибка лайка: {e}")
+            self.logger.exception(f"Ошибка лайка: {e}")
             return TaskResult(False, "like", str(e))
 
     async def join_group(self, url: str) -> TaskResult:
@@ -97,11 +100,15 @@ class VKActions:
                 match.group(2)
                 if match
                 else (
-                    re.findall(r"\d+", url)[-1] if re.findall(r"\d+", url) else "0"
+                    re.findall(r"\d+", url)[-1]
+                    if re.findall(r"\d+", url)
+                    else "0"
                 )
             )
             self.logger.info(f"Вступление в группу: {group_id}")
-            resp = await self.api.request("groups.join", data={"group_id": group_id})
+            resp = await self.api.request(
+                "groups.join", data={"group_id": group_id}
+            )
             if resp.get("response") == 1:
                 return TaskResult(True, "join", "Успешно вступил")
             return TaskResult(True, "join", "Уже в группе")
@@ -109,7 +116,7 @@ class VKActions:
             err_str = str(e)
             if "already in this community" in err_str or "Error 15" in err_str:
                 return TaskResult(True, "join", "Уже в группе")
-            self.logger.error(f"Ошибка вступления: {e}")
+            self.logger.exception(f"Ошибка вступления: {e}")
             return TaskResult(False, "join", str(e))
 
     async def add_friend(self, url: str) -> TaskResult:
@@ -120,16 +127,20 @@ class VKActions:
                 match.group(1)
                 if match
                 else (
-                    re.findall(r"\d+", url)[-1] if re.findall(r"\d+", url) else "0"
+                    re.findall(r"\d+", url)[-1]
+                    if re.findall(r"\d+", url)
+                    else "0"
                 )
             )
             self.logger.info(f"Добавление в друзья: {user_id}")
-            resp = await self.api.request("friends.add", data={"user_id": user_id})
+            resp = await self.api.request(
+                "friends.add", data={"user_id": user_id}
+            )
             if resp.get("response") in [1, 2, 3]:
                 return TaskResult(True, "friend", "Заявка отправлена/принята")
             return TaskResult(False, "friend", f"Ошибка API: {resp}")
         except Exception as e:
-            self.logger.error(f"Ошибка добавления в друзья: {e}")
+            self.logger.exception(f"Ошибка добавления в друзья: {e}")
             return TaskResult(False, "friend", str(e))
 
     async def subscribe_channel(self, url: str) -> TaskResult:
@@ -161,7 +172,7 @@ class VKActions:
                 or "already a member" in err_str.lower()
             ):
                 return TaskResult(True, "tg_join", "Уже подписан на TG")
-            self.logger.error(f"TG: Ошибка подписки: {e}")
+            self.logger.exception(f"TG: Ошибка подписки: {e}")
             return TaskResult(False, "tg_join", str(e))
 
     async def view_telegram_post(
@@ -248,10 +259,10 @@ class VKTargetRefactored:
                 if not self._active:
                     break
                 if not self._lock.locked():
-                    try:
-                        await self.client.send_message("vktarget_bot", "Задания")
-                    except Exception:
-                        pass
+                    with contextlib.suppress(Exception):
+                        await self.client.send_message(
+                            "vktarget_bot", "Задания"
+                        )
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -298,7 +309,9 @@ class VKTargetRefactored:
                 or "канал" in lower_text
                 or "чат" in lower_text
             ):
-                result = await self.vk.subscribe_telegram_channel(url, self.client)
+                result = await self.vk.subscribe_telegram_channel(
+                    url, self.client
+                )
             elif (
                 "просмотр" in lower_text
                 or "посмотрите" in lower_text
@@ -307,15 +320,23 @@ class VKTargetRefactored:
             ):
                 result = await self.vk.view_telegram_post(url, self.client)
             else:
-                result = await self.vk.subscribe_telegram_channel(url, self.client)
+                result = await self.vk.subscribe_telegram_channel(
+                    url, self.client
+                )
         elif "vk.com" in url:
             if "Вступите в" in text or "группу" in text or "сообщество" in text:
                 result = await self.vk.join_group(url)
-            elif "Поставьте лайк" in text or "лайк на" in text or "оцените" in text:
+            elif (
+                "Поставьте лайк" in text
+                or "лайк на" in text
+                or "оцените" in text
+            ):
                 result = await self.vk.like(url)
             elif "Добавить в друзья" in text or "в друзья" in text:
                 result = await self.vk.add_friend(url)
-            elif "канал" in text and ("подпишитесь" in text or "Вступите" in text):
+            elif "канал" in text and (
+                "подпишитесь" in text or "Вступите" in text
+            ):
                 result = await self.vk.subscribe_channel(url)
             else:
                 self.logger.debug(f"Неизвестный тип задачи VK: {text[:30]}")
@@ -344,7 +365,7 @@ class VKTargetRefactored:
                     f"Сообщение устарело, пропускаем клик. Ошибка: {e}"
                 )
             else:
-                self.logger.error(f"Ошибка клика: {e}")
+                self.logger.exception(f"Ошибка клика: {e}")
             await asyncio.sleep(2)
             if self._active:
                 await self.client.send_message("vktarget_bot", "Задания")

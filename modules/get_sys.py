@@ -29,7 +29,9 @@ if platform.system() == "Windows":
                 )
                 return None
     except ImportError:
-        logger.warning("WinTmp не установлен, температура недоступна на Windows")
+        logger.warning(
+            "WinTmp не установлен, температура недоступна на Windows"
+        )
 
         def get_temperature() -> str:
             return None
@@ -120,7 +122,7 @@ def human(n: int) -> str:
 
 def default_path() -> Path:
     if os.name == "nt":
-        drive = os.environ.get("SystemDrive", "C:")
+        drive = os.environ.get("SYSTEMDRIVE", "C:")
         return Path(drive + "\\")
     if "ANDROID_ROOT" in os.environ or "ANDROID_DATA" in os.environ:
         # for p in ("/storage/emulated/0", "/sdcard", str(Path.home())):
