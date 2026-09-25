@@ -2,9 +2,7 @@ clients/*
 sessions/*
 db/*
 notes/*
-
-tokens.yml
-config.yml
+configs/*
 
 **/__pycache__/
 .venv

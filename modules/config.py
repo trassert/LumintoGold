@@ -10,8 +10,8 @@ from . import pathes
 logger.info(f"Загружен модуль {__name__}!")
 
 
-config = ConfigManager(pathes.config)
-tokens = ConfigManager(pathes.tokens)
+config = ConfigManager(pathes.config, defaults=pathes.default_config)
+tokens = ConfigManager(pathes.tokens, defaults=pathes.default_tokens)
 
 
 async def load_client(clients_dir: Path, client_file: str):

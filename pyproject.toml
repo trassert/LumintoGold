@@ -17,6 +17,7 @@ dependencies = [
     "psutil>=7.1.3",
     "pytz>=2025.2",
     "pyyaml>=6.0.3",
+    "sycm>=0.1.1",
     "telethon>=1.42.0",
     "uvloop>=0.22.1; sys_platform != 'win32'",
     "vkbottle>=4.6.2",
