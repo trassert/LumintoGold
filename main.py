@@ -201,6 +201,20 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.setint (.+)"))(self.set_int_setting)
         self.client.on(d.cmd(r"\.время (.+)"))(self.time_by_city)
         self.client.on(d.cmd(r"\.ад(?:\s|$)"))(self.autodelmsg)
+        self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.autochat.add_chat)
+        self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.autochat.remove_chat)
+        self.client.on(d.cmd(r"\.авточат$"))(self.autochat.toggle)
+        self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.autochat.set_delay)
+        self.client.on(d.cmd(r"\.калк (.+)"))(self.calc)
+        self.client.on(d.cmd(r"\.к (.+)"))(self.calc)
+        self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
+        self.client.on(d.cmd(r"\.телемт$"))(self.telemt_info)
+        self.client.on(d.cmd(r"\.telemt$"))(self.telemt_info)
+        self.client.on(d.cmd(r"\+телемт юзер (.+)"))(self.telemt_adduser)
+        self.client.on(d.cmd(r"\+telemt user (.+)"))(self.telemt_adduser)
+        self.client.on(d.cmd(r"\-телемт юзер (.+)"))(self.telemt_deluser)
+        self.client.on(d.cmd(r"\-telemt user (.+)"))(self.telemt_deluser)
+        self.client.on(events.NewMessage())(self._dynamic_mask_reader)
         self.client.on(
             d.cmd(
                 r"\.genpass(?:\s+(.+))?",
@@ -235,20 +249,6 @@ class UserbotManager:
         self.client.on(d.cmd(r"\+флудобщ$"))(
             lambda e: self.flood_ctrl.unset_rule(e, "messages")
         )
-        self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.autochat.add_chat)
-        self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.autochat.remove_chat)
-        self.client.on(d.cmd(r"\.авточат$"))(self.autochat.toggle)
-        self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.autochat.set_delay)
-        self.client.on(d.cmd(r"\.калк (.+)"))(self.calc)
-        self.client.on(d.cmd(r"\.к (.+)"))(self.calc)
-        self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
-        self.client.on(d.cmd(r"\.телемт$"))(self.telemt_info)
-        self.client.on(d.cmd(r"\.telemt$"))(self.telemt_info)
-        self.client.on(d.cmd(r"\+телемт юзер (.+)"))(self.telemt_adduser)
-        self.client.on(d.cmd(r"\+telemt user (.+)"))(self.telemt_adduser)
-        self.client.on(d.cmd(r"\-телемт юзер (.+)"))(self.telemt_deluser)
-        self.client.on(d.cmd(r"\-telemt user (.+)"))(self.telemt_deluser)
-        self.client.on(events.NewMessage())(self._dynamic_mask_reader)
 
     async def stop(self):
         """Disconnect the client and cancel background tasks."""

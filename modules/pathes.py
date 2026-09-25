@@ -6,6 +6,10 @@ logger.info(f"Загружен модуль {__name__}!")
 
 config = Path("configs") / "config.yml"
 tokens = Path("configs") / "tokens.yml"
+
+default_config = Path("defaults") / "config.yml"
+default_tokens = Path("defaults") / "tokens.yml"
+
 notes = Path("notes")
 clients = Path("clients")
 ai = Path("ai_chats")
