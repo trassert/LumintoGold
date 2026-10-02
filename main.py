@@ -13,6 +13,7 @@ from telethon import TelegramClient, errors, events, functions, types
 from telethon.helpers import TotalList
 from telethon.network.connection import ConnectionTcpObfuscated
 from telethon.tl.custom import Message
+from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.messages import (
     GetChatInviteImportersRequest,
@@ -24,6 +25,7 @@ from telethon.tl.types import (
     PeerUser,
     User,
 )
+from telethon.tl.functions.account import UpdateProfileRequest
 from vkbottle import Bot
 from vkbottle.tools import PhotoWallUploader
 
@@ -180,6 +182,7 @@ class UserbotManager:
         self.client.on(d.cmd(r"\.серв$"))(self.server_load)
         self.client.on(d.cmd(r"\.релоадконфиг$"))(self.config_reload)
         self.client.on(d.cmd(r"\.автоферма$"))(self.on_off_farming)
+        self.client.on(d.cmd(r"\.афк$"))(self.afk_bio)
         self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
         self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
         self.client.on(d.cmd(r"\.авто vktarget_bot$"))(self.toggle_vktarget)
@@ -249,6 +252,17 @@ class UserbotManager:
         self.client.on(d.cmd(r"\+флудобщ$"))(
             lambda e: self.flood_ctrl.unset_rule(e, "messages")
         )
+
+    async def afk_bio(self, event: Message):
+        if await self.settings.get("toggle.afk") is True:
+            await self.settings.set("toggle.afk", False)
+            bio = (await self.client(GetFullUserRequest((await self.client.get_me()).id))).full_user.about
+            await self.settings.set("bio.normal", bio)
+            await self.client(UpdateProfileRequest(about=bio))
+            return await event.edit(phrase.afk.unset)
+        await self.settings.set("toggle.afk", True)
+        await self.client(UpdateProfileRequest(about=await self.settings.get("bio.afk")))
+        return await event.edit(phrase.afk.set)
 
     async def stop(self):
         """Disconnect the client and cancel background tasks."""

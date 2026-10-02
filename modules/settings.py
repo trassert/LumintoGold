@@ -47,6 +47,9 @@ default = {
     "token.exchangerate": config.tokens.default.exchangerate,
     "telemt.url": "http://127.0.0.1:9091",
     "telemt.token": "",
+    "bio.normal": "",
+    "bio.afk": "Занято! Не писать.",
+    "afk.toggle": False,
 }
 
 
