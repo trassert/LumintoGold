@@ -49,7 +49,7 @@ default = {
     "telemt.token": "",
     "bio.normal": "",
     "bio.afk": "Занято! Не писать.",
-    "afk.toggle": False,
+    "toggle.afk": False,
 }
 
 
