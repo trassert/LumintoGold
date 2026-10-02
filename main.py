@@ -256,10 +256,10 @@ class UserbotManager:
     async def afk_bio(self, event: Message):
         if await self.settings.get("toggle.afk") is True:
             await self.settings.set("toggle.afk", False)
-            bio = (await self.client(GetFullUserRequest((await self.client.get_me()).id))).full_user.about
-            await self.settings.set("bio.normal", bio)
-            await self.client(UpdateProfileRequest(about=bio))
+            await self.client(UpdateProfileRequest(about=await self.settings.get("bio.normal")))
             return await event.edit(phrase.afk.unset)
+        bio = (await self.client(GetFullUserRequest((await self.client.get_me()).id))).full_user.about
+        await self.settings.set("bio.normal", bio)
         await self.settings.set("toggle.afk", True)
         await self.client(UpdateProfileRequest(about=await self.settings.get("bio.afk")))
         return await event.edit(phrase.afk.set)
