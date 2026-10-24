@@ -83,6 +83,16 @@ class UBSettings:
             content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
             await f.write(content)
 
+    async def all(self) -> dict:
+        await self._ensure_loaded()
+        return dict(self._data)
+
+    async def replace(self, data: dict) -> None:
+        self._data = dict(data)
+        async with aiofiles.open(self.filename, "wb") as f:
+            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
+            await f.write(content)
+
     async def get(self, name_setting: str, if_none: Any = None) -> Any:
         await self._ensure_loaded()
         if if_none is not None:

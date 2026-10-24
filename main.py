@@ -3,38 +3,39 @@ import contextlib
 import logging
 import random
 import re
+import sys
 from pathlib import Path
 from time import time
 
 import aiofiles
-import orjson
 from loguru import logger
 from telethon import TelegramClient, errors, events, functions, types
 from telethon.helpers import TotalList
 from telethon.network.connection import ConnectionTcpObfuscated
 from telethon.tl.custom import Message
-from telethon.tl.functions.users import GetFullUserRequest
-from telethon.tl.functions.account import UpdateStatusRequest
+from telethon.tl.functions.account import (
+    UpdateProfileRequest,
+    UpdateStatusRequest,
+)
 from telethon.tl.functions.messages import (
     GetChatInviteImportersRequest,
     HideChatJoinRequestRequest,
 )
+from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     MessageMediaDocument,
     MessageService,
     PeerUser,
     User,
 )
-from telethon.tl.functions.account import UpdateProfileRequest
 from vkbottle import Bot
 from vkbottle.tools import PhotoWallUploader
 
 from modules import phrase
-from modules.cli import CLI, loguru_sink
 
 logger.remove()
 logger.add(
-    loguru_sink,
+    sys.stderr,
     format=(
         "[{time:HH:mm:ss} <level>{level}</level>]: <green>{file}:{function}</green> > {message}"
     ),
@@ -58,27 +59,61 @@ class InterceptHandler(logging.Handler):
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 _managers: dict[str, UserbotManager] = {}
 _manager_tasks: dict[str, asyncio.Task] = {}
+_client_status: dict[str, dict] = {}
+_client_locks: dict[str, asyncio.Lock] = {}
+
+
+class ClientNotAuthorized(Exception):
+    pass
+
+
+def _set_status(phone: str, status: str, error: str | None = None) -> None:
+    _client_status[phone] = {
+        "status": status,
+        "error": error,
+        "since": time(),
+    }
+
+
+def _client_lock(phone: str) -> asyncio.Lock:
+    if phone not in _client_locks:
+        _client_locks[phone] = asyncio.Lock()
+    return _client_locks[phone]
+
+
+def _session_exists(phone: str) -> bool:
+    return (pathes.sessions / f"{phone}.session").exists()
+
+
+def _make_client(
+    phone: str,
+    api_id: int,
+    api_hash: str,
+    session_path: Path | None = None,
+    connection_retries: int = -1,
+) -> TelegramClient:
+    return TelegramClient(
+        session=str(session_path or pathes.sessions / phone),
+        api_id=api_id,
+        api_hash=api_hash,
+        use_ipv6=config.config.use_ipv6,
+        system_version="4.16.30-vxCUSTOM",
+        device_model="LumintoGold",
+        system_lang_code="ru",
+        lang_code="ru",
+        connection_retries=connection_retries,
+        retry_delay=3,
+        connection=ConnectionTcpObfuscated,
+    )
 
 
 class UserbotManager:
     def __init__(self, phone: str, api_id: int, api_hash: str):
         self.phone = phone
         self.settings = settings.UBSettings(phone, pathes.clients)
-        self.session_path = Path("sessions") / phone
+        self.session_path = pathes.sessions / phone
         self.voice_path = pathes.voice / phone
-        self.client = TelegramClient(
-            session=str(self.session_path),
-            api_id=api_id,
-            api_hash=api_hash,
-            use_ipv6=config.config.use_ipv6,
-            system_version="4.16.30-vxCUSTOM",
-            device_model="LumintoGold",
-            system_lang_code="ru",
-            lang_code="ru",
-            connection_retries=-1,
-            retry_delay=3,
-            connection=ConnectionTcpObfuscated,
-        )
+        self.client = _make_client(phone, api_id, api_hash, self.session_path)
         self.iris_task = task_gen.Generator(f"{phone}_iris")
         self.online_task = task_gen.Generator(f"{phone}_online")
         self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
@@ -92,6 +127,8 @@ class UserbotManager:
         )
         self.clickbee = clickbee.ClickBeeAutomation(self.client, self.settings)
         self._stopped = False
+        self.status = "starting"
+        self.error: str | None = None
 
     async def init(self):
         use_ipv6 = await self.settings.get("use.ipv6")
@@ -106,7 +143,11 @@ class UserbotManager:
             self.ai_chat = self.ai_client.chat(self.phone)
         except Exception:
             logger.warning("Установите Groq-токен (.иитокен <токен>)")
-        await self.client.start(phone=self.phone)
+        await self.client.connect()
+        if not await self.client.is_user_authorized():
+            raise ClientNotAuthorized(
+                "Нет авторизации — войдите через веб-панель"
+            )
         logger.info(f"Запущен клиент ({self.phone})")
         self._register_handlers()
         if await self.settings.get("block.voice"):
@@ -256,12 +297,22 @@ class UserbotManager:
     async def afk_bio(self, event: Message):
         if await self.settings.get("toggle.afk") is True:
             await self.settings.set("toggle.afk", False)
-            await self.client(UpdateProfileRequest(about=await self.settings.get("bio.normal")))
+            await self.client(
+                UpdateProfileRequest(
+                    about=await self.settings.get("bio.normal")
+                )
+            )
             return await event.edit(phrase.afk.unset)
-        bio = (await self.client(GetFullUserRequest((await self.client.get_me()).id))).full_user.about
+        bio = (
+            await self.client(
+                GetFullUserRequest((await self.client.get_me()).id)
+            )
+        ).full_user.about
         await self.settings.set("bio.normal", bio)
         await self.settings.set("toggle.afk", True)
-        await self.client(UpdateProfileRequest(about=await self.settings.get("bio.afk")))
+        await self.client(
+            UpdateProfileRequest(about=await self.settings.get("bio.afk"))
+        )
         return await event.edit(phrase.afk.set)
 
     async def stop(self):
@@ -269,6 +320,7 @@ class UserbotManager:
         if self._stopped:
             return
         self._stopped = True
+        self.status = "stopping"
         logger.info(f"Останавливаю клиент ({self.phone})…")
         for task in (
             self.iris_task,
@@ -282,6 +334,7 @@ class UserbotManager:
             self.vktarget.stop()
         with contextlib.suppress(Exception):
             await self.client.disconnect()
+        self.status = "stopped"
         logger.info(f"Клиент ({self.phone}) остановлен.")
 
     async def telemt_adduser(self, event: Message):
@@ -1190,68 +1243,175 @@ class UserbotManager:
     async def run(self):
         try:
             await self.init()
+            self.status = "running"
+            _set_status(self.phone, "running")
             await self.client.run_until_disconnected()
-        except Exception:
+        except ClientNotAuthorized as exc:
+            self.status = "unauthorized"
+            self.error = str(exc)
+            logger.warning(f"Клиент ({self.phone}): {exc}")
+        except asyncio.CancelledError:
+            self.status = "stopped"
+            raise
+        except Exception as exc:
+            self.status = "error"
+            self.error = str(exc) or type(exc).__name__
             logger.exception(f"Критическая ошибка в {self.phone}")
         finally:
+            if self.status == "running":
+                self.status = "stopped"
             _managers.pop(self.phone, None)
             _manager_tasks.pop(self.phone, None)
+            _set_status(self.phone, self.status, self.error)
+            with contextlib.suppress(Exception):
+                await self.client.disconnect()
 
 
-async def _launch_manager(phone: str, api_id: int, api_hash: str) -> bool:
-    """Создаёт и запускает UserbotManager в фоне. Возвращает False если уже запущен."""
-    if phone in _managers:
-        return False
-    manager = UserbotManager(phone, api_id, api_hash)
-    _managers[phone] = manager
-    task = asyncio.create_task(manager.run(), name=f"ub_{phone}")
-    _manager_tasks[phone] = task
-    return True
+async def _read_client_config(phone: str) -> dict | None:
+    try:
+        return await settings.UBSettings(phone, pathes.clients).all()
+    except Exception:
+        return None
 
 
-async def _save_client_config(phone: str, api_id: int, api_hash: str) -> None:
-    """Сохраняет конфиг клиента в clients/<phone>.json."""
-    pathes.clients.mkdir(exist_ok=True)
-    config_path = pathes.clients / f"{phone}.json"
-    async with aiofiles.open(config_path, "wb") as f:
-        await f.write(
-            orjson.dumps(
-                {"api_id": api_id, "api_hash": api_hash},
-                option=orjson.OPT_INDENT_2,
-            )
+async def _launch_manager(phone: str) -> bool:
+    """Создаёт и запускает UserbotManager в фоне."""
+    async with _client_lock(phone):
+        manager = _managers.get(phone)
+        task = _manager_tasks.get(phone)
+        if manager and task and not task.done():
+            return False
+        _managers.pop(phone, None)
+        _manager_tasks.pop(phone, None)
+        data = await _read_client_config(phone)
+        if not data:
+            _set_status(phone, "error", "Конфиг не найден или повреждён")
+            return False
+        try:
+            api_id = int(data["api_id"])
+            api_hash = str(data["api_hash"])
+        except KeyError, TypeError, ValueError:
+            _set_status(phone, "error", "В конфиге нет api_id/api_hash")
+            return False
+        manager = UserbotManager(phone, api_id, api_hash)
+        _managers[phone] = manager
+        _set_status(phone, "starting")
+        _manager_tasks[phone] = asyncio.create_task(
+            manager.run(), name=f"ub_{phone}"
         )
+        return True
+
+
+async def _stop_manager(phone: str) -> bool:
+    async with _client_lock(phone):
+        manager = _managers.pop(phone, None)
+        task = _manager_tasks.pop(phone, None)
+        if manager is None and task is None:
+            _set_status(phone, "stopped")
+            return False
+        _set_status(phone, "stopping")
+        if manager:
+            with contextlib.suppress(Exception):
+                await manager.stop()
+        if task and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+        _set_status(phone, "stopped")
+        return True
+
+
+async def _restart_manager(phone: str) -> bool:
+    await _stop_manager(phone)
+    return await _launch_manager(phone)
+
+
+async def _stop_all_managers() -> int:
+    phones = list(_managers)
+    if not phones:
+        return 0
+    await asyncio.gather(
+        *(_stop_manager(phone) for phone in phones),
+        return_exceptions=True,
+    )
+    return len(phones)
 
 
 async def main():
+    import signal
+
     pathes.clients.mkdir(exist_ok=True)
-    client_files = [f for f in pathes.clients.iterdir() if f.suffix == ".json"]
-    if not client_files:
-        logger.warning(phrase.misc.no_clients)
-        number = input(phrase.misc.input_number)
-        api_id = int(input(phrase.misc.input_api_id))
-        api_hash = input(phrase.misc.input_api_hash)
-        await _save_client_config(number, api_id, api_hash)
-        return await main()
-    logger.info(f"Clients: {[f.name for f in client_files]}")
-    for cf in client_files:
-        result = await config.load_client(pathes.clients, cf.name)
-        if result:
-            phone, api_id, api_hash = result
-            await _launch_manager(phone, api_id, api_hash)
-    if not _managers:
-        return logger.error(phrase.misc.no_valid_clients)
-    cli = CLI(
+    pathes.sessions.mkdir(exist_ok=True)
+    loop = asyncio.get_running_loop()
+    log_broker = web.LogBroker(loop)
+    logger.add(log_broker, level="INFO")
+
+    panel = web.Panel(
+        host=str(config.config.web.host),
+        port=int(config.config.web.port),
+        password=str(config.config.web.password or ""),
         managers=_managers,
-        manager_tasks=_manager_tasks,
-        launch_manager_func=_launch_manager,
-        save_config_func=_save_client_config,
+        statuses=_client_status,
+        launch=_launch_manager,
+        stop=_stop_manager,
+        restart=_restart_manager,
+        stop_all=_stop_all_managers,
+        make_client=_make_client,
+        log_broker=log_broker,
     )
-    await asyncio.gather(
-        cli.run(),
-        *_manager_tasks.values(),
-        return_exceptions=True,
-    )
-    return None
+    try:
+        await panel.start()
+    except OSError as exc:
+        logger.error(
+            "Не удалось запустить веб-панель "
+            f"{config.config.web.host}:{config.config.web.port}: {exc}"
+        )
+        raise
+
+    client_files = sorted(pathes.clients.glob("*.json"))
+    if client_files:
+        logger.info(f"Clients: {[f.name for f in client_files]}")
+    for client_file in client_files:
+        result = await config.load_client(pathes.clients, client_file.name)
+        if not result:
+            _set_status(
+                client_file.stem,
+                "error",
+                "Некорректный JSON клиентского конфига",
+            )
+            continue
+        phone = result[0]
+        data = await _read_client_config(phone)
+        if data and data.get("disabled"):
+            _set_status(phone, "disabled")
+            continue
+        if not _session_exists(phone):
+            _set_status(
+                phone,
+                "unauthorized",
+                "Нет сессии — требуется вход через панель",
+            )
+            logger.warning(
+                f"Клиент ({phone}) без сессии: войдите через веб-панель"
+            )
+            continue
+        await _launch_manager(phone)
+
+    stop_event = asyncio.Event()
+
+    def request_stop(*_args) -> None:
+        stop_event.set()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        with contextlib.suppress(NotImplementedError, RuntimeError, ValueError):
+            loop.add_signal_handler(sig, request_stop)
+
+    try:
+        await stop_event.wait()
+    finally:
+        logger.info("Останавливаю веб-панель и клиентов…")
+        await panel.stop()
+        await _stop_all_managers()
 
 
 if __name__ == "__main__":
@@ -1277,6 +1437,7 @@ if __name__ == "__main__":
         telemt,
         tz,
         vktarget_bot,
+        web,
     )
 
     try:

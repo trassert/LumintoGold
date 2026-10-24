@@ -12,6 +12,7 @@ default_tokens = Path("defaults") / "tokens.yml"
 
 notes = Path("notes")
 clients = Path("clients")
+sessions = Path("sessions")
 ai = Path("ai_chats")
 voice = Path("voice_cache")
 

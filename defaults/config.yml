@@ -2,6 +2,11 @@ use_ipv6: False # Использовать IPv6
 wait_delete: 60 # Через сколько удалять сообщение .ад
 battery_path: "/sys/class/power_supply/battery/status" # Путь к файлу с информацией о батарее
 
+web:
+  host: "127.0.0.1" # 0.0.0.0 — доступ по сети (HTTP не шифрует пароль!)
+  port: 8080
+  password: "luminto" # Смените перед публикацией панели
+
 # Не трогай это, если не знаешь! URL для API
 url:
   geoapify: "https://api.geoapify.com/v1/geocode/reverse"
