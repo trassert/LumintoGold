@@ -13,9 +13,8 @@ const state = {
   logSearch: "",
   logPaused: false,
   logRenderQueued: false,
-  system: null,
-  systemTimer: null,
   refreshTimer: null,
+  systemTimer: null,
   refreshing: false,
   ws: null,
   wsRetry: 0,
@@ -23,7 +22,8 @@ const state = {
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
-const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+const $$ = (selector, root = document) =>
+  Array.from(root.querySelectorAll(selector));
 
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -34,31 +34,31 @@ const esc = (value) =>
     "'": "&#39;",
   }[char]));
 
-const icon = (name) => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+const icon = (name) =>
+  `<svg class="icon" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
 
 const STATUS = {
-  running: { label: "Работает", cls: "running" },
-  starting: { label: "Запускается", cls: "starting" },
-  stopping: { label: "Останавливается", cls: "stopping" },
-  stopped: { label: "Остановлен", cls: "stopped" },
-  disabled: { label: "Отключён", cls: "disabled" },
-  unauthorized: { label: "Нужен вход", cls: "unauthorized" },
-  error: { label: "Ошибка", cls: "error" },
-  invalid: { label: "Битый конфиг", cls: "invalid" },
+  running: { label: "Работает", tone: "success" },
+  starting: { label: "Запускается", tone: "warning" },
+  stopping: { label: "Останавливается", tone: "warning" },
+  stopped: { label: "Остановлен", tone: "neutral" },
+  disabled: { label: "Отключён", tone: "neutral" },
+  unauthorized: { label: "Нужен вход", tone: "warning" },
+  error: { label: "Ошибка", tone: "danger" },
+  invalid: { label: "Ошибка конфига", tone: "danger" },
 };
 
 const statusInfo = (status) => STATUS[status] || STATUS.stopped;
 
-const statusChip = (status) => {
+const badge = (status) => {
   const info = statusInfo(status);
-  return `<span class="status status--${info.cls}" id="client-status"><span class="status-dot"></span>${esc(info.label)}</span>`;
+  return `<span class="badge badge--${info.tone}"><span class="badge__dot"></span>${esc(info.label)}</span>`;
 };
 
-const alertHtml = (message, tone = "") =>
-  `<div class="alert ${tone ? `alert--${tone}` : ""}">${icon(tone === "success" ? "check" : "alert")}<span>${esc(message)}</span></div>`;
+const alertHtml = (message, tone = "error") =>
+  `<div class="alert alert--${tone}">${icon(tone === "success" ? "check" : "alert")}<span>${esc(message)}</span></div>`;
 
-const noticeHtml = (message) =>
-  `<div class="notice">${icon("spark")}<span>${esc(message)}</span></div>`;
+const noticeHtml = (message) => `<div class="notice">${esc(message)}</div>`;
 
 const fmtBytes = (value) => {
   const size = Number(value) || 0;
@@ -82,7 +82,8 @@ const fmtUptime = (seconds) => {
   return `${minutes} мин`;
 };
 
-const fmtNumber = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
+const fmtNumber = (value) =>
+  new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 
 async function api(path, options = {}) {
   const opts = {
@@ -116,19 +117,25 @@ async function api(path, options = {}) {
 
 let toastTimer = null;
 function toast(message, tone = "") {
-  const element = $("#snackbar");
+  const element = $("#toast");
   element.textContent = message;
-  element.className = `snackbar is-visible${tone === "error" ? " snackbar--error" : ""}`;
+  element.className = `toast is-visible${tone === "error" ? " toast--error" : ""}`;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     element.classList.remove("is-visible");
-  }, tone === "error" ? 5200 : 3400);
+  }, tone === "error" ? 5000 : 3200);
 }
 
 function setPage(title, subtitle, actions = "") {
   $("#page-title").textContent = title;
   $("#page-subtitle").textContent = subtitle;
-  $("#topbar-actions").innerHTML = actions;
+  $("#page-actions").innerHTML = actions;
+}
+
+function setBusy(button, busy) {
+  if (!button) return;
+  button.disabled = busy;
+  button.classList.toggle("is-busy", busy);
 }
 
 function updateNav() {
@@ -147,20 +154,16 @@ function navigate(path) {
   location.hash = hash;
 }
 
-function setBusy(button, busy) {
-  if (!button) return;
-  button.disabled = busy;
-  button.classList.toggle("is-busy", busy);
-}
-
 function themeIcon() {
   const dark = document.documentElement.dataset.theme === "dark";
-  const use = $("#theme-toggle use");
-  if (use) use.setAttribute("href", dark ? "#i-sun" : "#i-moon");
+  $$("#theme-toggle use, #theme-toggle-mobile use").forEach((use) => {
+    use.setAttribute("href", dark ? "#i-sun" : "#i-moon");
+  });
 }
 
 function toggleTheme() {
-  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  const next =
+    document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
   try {
     localStorage.setItem("luminto-theme", next);
@@ -183,15 +186,15 @@ function showLogin() {
   stopSystemTimer();
   closeModal();
   $("#app").hidden = true;
-  $("#login-screen").hidden = false;
+  $("#login-page").hidden = false;
   $("#login-error").hidden = true;
   $("#login-password").value = "";
-  setTimeout(() => $("#login-password").focus(), 50);
+  setTimeout(() => $("#login-password").focus(), 40);
 }
 
 async function enterApp() {
   state.authenticated = true;
-  $("#login-screen").hidden = true;
+  $("#login-page").hidden = true;
   $("#app").hidden = false;
   themeIcon();
   connectLogs();
@@ -202,11 +205,9 @@ async function enterApp() {
       try {
         if (state.view === "clients") {
           await refreshClients(true);
-        } else if (state.view === "client") {
-          await refreshClientHead();
         }
       } catch {
-        // The next poll will retry.
+        // next poll will retry
       } finally {
         state.refreshing = false;
       }
@@ -220,7 +221,6 @@ async function enterApp() {
 
 async function handleLogin(event) {
   event.preventDefault();
-  const form = event.currentTarget;
   const button = $("#login-submit");
   const error = $("#login-error");
   error.hidden = true;
@@ -230,7 +230,7 @@ async function handleLogin(event) {
       method: "POST",
       body: { password: $("#login-password").value },
     });
-    form.reset();
+    $("#login-form").reset();
     await enterApp();
   } catch (err) {
     error.textContent = err.message;
@@ -282,7 +282,6 @@ async function refreshClients(silent = false) {
 }
 
 async function renderClients() {
-  if (!state.authenticated) return;
   try {
     await refreshClients(false);
   } catch (err) {
@@ -293,20 +292,19 @@ async function renderClients() {
 
 function clientsSubtitle() {
   const total = state.counts.total || 0;
-  const running = state.counts.running || 0;
-  const disabled = state.counts.disabled || 0;
-  const errors = state.counts.errors || 0;
-  if (!total) return "Пока пусто — добавьте первого клиента";
-  const parts = [`${total} всего`, `${running} работают`, `${disabled} отключены`];
-  if (errors) parts.push(`${errors} с ошибкой`);
+  if (!total) return "Клиентов пока нет";
+  const parts = [`Всего: ${total}`];
+  if (state.counts.running) parts.push(`работают: ${state.counts.running}`);
+  if (state.counts.disabled) parts.push(`отключены: ${state.counts.disabled}`);
+  if (state.counts.errors) parts.push(`с ошибкой: ${state.counts.errors}`);
   return parts.join(" · ");
 }
 
 function clientsActions() {
   return `
-    <button class="btn btn--tonal btn--small" data-top-action="import">${icon("upload")} Импорт</button>
-    <button class="btn btn--outlined btn--small" data-top-action="stop-all">${icon("stop")} Стоп все</button>
-    <button class="btn btn--filled btn--small" data-top-action="add">${icon("plus")} Добавить</button>
+    <button class="btn btn--secondary" data-top-action="import">${icon("upload")} Импорт</button>
+    <button class="btn btn--danger" data-top-action="stop-all">${icon("stop")} Остановить всех</button>
+    <button class="btn btn--primary" data-top-action="add">${icon("plus")} Добавить</button>
   `;
 }
 
@@ -316,57 +314,70 @@ function drawClients() {
   if (!state.clients.length) {
     view.innerHTML = `
       <div class="empty">
-        <div class="empty__icon">${icon("spark")}</div>
-        <h2>Пока ни одного клиента</h2>
-        <p>Добавьте аккаунт по коду из Telegram или QR. Уже есть готовые конфиги? Импортируйте их пачкой.</p>
+        <h2>Нет клиентов</h2>
+        <p>Добавьте аккаунт по коду Telegram, через QR или импортируйте готовый JSON-конфиг.</p>
         <div class="empty__actions">
-          <button class="btn btn--filled" data-action="add">${icon("plus")} Добавить клиента</button>
-          <button class="btn btn--tonal" data-action="import">${icon("upload")} Импорт JSON</button>
+          <button class="btn btn--primary" data-action="add">${icon("plus")} Добавить клиента</button>
+          <button class="btn btn--secondary" data-action="import">${icon("upload")} Импорт JSON</button>
         </div>
       </div>`;
     return;
   }
-  view.innerHTML = `<div class="clients-grid">${state.clients.map(clientCard).join("")}</div>`;
+  view.innerHTML = `
+    <div class="table-wrap">
+      <table class="table clients-table">
+        <thead>
+          <tr>
+            <th>Клиент</th>
+            <th>Статус</th>
+            <th>Сессия</th>
+            <th>Автостарт</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${state.clients.map(clientRow).join("")}
+        </tbody>
+      </table>
+    </div>`;
 }
 
-function clientCard(client) {
-  const info = statusInfo(client.status);
+function clientRow(client) {
   const running = ["running", "starting", "stopping"].includes(client.status);
   const busy = ["starting", "stopping"].includes(client.status);
   const canStart = client.valid && client.has_session;
-  const needLogin = client.valid && (!client.has_session || client.status === "unauthorized");
-  const errorClass = client.status === "unauthorized" ? "client-error client-error--warning" : "client-error";
-  const errorText = client.error ? `<p class="${errorClass}">${esc(client.error)}</p>` : "";
-  const startButton = running
-    ? `<button class="btn btn--tonal btn--small" data-action="stop" ${busy ? "disabled" : ""}>${icon("stop")} Остановить</button>`
-    : `<button class="btn btn--tonal btn--small" data-action="start" ${canStart ? "" : "disabled"}>${icon("play")} Запустить</button>`;
-  const loginButton = needLogin
-    ? `<button class="btn btn--outlined btn--small" data-action="login">${icon("key")} Войти</button>`
+  const needLogin =
+    client.valid && (!client.has_session || client.status === "unauthorized");
+  const error = client.error
+    ? `<span class="row-error" title="${esc(client.error)}">${esc(client.error)}</span>`
     : "";
+  const runtimeButton = running
+    ? `<button class="btn btn--secondary" data-action="stop" ${busy ? "disabled" : ""}>${icon("stop")} Стоп</button>`
+    : `<button class="btn btn--secondary" data-action="start" ${canStart ? "" : "disabled"}>${icon("play")} Старт</button>`;
   return `
-    <article class="client-card" data-phone="${esc(client.phone)}">
-      <div class="client-card__top">
-        <span class="status status--${info.cls}"><span class="status-dot"></span>${esc(info.label)}</span>
-        <button class="icon-btn" data-action="open" aria-label="Открыть конфиг">${icon("settings")}</button>
-      </div>
-      <h3 class="client-phone">+${esc(client.phone)}</h3>
-      <p class="client-sub">
-        <span class="chip">api ${esc(client.api_id ?? "—")}</span>
-        <span class="chip">${client.has_session ? "сессия есть" : "нет сессии"}</span>
-        <span class="chip">${client.settings_count || 0} настроек</span>
-      </p>
-      ${errorText}
-      <div class="client-card__actions">
-        ${startButton}
-        <button class="btn btn--text btn--small" data-action="restart" ${canStart && !busy ? "" : "disabled"}>${icon("restart")} Рестарт</button>
-        ${loginButton}
-        <label class="switch" title="Запускать при старте панели">
+    <tr data-phone="${esc(client.phone)}">
+      <td data-label="" class="client-cell">
+        <strong>+${esc(client.phone)}</strong>
+        <span>api_id ${esc(client.api_id ?? "—")}${client.valid ? "" : " · конфиг повреждён"}</span>
+        ${error}
+      </td>
+      <td data-label="Статус">${badge(client.status)}</td>
+      <td data-label="Сессия" class="cell-muted">${client.has_session ? "Есть" : "Нет"}</td>
+      <td data-label="Автостарт">
+        <label class="switch">
           <input type="checkbox" data-autostart data-phone="${esc(client.phone)}" ${client.disabled ? "" : "checked"}>
-          <span class="switch__track"></span>
-          <span>Автостарт</span>
+          <span class="switch__box"></span>
         </label>
-      </div>
-    </article>`;
+      </td>
+      <td data-label="">
+        <div class="row-actions">
+          <button class="btn btn--ghost" data-action="open">Открыть</button>
+          ${runtimeButton}
+          <button class="btn btn--ghost" data-action="restart" ${canStart && !busy ? "" : "disabled"}>${icon("restart")} Рестарт</button>
+          ${needLogin ? `<button class="btn btn--ghost" data-action="login">${icon("key")} Войти</button>` : ""}
+        </div>
+      </td>
+    </tr>`;
 }
 
 function findClient(phone) {
@@ -377,8 +388,14 @@ async function clientAction(action, phone, button) {
   if (!phone) return;
   setBusy(button, true);
   try {
-    await api(`/api/clients/${encodeURIComponent(phone)}/${action}`, { method: "POST" });
-    const labels = { start: "Клиент запускается", stop: "Клиент остановлен", restart: "Клиент перезапускается" };
+    await api(`/api/clients/${encodeURIComponent(phone)}/${action}`, {
+      method: "POST",
+    });
+    const labels = {
+      start: "Клиент запускается",
+      stop: "Клиент остановлен",
+      restart: "Клиент перезапускается",
+    };
     toast(labels[action] || "Готово");
     await refreshClients(true);
     if (state.view === "client" && state.clientPhone === phone) {
@@ -388,7 +405,13 @@ async function clientAction(action, phone, button) {
     toast(err.message, "error");
     if (err.message.includes("сессии")) {
       const client = findClient(phone) || state.client;
-      if (client) openAddDialog({ phone: client.phone, api_id: client.api_id }, "code");
+      if (client) {
+        openAddDialog("code", {
+          phone: client.phone,
+          api_id: client.api_id,
+          api_hash: client.config?.api_hash,
+        });
+      }
     }
     await refreshClients(true).catch(() => {});
   } finally {
@@ -410,7 +433,10 @@ async function setAutostart(phone, enabled, input) {
     }
     if (data.needs_login) {
       const client = findClient(phone) || data;
-      openAddDialog({ phone: client.phone, api_id: client.api_id }, "code");
+      openAddDialog("code", {
+        phone: client.phone,
+        api_id: client.api_id,
+      });
     }
   } catch (err) {
     toast(err.message, "error");
@@ -423,28 +449,29 @@ async function setAutostart(phone, enabled, input) {
 async function stopAll() {
   const confirmed = await confirmDialog(
     "Остановить всех клиентов?",
-    "Все запущенные клиенты будут отключены. Флаг автостарта не изменится.",
-    "Остановить всех",
-    true,
+    "Запущенные клиенты будут остановлены. Флаг автостарта не изменится.",
+    "Остановить",
   );
   if (!confirmed) return;
   try {
     const data = await api("/api/clients/stop-all", { method: "POST" });
-    toast(`Остановлено клиентов: ${data.stopped}`);
+    toast(`Остановлено: ${data.stopped}`);
     await refreshClients(true);
   } catch (err) {
     toast(err.message, "error");
   }
 }
 
-// ---------------------------------------------------------------- client detail
+// ---------------------------------------------------------------- detail
 
 async function loadClient(phone) {
   const previous = state.clientPhone;
   state.clientPhone = phone;
   try {
     const data = await api(`/api/clients/${encodeURIComponent(phone)}`);
-    if (previous !== data.phone) state.clientTab = data.valid ? "settings" : "json";
+    if (previous !== data.phone) {
+      state.clientTab = data.valid ? "settings" : "json";
+    }
     state.client = data;
     drawClient(data);
   } catch (err) {
@@ -454,83 +481,107 @@ async function loadClient(phone) {
 }
 
 function drawClient(client) {
-  const info = statusInfo(client.status);
   const running = ["running", "starting", "stopping"].includes(client.status);
   const busy = ["starting", "stopping"].includes(client.status);
   const canStart = client.valid && client.has_session;
-  const needLogin = client.valid && (!client.has_session || client.status === "unauthorized");
+  const needLogin =
+    client.valid && (!client.has_session || client.status === "unauthorized");
   const tab = client.valid ? state.clientTab : "json";
   state.clientTab = tab;
-  setPage(
-    "Клиент",
-    `+${client.phone} · ${info.label}`,
-    `<button class="btn btn--outlined btn--small" data-top-action="back">${icon("back")} Назад</button>`,
-  );
+  setPage("Клиент", "");
+
+  const error = client.error
+    ? `<div style="margin-bottom:16px">${alertHtml(
+        client.error,
+        client.status === "unauthorized" ? "warning" : "error",
+      )}</div>`
+    : "";
 
   const actions = `
-    <button class="btn btn--tonal btn--small" data-detail-action="restart" ${canStart && !busy ? "" : "disabled"}>${icon("restart")} Рестарт</button>
     ${
       running
-        ? `<button class="btn btn--tonal btn--small" data-detail-action="stop" ${busy ? "disabled" : ""}>${icon("stop")} Остановить</button>`
-        : `<button class="btn btn--tonal btn--small" data-detail-action="start" ${canStart ? "" : "disabled"}>${icon("play")} Запустить</button>`
+        ? `<button class="btn btn--secondary" data-detail-action="stop" ${busy ? "disabled" : ""}>${icon("stop")} Остановить</button>`
+        : `<button class="btn btn--secondary" data-detail-action="start" ${canStart ? "" : "disabled"}>${icon("play")} Запустить</button>`
     }
-    ${needLogin ? `<button class="btn btn--outlined btn--small" data-detail-action="login">${icon("key")} Войти</button>` : ""}
-    <label class="switch">
-      <input type="checkbox" data-detail-autostart ${client.disabled ? "" : "checked"}>
-      <span class="switch__track"></span>
-      <span>Автостарт</span>
-    </label>`;
+    <button class="btn btn--secondary" data-detail-action="restart" ${canStart && !busy ? "" : "disabled"}>${icon("restart")} Перезапустить</button>
+    ${needLogin ? `<button class="btn btn--primary" data-detail-action="login">${icon("key")} Войти</button>` : ""}`;
 
-  const meta = `
-    <span class="chip">api ${esc(client.api_id ?? "—")}</span>
-    <span class="chip ${client.has_session ? "chip--success" : "chip--warning"}">${client.has_session ? "сессия есть" : "нет сессии"}</span>
-    <span class="chip ${client.disabled ? "chip--warning" : "chip--primary"}">${client.disabled ? "автостарт выкл." : "автостарт вкл."}</span>
-    ${client.error ? `<span class="chip chip--error">есть ошибка</span>` : ""}`;
-
-  const settingsPanel = client.valid
-    ? renderSettingsPanel(client)
-    : `<div class="alert">${icon("alert")}<span>${esc(client.error || "Конфиг повреждён")}. Исправьте JSON во вкладке «JSON».</span></div>`;
+  const accessFields = client.valid
+    ? `
+      <div class="form-field">
+        <span>api_id</span>
+        <input data-key="api_id" data-kind="number" type="number" step="1" value="${esc(client.config?.api_id ?? "")}">
+      </div>
+      <div class="form-field">
+        <span>api_hash</span>
+        <input data-key="api_hash" data-kind="string" type="text" spellcheck="false" value="${esc(client.config?.api_hash ?? "")}">
+      </div>`
+    : `<p class="form-hint">Доступ появится после исправления JSON.</p>`;
 
   $("#view").innerHTML = `
-    <div class="client-detail">
-      <header class="detail-head">
-        <div>
-          <div class="detail-title">
-            <h2>+${esc(client.phone)}</h2>
-            ${statusChip(client.status)}
-          </div>
-          <div class="detail-meta">${meta}</div>
-          ${client.error ? `<p class="form-error ${client.status === "unauthorized" ? "form-error--warning" : ""}" id="client-error">${esc(client.error)}</p>` : `<p class="form-error" id="client-error" hidden></p>`}
+    <div class="page-head">
+      <div>
+        <div class="breadcrumb">
+          <button data-detail-action="back">Клиенты</button>
+          <span>/</span>
+          <span>+${esc(client.phone)}</span>
         </div>
-        <div class="detail-actions">${actions}</div>
-      </header>
-      <section class="panel-section">
-        <div class="section-head">
-          <div>
-            <h3>Конфигурация</h3>
-            <p>Правки сохраняются в clients/${esc(client.phone)}.json</p>
-          </div>
+        <h2>+${esc(client.phone)} ${badge(client.status)}</h2>
+      </div>
+      <div class="page-head__actions">${actions}</div>
+    </div>
+    ${error}
+    <div class="detail-layout">
+      <div class="stack">
+        <section class="panel">
           <div class="tabs" id="config-tabs">
             <button class="tab ${tab === "settings" ? "is-active" : ""}" data-tab="settings" ${client.valid ? "" : "disabled"}>Настройки</button>
             <button class="tab ${tab === "json" ? "is-active" : ""}" data-tab="json">JSON</button>
           </div>
-        </div>
-        <div id="panel-settings" ${tab === "settings" ? "" : "hidden"}>${settingsPanel}</div>
-        <div id="panel-json" ${tab === "json" ? "" : "hidden"}>
-          <p class="form-hint">Сырой JSON файла клиента. Кнопка «Сохранить JSON» проверит структуру перед записью.</p>
-          <textarea id="json-editor" class="code-editor" spellcheck="false">${esc(client.raw || "")}</textarea>
-          <div class="section-actions">
-            <button id="save-json" class="btn btn--filled btn--small">${icon("check")} Сохранить JSON</button>
-            <button id="format-json" class="btn btn--outlined btn--small">${icon("spark")} Форматировать</button>
+          <div id="panel-settings" class="tab-panel" ${tab === "settings" ? "" : "hidden"}>
+            ${client.valid ? renderSettings(client) : ""}
           </div>
-        </div>
-      </section>
+          <div id="panel-json" class="tab-panel" ${tab === "json" ? "" : "hidden"}>
+            <p class="form-hint" style="margin-bottom:10px">Сырой JSON файла клиента. Перед записью структура проверяется.</p>
+            <textarea id="json-editor" class="code-editor" spellcheck="false">${esc(client.raw || "")}</textarea>
+            <div class="form-actions">
+              <button id="save-json" class="btn btn--primary">${icon("check")} Сохранить JSON</button>
+              <button id="format-json" class="btn btn--secondary">Форматировать</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="stack">
+        <section class="panel">
+          <div class="side-section" id="access-section" ${tab === "json" ? "hidden" : ""}>
+            <h4>Доступ</h4>
+            ${accessFields}
+          </div>
+          <div class="side-section">
+            <h4>Сессия</h4>
+            <div class="meta-list">
+              <div class="meta-row"><span>Файл сессии</span><span>${client.has_session ? "Есть" : "Нет"}</span></div>
+              <div class="meta-row"><span>Автостарт</span><span>${client.disabled ? "Выключен" : "Включён"}</span></div>
+            </div>
+          </div>
+          <div class="side-section">
+            <h4>Автостарт</h4>
+            <div class="side-switch">
+              <span class="muted">Запускать при старте панели</span>
+              <label class="switch">
+                <input type="checkbox" data-detail-autostart ${client.disabled ? "" : "checked"}>
+                <span class="switch__box"></span>
+              </label>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>`;
 }
 
-function renderSettingsPanel(client) {
+function renderSettings(client) {
   const config = client.config || {};
-  const values = Object.entries(config)
+  const keys = Object.entries(config)
     .filter(([key]) => !["api_id", "api_hash", "phone", "disabled"].includes(key))
     .sort(([a], [b]) => a.localeCompare(b));
   const defaults = Object.entries(client.available_defaults || {})
@@ -538,60 +589,69 @@ function renderSettingsPanel(client) {
     .map(([key]) => `<option value="${esc(key)}">${esc(key)}</option>`)
     .join("");
   return `
-    <div class="access-grid">
+    ${
+      keys.length
+        ? `<div class="settings-list" id="settings-list">${keys.map(([key, value]) => settingRow(key, value)).join("")}</div>`
+        : `<div class="settings-list" id="settings-list"><p class="form-hint" style="padding:12px 0">Дополнительных настроек нет. Добавьте нужные из списка ниже.</p></div>`
+    }
+    <div class="add-setting">
       <label class="form-field">
-        <span>api_id</span>
-        <input id="cfg-api-id" data-key="api_id" data-kind="number" type="number" step="1" value="${esc(config.api_id ?? "")}">
+        <span>Добавить настройку</span>
+        <select id="new-setting-key"><option value="">Выберите ключ</option>${defaults}</select>
       </label>
-      <label class="form-field">
-        <span>api_hash</span>
-        <input id="cfg-api-hash" data-key="api_hash" data-kind="string" type="text" spellcheck="false" value="${esc(config.api_hash ?? "")}">
-      </label>
-    </div>
-    <div class="settings-grid" id="settings-grid">
-      ${values.map(([key, value]) => settingRow(key, value)).join("")}
-    </div>
-    <div class="add-setting" id="add-setting">
-      <label class="form-field">
-        <span>Добавить настройку из defaults</span>
-        <select id="new-setting-key"><option value="">Выберите ключ…</option>${defaults}</select>
-      </label>
-      <button class="btn btn--tonal btn--small" id="add-setting-btn" ${defaults ? "" : "disabled"}>${icon("plus")} Добавить</button>
+      <button class="btn btn--secondary" id="add-setting-btn" ${defaults ? "" : "disabled"}>${icon("plus")} Добавить</button>
     </div>
     ${noticeHtml("Токены и флаги фоновых задач применяются после перезапуска клиента. api_id/api_hash перезапускают его автоматически.")}
-    <div class="section-actions">
-      <button id="save-settings" class="btn btn--filled btn--small">${icon("check")} Сохранить настройки</button>
-      <button id="reset-settings" class="btn btn--text btn--small">${icon("refresh")} Сбросить</button>
+    <div class="form-actions">
+      <button class="btn btn--secondary" id="reset-settings">Сбросить</button>
+      <button class="btn btn--primary" id="save-settings">${icon("check")} Сохранить</button>
     </div>`;
 }
 
 function settingRow(key, value) {
-  const label = `<label title="${esc(key)}">${esc(key)}</label>`;
+  const label = `<div class="setting__key">${esc(key)}</div>`;
   if (typeof value === "boolean") {
-    return `<div class="setting-row setting-row--bool" data-setting="${esc(key)}">
+    return `<div class="setting" data-setting="${esc(key)}">
       ${label}
-      <label class="switch switch--setting">
-        <input type="checkbox" data-key="${esc(key)}" data-kind="bool" ${value ? "checked" : ""}>
-        <span class="switch__track"></span>
-      </label>
+      <div class="setting__control setting__control--switch">
+        <label class="switch">
+          <input type="checkbox" data-key="${esc(key)}" data-kind="bool" ${value ? "checked" : ""}>
+          <span class="switch__box"></span>
+        </label>
+      </div>
     </div>`;
   }
   if (typeof value === "number") {
-    return `<div class="setting-row" data-setting="${esc(key)}">${label}<input type="number" step="any" data-key="${esc(key)}" data-kind="number" value="${esc(value)}"></div>`;
+    return `<div class="setting" data-setting="${esc(key)}">
+      ${label}
+      <div class="setting__control"><input type="number" step="any" data-key="${esc(key)}" data-kind="number" value="${esc(value)}"></div>
+    </div>`;
   }
   if (typeof value === "string") {
-    return `<div class="setting-row" data-setting="${esc(key)}">${label}<input type="text" data-key="${esc(key)}" data-kind="string" value="${esc(value)}"></div>`;
+    return `<div class="setting" data-setting="${esc(key)}">
+      ${label}
+      <div class="setting__control"><input type="text" data-key="${esc(key)}" data-kind="string" value="${esc(value)}"></div>
+    </div>`;
   }
   if (value === null) {
-    return `<div class="setting-row setting-row--null" data-setting="${esc(key)}">${label}<input type="text" data-key="${esc(key)}" data-kind="null" value="" placeholder="null"><span class="setting-hint">Пусто = null, иначе строка</span></div>`;
+    return `<div class="setting" data-setting="${esc(key)}">
+      ${label}
+      <div class="setting__control">
+        <input type="text" data-key="${esc(key)}" data-kind="null" value="" placeholder="null">
+        <span class="setting__hint">Пустое значение означает null.</span>
+      </div>
+    </div>`;
   }
-  return `<div class="setting-row" data-setting="${esc(key)}">${label}<textarea data-key="${esc(key)}" data-kind="json" spellcheck="false">${esc(JSON.stringify(value, null, 2))}</textarea></div>`;
+  return `<div class="setting" data-setting="${esc(key)}">
+    ${label}
+    <div class="setting__control"><textarea data-key="${esc(key)}" data-kind="json" spellcheck="false">${esc(JSON.stringify(value, null, 2))}</textarea></div>
+  </div>`;
 }
 
 function collectSettings() {
-  if (!state.client?.config) throw new Error("Нет конфига для сохранения");
+  if (!state.client?.config) throw new Error("Нет конфигурации");
   const config = JSON.parse(JSON.stringify(state.client.config));
-  $$("#panel-settings [data-key]").forEach((input) => {
+  $$("#view [data-key]").forEach((input) => {
     const key = input.dataset.key;
     const kind = input.dataset.kind;
     if (kind === "bool") {
@@ -627,14 +687,14 @@ async function saveSettings(button) {
   }
   setBusy(button, true);
   try {
-    const data = await api(`/api/clients/${encodeURIComponent(state.clientPhone)}`, {
-      method: "PUT",
-      body: { config },
-    });
+    const data = await api(
+      `/api/clients/${encodeURIComponent(state.clientPhone)}`,
+      { method: "PUT", body: { config } },
+    );
     state.client = data;
     await refreshClients(true);
     drawClient(data);
-    toast(data.restarted ? "Сохранено, клиент перезапущен" : "Настройки сохранены");
+    toast(data.restarted ? "Сохранено, клиент перезапущен" : "Сохранено");
   } catch (err) {
     toast(err.message, "error");
   } finally {
@@ -654,15 +714,15 @@ async function saveJson(button) {
   }
   setBusy(button, true);
   try {
-    const data = await api(`/api/clients/${encodeURIComponent(state.clientPhone)}`, {
-      method: "PUT",
-      body: { raw: editor.value },
-    });
+    const data = await api(
+      `/api/clients/${encodeURIComponent(state.clientPhone)}`,
+      { method: "PUT", body: { raw: editor.value } },
+    );
     state.client = data;
     state.clientTab = "json";
     await refreshClients(true);
     drawClient(data);
-    toast(data.restarted ? "JSON сохранён, клиент перезапущен" : "JSON сохранён");
+    toast(data.restarted ? "Сохранено, клиент перезапущен" : "JSON сохранён");
   } catch (err) {
     toast(err.message, "error");
   } finally {
@@ -688,36 +748,19 @@ function addSetting(key) {
     return;
   }
   const value = state.client.available_defaults[key];
-  const grid = $("#settings-grid");
-  if (!grid) return;
-  grid.insertAdjacentHTML("beforeend", settingRow(key, value));
+  const list = $("#settings-list");
+  if (!list) return;
+  list.insertAdjacentHTML("beforeend", settingRow(key, value));
   const select = $("#new-setting-key");
   const option = Array.from(select.options).find((item) => item.value === key);
   if (option) option.remove();
-  if (!select.options.length || (select.options.length === 1 && !select.options[0].value)) {
+  if (
+    !select.options.length ||
+    (select.options.length === 1 && !select.options[0].value)
+  ) {
     $("#add-setting-btn")?.setAttribute("disabled", "");
   }
   toast(`Добавлена настройка ${key}`);
-}
-
-async function refreshClientHead() {
-  if (!state.clientPhone || state.view !== "client") return;
-  const data = await api(`/api/clients/${encodeURIComponent(state.clientPhone)}`);
-  if (!state.client) return;
-  state.client.status = data.status;
-  state.client.error = data.error;
-  state.client.disabled = data.disabled;
-  state.client.has_session = data.has_session;
-  const chip = $("#client-status");
-  if (chip) chip.outerHTML = statusChip(data.status);
-  const error = $("#client-error");
-  if (error) {
-    error.className = `form-error ${data.status === "unauthorized" ? "form-error--warning" : ""}`;
-    error.textContent = data.error || "";
-    error.hidden = !data.error;
-  }
-  const toggle = $("[data-detail-autostart]");
-  if (toggle && document.activeElement !== toggle) toggle.checked = !data.disabled;
 }
 
 // ---------------------------------------------------------------- logs
@@ -772,50 +815,70 @@ function scheduleLogRender() {
   });
 }
 
-const LOG_RANK = { DEBUG: 0, INFO: 1, SUCCESS: 2, WARNING: 3, ERROR: 4, CRITICAL: 5 };
+const LOG_RANK = {
+  DEBUG: 0,
+  INFO: 1,
+  SUCCESS: 2,
+  WARNING: 3,
+  ERROR: 4,
+  CRITICAL: 5,
+};
 
 function filteredLogs() {
   const needle = state.logSearch.trim().toLowerCase();
-  const minRank = state.logLevel === "ALL" ? -1 : LOG_RANK[state.logLevel] ?? 0;
+  const minRank =
+    state.logLevel === "ALL" ? -1 : LOG_RANK[state.logLevel] ?? 0;
   return state.logs.filter((entry) => {
     if (minRank >= 0 && (LOG_RANK[entry.level] ?? 0) < minRank) return false;
     if (!needle) return true;
-    return `${entry.message || ""} ${entry.source || ""}`.toLowerCase().includes(needle);
+    return `${entry.message || ""} ${entry.source || ""}`
+      .toLowerCase()
+      .includes(needle);
   });
 }
 
 function renderLogs() {
   setPage(
     "Логи",
-    "Поток loguru в реальном времени",
-    `<button class="btn btn--outlined btn--small" data-top-action="clear-logs">${icon("close")} Очистить</button>`,
+    "Поток событий в реальном времени",
+    `<button class="btn btn--secondary" data-top-action="clear-logs">Очистить</button>`,
   );
-  const levels = ["ALL", "INFO", "WARNING", "ERROR"];
+  const levels = [
+    ["ALL", "Все уровни"],
+    ["INFO", "INFO и выше"],
+    ["WARNING", "WARNING и выше"],
+    ["ERROR", "ERROR и выше"],
+  ];
   $("#view").innerHTML = `
-    <div class="logs-toolbar">
-      <div class="segmented" id="log-levels">
-        ${levels.map((level) => `<button class="${state.logLevel === level ? "is-active" : ""}" data-log-level="${level}">${level === "ALL" ? "Все" : level}</button>`).join("")}
-      </div>
-      <div class="search-box">
+    <div class="toolbar">
+      <select id="log-level" aria-label="Уровень логов">
+        ${levels
+          .map(
+            ([value, label]) =>
+              `<option value="${value}" ${state.logLevel === value ? "selected" : ""}>${label}</option>`,
+          )
+          .join("")}
+      </select>
+      <label class="search-field">
         ${icon("search")}
-        <input id="log-search" type="search" placeholder="Поиск по логам" value="${esc(state.logSearch)}">
-      </div>
-      <div class="logs-spacer"></div>
-      <button id="log-pause" class="btn btn--outlined btn--small">
+        <input id="log-search" type="search" placeholder="Поиск" value="${esc(state.logSearch)}" aria-label="Поиск по логам">
+      </label>
+      <span class="toolbar-spacer"></span>
+      <button id="log-pause" class="btn btn--secondary">
         ${state.logPaused ? icon("play") : icon("pause")} ${state.logPaused ? "Продолжить" : "Пауза"}
       </button>
     </div>
-    <div class="log-list" id="log-list"></div>`;
+    <div class="log-box"><div class="log-list" id="log-list"></div></div>`;
   renderLogRows();
 }
 
 function renderLogRows() {
   const list = $("#log-list");
   if (!list) return;
-  const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 90;
+  const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
   const entries = filteredLogs().slice(-900);
   if (!entries.length) {
-    list.innerHTML = `<div class="log-empty">${icon("logs")}<p>${state.logs.length ? "Ничего не найдено по фильтру" : "Пока тихо. Логи появятся здесь."}</p></div>`;
+    list.innerHTML = `<div class="log-empty">${state.logs.length ? "Ничего не найдено" : "Логов пока нет"}</div>`;
     return;
   }
   list.innerHTML = entries
@@ -834,17 +897,7 @@ function renderLogRows() {
       </div>`,
     )
     .join("");
-  if (atBottom) {
-    list.scrollTop = list.scrollHeight;
-  }
-}
-
-function setLogLevel(level) {
-  state.logLevel = level;
-  $$("#log-levels button").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.logLevel === level);
-  });
-  renderLogRows();
+  if (atBottom) list.scrollTop = list.scrollHeight;
 }
 
 function toggleLogPause() {
@@ -866,10 +919,11 @@ function stopSystemTimer() {
 async function renderSystem() {
   setPage(
     "Система",
-    "Хост, память, диск и сеть",
-    `<button class="btn btn--outlined btn--small" data-top-action="refresh-system">${icon("refresh")} Обновить</button>`,
+    "Состояние хоста",
+    `<button class="btn btn--secondary" data-top-action="refresh-system">${icon("refresh")} Обновить</button>`,
   );
-  $("#view").innerHTML = `<div class="system-grid" id="system-grid"><div class="metric-card"><div class="metric-label">Загрузка метрик…</div></div></div>`;
+  $("#view").innerHTML =
+    '<div class="stats-grid" id="system-grid"><div class="stat-card"><div class="stat-card__title">Загрузка…</div></div></div>';
   await loadSystem();
   if (state.view !== "system") return;
   stopSystemTimer();
@@ -881,7 +935,6 @@ async function renderSystem() {
 async function loadSystem(showError = false) {
   try {
     const data = await api("/api/system");
-    state.system = data;
     const grid = $("#system-grid");
     if (grid) grid.innerHTML = systemHtml(data);
   } catch (err) {
@@ -889,10 +942,16 @@ async function loadSystem(showError = false) {
   }
 }
 
-function gaugeStyle(percent) {
+function barClass(percent) {
+  const value = Number(percent) || 0;
+  if (value >= 85) return "bar__fill bar__fill--danger";
+  if (value >= 70) return "bar__fill bar__fill--warning";
+  return "bar__fill";
+}
+
+function bar(percent) {
   const value = Math.max(0, Math.min(100, Number(percent) || 0));
-  const color = value >= 85 ? "var(--error)" : value >= 65 ? "var(--warning)" : "var(--primary)";
-  return `--value:${value};--gauge-color:${color}`;
+  return `<div class="bar"><div class="${barClass(value)}" style="width:${value}%"></div></div>`;
 }
 
 function systemHtml(data) {
@@ -902,46 +961,43 @@ function systemHtml(data) {
   const network = data.network || {};
   const clients = data.clients || {};
   return `
-    <article class="metric-card">
-      <div class="metric-card__head"><h3>Процессор</h3>${icon("system")}</div>
-      <div class="gauge" style="${gaugeStyle(cpu.percent)}">
-        <div class="gauge__inner">${Math.round(cpu.percent || 0)}%<small>CPU</small></div>
-      </div>
-      <div class="metric-row"><span>Ядра / потоки</span><span>${esc(cpu.physical ?? "?")} / ${esc(cpu.cores ?? "?")}</span></div>
-      <div class="metric-row"><span>Частота</span><span>${cpu.freq ? `${fmtNumber(cpu.freq)} МГц` : "—"}</span></div>
-      <div class="metric-row"><span>Load average</span><span>${(cpu.load || []).join(" · ") || "—"}</span></div>
+    <article class="stat-card">
+      <div class="stat-card__title">Процессор</div>
+      <div class="stat-card__value">${Math.round(cpu.percent || 0)}%<small> загрузка</small></div>
+      ${bar(cpu.percent)}
+      <div class="kv"><span>Ядра / потоки</span><span>${esc(cpu.physical ?? "?")} / ${esc(cpu.cores ?? "?")}</span></div>
+      <div class="kv"><span>Частота</span><span>${cpu.freq ? `${fmtNumber(cpu.freq)} МГц` : "—"}</span></div>
+      <div class="kv"><span>Load average</span><span>${(cpu.load || []).join(" · ") || "—"}</span></div>
     </article>
-    <article class="metric-card">
-      <div class="metric-card__head"><h3>Память</h3>${icon("spark")}</div>
-      <div class="gauge" style="${gaugeStyle(memory.percent)}">
-        <div class="gauge__inner">${Math.round(memory.percent || 0)}%<small>RAM</small></div>
-      </div>
-      <div class="metric-row"><span>Использовано</span><span>${fmtBytes(memory.used)}</span></div>
-      <div class="metric-row"><span>Всего</span><span>${fmtBytes(memory.total)}</span></div>
-      <div class="metric-row"><span>Доступно</span><span>${fmtBytes(memory.available)}</span></div>
+    <article class="stat-card">
+      <div class="stat-card__title">Память</div>
+      <div class="stat-card__value">${Math.round(memory.percent || 0)}%<small> занято</small></div>
+      ${bar(memory.percent)}
+      <div class="kv"><span>Использовано</span><span>${fmtBytes(memory.used)}</span></div>
+      <div class="kv"><span>Всего</span><span>${fmtBytes(memory.total)}</span></div>
+      <div class="kv"><span>Доступно</span><span>${fmtBytes(memory.available)}</span></div>
     </article>
-    <article class="metric-card">
-      <div class="metric-card__head"><h3>Диск</h3>${icon("file")}</div>
-      <div class="gauge" style="${gaugeStyle(disk.percent)}">
-        <div class="gauge__inner">${Math.round(disk.percent || 0)}%<small>диск</small></div>
-      </div>
-      <div class="metric-row"><span>Использовано</span><span>${fmtBytes(disk.used)}</span></div>
-      <div class="metric-row"><span>Всего</span><span>${fmtBytes(disk.total)}</span></div>
-      <div class="metric-row"><span>Свободно</span><span>${fmtBytes(disk.free)}</span></div>
+    <article class="stat-card">
+      <div class="stat-card__title">Диск</div>
+      <div class="stat-card__value">${Math.round(disk.percent || 0)}%<small> занято</small></div>
+      ${bar(disk.percent)}
+      <div class="kv"><span>Использовано</span><span>${fmtBytes(disk.used)}</span></div>
+      <div class="kv"><span>Всего</span><span>${fmtBytes(disk.total)}</span></div>
+      <div class="kv"><span>Свободно</span><span>${fmtBytes(disk.free)}</span></div>
     </article>
-    <article class="metric-card">
-      <div class="metric-card__head"><h3>Хост</h3>${icon("power")}</div>
-      <div class="metric-value">${esc(fmtUptime(data.uptime))}</div>
-      <div class="metric-label">время работы</div>
-      <div class="metric-row"><span>ОС</span><span>${esc(data.platform || "—")}</span></div>
-      <div class="metric-row"><span>Python</span><span>${esc(data.python || "—")}</span></div>
-      <div class="metric-row"><span>Клиентов запущено</span><span>${esc(clients.running ?? 0)} / ${esc(clients.total ?? 0)}</span></div>
+    <article class="stat-card">
+      <div class="stat-card__title">Хост</div>
+      <div class="stat-card__value">${esc(fmtUptime(data.uptime))}</div>
+      <div class="stat-note" style="margin-top:-4px;margin-bottom:10px">время работы</div>
+      <div class="kv"><span>ОС</span><span>${esc(data.platform || "—")}</span></div>
+      <div class="kv"><span>Python</span><span>${esc(data.python || "—")}</span></div>
+      <div class="kv"><span>Клиентов запущено</span><span>${esc(clients.running ?? 0)} / ${esc(clients.total ?? 0)}</span></div>
     </article>
-    <article class="metric-card metric-card--wide">
-      <div class="metric-card__head"><h3>Сеть</h3>${icon("refresh")}</div>
-      <div class="metric-row"><span>Отправлено</span><span>${fmtBytes(network.sent)}</span></div>
-      <div class="metric-row"><span>Принято</span><span>${fmtBytes(network.recv)}</span></div>
-      <p class="form-hint" style="margin-top:10px">Счётчики интерфейсов с момента запуска хоста. Скорость не измеряется, чтобы не создавать лишнюю нагрузку.</p>
+    <article class="stat-card">
+      <div class="stat-card__title">Сеть</div>
+      <div class="kv"><span>Отправлено</span><span>${fmtBytes(network.sent)}</span></div>
+      <div class="kv"><span>Принято</span><span>${fmtBytes(network.recv)}</span></div>
+      <p class="stat-note">Счётчики интерфейсов с момента запуска хоста. Скорость не измеряется, чтобы не создавать лишнюю нагрузку.</p>
     </article>`;
 }
 
@@ -972,14 +1028,17 @@ function openModal({ title, subtitle = "", body = "", wide = false, onClose = nu
     onClose?.();
   };
   root.addEventListener("click", (event) => {
-    if (event.target === root || event.target.closest("[data-close-modal]")) close();
+    if (event.target === root || event.target.closest("[data-close-modal]")) {
+      close();
+    }
   });
   document.addEventListener("keydown", onKey);
   state.modalClose = close;
   setTimeout(() => {
-    const focusable = root.querySelector("input:not([type=hidden]), textarea, select, button");
-    focusable?.focus();
-  }, 40);
+    root
+      .querySelector("input:not([type=hidden]), textarea, select, button")
+      ?.focus();
+  }, 30);
   return { root, bodyEl: root.querySelector(".modal__body"), close };
 }
 
@@ -987,7 +1046,7 @@ function closeModal() {
   if (state.modalClose) state.modalClose();
 }
 
-function confirmDialog(title, message, confirmLabel = "Подтвердить", danger = false) {
+function confirmDialog(title, message, confirmLabel = "Подтвердить") {
   return new Promise((resolve) => {
     let done = false;
     const finish = (value) => {
@@ -1003,8 +1062,8 @@ function confirmDialog(title, message, confirmLabel = "Подтвердить", 
     const foot = document.createElement("div");
     foot.className = "modal__foot";
     foot.innerHTML = `
-      <button class="btn btn--text" data-cancel>Отмена</button>
-      <button class="btn ${danger ? "btn--danger" : "btn--filled"}" data-confirm>${esc(confirmLabel)}</button>`;
+      <button class="btn btn--secondary" data-cancel>Отмена</button>
+      <button class="btn btn--danger-filled" data-confirm>${esc(confirmLabel)}</button>`;
     modal.root.querySelector(".modal").appendChild(foot);
     foot.querySelector("[data-cancel]").addEventListener("click", () => {
       finish(false);
@@ -1019,159 +1078,140 @@ function confirmDialog(title, message, confirmLabel = "Подтвердить", 
 
 // ---------------------------------------------------------------- add client
 
-function openAddDialog(prefill = {}, initialTab = "code") {
+async function fetchLoginOptions() {
+  try {
+    return await api("/api/login-options");
+  } catch {
+    return { has_credentials: false, source: null };
+  }
+}
+
+async function openAddDialog(initialTab = "code", prefill = {}) {
   const ctx = {
+    tab: initialTab,
     prefill,
     login: null,
     poll: null,
     files: [],
-    mode: initialTab,
-    lastSvg: null,
+    forceCreds: false,
+    options: { has_credentials: false, source: null },
   };
   const modal = openModal({
     title: "Добавить клиента",
-    subtitle: "Вход по коду, QR или импорт готового JSON",
+    subtitle: "Вход по коду, QR или импорт конфигурации",
     wide: true,
-    body: `
-      <div class="tabs tabs--modal" id="add-tabs">
-        <button class="tab" data-add-tab="code">Код</button>
-        <button class="tab" data-add-tab="qr">QR-вход</button>
-        <button class="tab" data-add-tab="import">Импорт JSON</button>
-      </div>
-      <div id="add-body"></div>`,
+    body: '<p class="form-hint">Загрузка…</p>',
     onClose: () => cleanupAdd(ctx),
   });
   ctx.modal = modal;
-  ctx.body = modal.bodyEl.querySelector("#add-body");
-  $$("[data-add-tab]", modal.root).forEach((button) => {
-    button.addEventListener("click", () => switchAddTab(ctx, button.dataset.addTab));
-  });
-  switchAddTab(ctx, initialTab);
+  ctx.body = modal.bodyEl;
+  ctx.options = await fetchLoginOptions();
+  if (!modal.root.isConnected) return;
+  renderAdd(ctx, initialTab);
 }
 
-async function switchAddTab(ctx, tab) {
-  if (ctx.mode === tab && (ctx.login || ctx.body.innerHTML)) {
-    setAddTabs(ctx, tab);
-    return;
-  }
-  await cancelLogin(ctx);
-  ctx.mode = tab;
-  setAddTabs(ctx, tab);
-  if (tab === "import") {
-    renderImport(ctx);
-  } else {
-    renderCredentials(ctx);
-  }
-}
-
-function setAddTabs(ctx, tab) {
-  $$("[data-add-tab]", ctx.modal.root).forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.addTab === tab);
-  });
-}
-
-function cleanupAdd(ctx) {
-  if (ctx.poll) {
-    clearInterval(ctx.poll);
-    ctx.poll = null;
-  }
-  if (ctx.login && ctx.login.state !== "authorized") {
-    fetch(`/api/logins/${ctx.login.id}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-    }).catch(() => {});
-  }
-  ctx.login = null;
-}
-
-async function cancelLogin(ctx) {
-  if (ctx.poll) {
-    clearInterval(ctx.poll);
-    ctx.poll = null;
-  }
-  if (ctx.login && ctx.login.state !== "authorized") {
-    try {
-      await fetch(`/api/logins/${ctx.login.id}`, {
-        method: "DELETE",
-        credentials: "same-origin",
-      });
-    } catch {}
-  }
-  ctx.login = null;
-}
-
-function showAddError(ctx, message) {
-  const holder = ctx.body.querySelector("#add-error");
-  if (holder) holder.innerHTML = alertHtml(message);
-  else toast(message, "error");
-}
-
-function clearAddError(ctx) {
-  const holder = ctx.body.querySelector("#add-error");
-  if (holder) holder.innerHTML = "";
-}
-
-function loginSteps(active) {
-  const steps = [
-    ["creds", "Данные"],
-    ["code", "Код / QR"],
-    ["done", "Готово"],
-  ];
-  return `<div class="login-steps">${steps
-    .map(([key, label], index) => {
-      const order = ["creds", "code", "done"];
-      const activeIndex = order.indexOf(active);
-      const cls = index < activeIndex ? "is-done" : index === activeIndex ? "is-active" : "";
-      return `<span class="login-step ${cls}"><span class="login-step__num">${index < activeIndex ? "✓" : index + 1}</span>${label}</span>`;
-    })
-    .join("")}</div>`;
-}
-
-function renderCredentials(ctx) {
-  const p = ctx.prefill || {};
+function renderAdd(ctx, tab) {
+  if (tab !== ctx.tab) cancelLogin(ctx);
+  ctx.tab = tab;
   ctx.body.innerHTML = `
-    ${loginSteps("creds")}
-    <form id="add-creds" class="form-grid" autocomplete="off">
-      <label class="form-field span-2">
+    <div class="dialog-tabs" id="add-tabs">
+      <button class="dialog-tab ${tab === "code" ? "is-active" : ""}" data-add-tab="code">По коду</button>
+      <button class="dialog-tab ${tab === "qr" ? "is-active" : ""}" data-add-tab="qr">QR-код</button>
+      <button class="dialog-tab ${tab === "import" ? "is-active" : ""}" data-add-tab="import">Импорт</button>
+    </div>
+    <div id="add-content"></div>`;
+  $$("[data-add-tab]", ctx.body).forEach((button) => {
+    button.addEventListener("click", () => renderAdd(ctx, button.dataset.addTab));
+  });
+  if (tab === "code") renderCodeForm(ctx);
+  else if (tab === "qr") renderQrForm(ctx);
+  else renderImport(ctx);
+}
+
+function credentialsSourceLabel(ctx) {
+  return ctx.options.source ? `Источник: ${ctx.options.source}` : "";
+}
+
+function renderCredentialFields(ctx) {
+  if (ctx.options.has_credentials && !ctx.forceCreds) {
+    return `
+      <div class="credentials-note form-field--full">
+        <span>api_id и api_hash не нужны. ${esc(credentialsSourceLabel(ctx))}.</span>
+        <button type="button" id="show-creds">Указать другие</button>
+      </div>`;
+  }
+  return `
+    <label class="form-field">
+      <span>api_id</span>
+      <input name="api_id" type="number" inputmode="numeric" value="${esc(ctx.prefill.api_id ?? "")}" placeholder="из my.telegram.org">
+    </label>
+    <label class="form-field">
+      <span>api_hash</span>
+      <input name="api_hash" type="text" spellcheck="false" value="${esc(ctx.prefill.api_hash ?? "")}" placeholder="32 hex-символа">
+    </label>
+    ${
+      ctx.options.has_credentials
+        ? `<div class="credentials-note form-field--full"><span>Можно оставить пустым — будут использованы сохранённые данные.</span><button type="button" id="hide-creds">Скрыть</button></div>`
+        : `<p class="form-hint form-field--full">Нужны api_id/api_hash приложения с my.telegram.org: панель ещё не знает ни одного клиента.</p>`
+    }`;
+}
+
+function captureCodeForm(ctx) {
+  const form = $("#add-code-form");
+  if (!form) return;
+  const data = new FormData(form);
+  ctx.prefill.phone = String(data.get("phone") || ctx.prefill.phone || "");
+  ctx.prefill.api_id = String(data.get("api_id") || ctx.prefill.api_id || "");
+  ctx.prefill.api_hash = String(data.get("api_hash") || ctx.prefill.api_hash || "");
+}
+
+function renderCodeForm(ctx) {
+  ctx.body.querySelector("#add-content").innerHTML = `
+    <form id="add-code-form" class="form-grid" autocomplete="off">
+      <label class="form-field form-field--full">
         <span>Телефон</span>
-        <input name="phone" type="tel" inputmode="tel" placeholder="79991234567" value="${esc(p.phone || "")}" required>
+        <input name="phone" type="tel" inputmode="tel" value="${esc(ctx.prefill.phone || "")}" placeholder="79991234567" required>
       </label>
-      <label class="form-field">
-        <span>api_id</span>
-        <input name="api_id" type="number" inputmode="numeric" placeholder="из my.telegram.org" value="${esc(p.api_id ?? "")}">
-      </label>
-      <label class="form-field">
-        <span>api_hash</span>
-        <input name="api_hash" type="text" spellcheck="false" placeholder="32 hex-символа" value="${esc(p.api_hash || "")}">
-      </label>
-      <p class="form-hint span-2">Для уже существующего клиента api_id и api_hash можно не заполнять — они возьмутся из конфига.</p>
-      <div class="section-actions span-2">
-        <button class="btn btn--filled" type="submit">${icon(ctx.mode === "qr" ? "qr" : "key")} ${ctx.mode === "qr" ? "Сгенерировать QR" : "Получить код"}</button>
+      ${renderCredentialFields(ctx)}
+      <div id="add-error" class="form-field--full"></div>
+      <div class="form-actions form-field--full">
+        <button class="btn btn--primary" type="submit">Получить код</button>
       </div>
-    </form>
-    <div id="add-error"></div>`;
-  $("#add-creds", ctx.body).addEventListener("submit", async (event) => {
+    </form>`;
+  $("#show-creds")?.addEventListener("click", () => {
+    captureCodeForm(ctx);
+    ctx.forceCreds = true;
+    renderCodeForm(ctx);
+  });
+  $("#hide-creds")?.addEventListener("click", () => {
+    captureCodeForm(ctx);
+    ctx.forceCreds = false;
+    renderCodeForm(ctx);
+  });
+  $("#add-code-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     clearAddError(ctx);
     const form = new FormData(event.currentTarget);
     const button = event.currentTarget.querySelector("button[type=submit]");
+    const body = {
+      phone: String(form.get("phone") || "").trim(),
+      method: "code",
+    };
+    ctx.prefill.phone = body.phone;
+    if (ctx.forceCreds || !ctx.options.has_credentials) {
+      body.api_id = String(form.get("api_id") || "").trim();
+      body.api_hash = String(form.get("api_hash") || "").trim();
+      ctx.prefill.api_id = body.api_id;
+      ctx.prefill.api_hash = body.api_hash;
+    }
     setBusy(button, true);
     try {
-      const data = await api("/api/logins", {
-        method: "POST",
-        body: {
-          phone: String(form.get("phone") || "").trim(),
-          api_id: String(form.get("api_id") || "").trim(),
-          api_hash: String(form.get("api_hash") || "").trim(),
-          method: ctx.mode === "qr" ? "qr" : "code",
-        },
-      });
+      const data = await api("/api/logins", { method: "POST", body });
       ctx.login = data;
-      if (data.state === "qr_waiting") {
-        renderQr(ctx);
-        startQrPoll(ctx);
+      if (data.state === "password_required") {
+        renderPasswordStep(ctx, "Аккаунт защищён паролем 2FA.", "code");
       } else {
-        renderCode(ctx);
+        renderCodeStep(ctx);
       }
     } catch (err) {
       showAddError(ctx, err.message);
@@ -1181,23 +1221,22 @@ function renderCredentials(ctx) {
   });
 }
 
-function renderCode(ctx) {
-  ctx.body.innerHTML = `
-    ${loginSteps("code")}
-    <div class="alert alert--success">${icon("check")}<span>Код отправлен на +${esc(ctx.login.phone)}. Введите его из Telegram.</span></div>
-    <form id="code-form" class="form-grid" autocomplete="off" style="margin-top:16px">
-      <label class="form-field span-2">
+function renderCodeStep(ctx) {
+  ctx.body.querySelector("#add-content").innerHTML = `
+    <div class="alert alert--info">${icon("key")}<span>Код отправлен на +${esc(ctx.login.phone)}.</span></div>
+    <form id="code-step-form" class="form-grid" autocomplete="off" style="margin-top:14px">
+      <label class="form-field form-field--full">
         <span>Код из Telegram</span>
         <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="12345" required>
       </label>
-      <div class="section-actions span-2">
-        <button class="btn btn--filled" type="submit">${icon("check")} Войти</button>
-        <button class="btn btn--text" type="button" id="resend-code">Отправить ещё раз</button>
-        <button class="btn btn--text" type="button" id="back-to-creds">Назад</button>
+      <div id="add-error" class="form-field--full"></div>
+      <div class="form-actions form-field--full">
+        <button class="btn btn--secondary" type="button" id="code-back">Назад</button>
+        <button class="btn btn--secondary" type="button" id="code-resend">Отправить ещё раз</button>
+        <button class="btn btn--primary" type="submit">Войти</button>
       </div>
-    </form>
-    <div id="add-error"></div>`;
-  $("#code-form", ctx.body).addEventListener("submit", async (event) => {
+    </form>`;
+  $("#code-step-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     clearAddError(ctx);
     const code = String(new FormData(event.currentTarget).get("code") || "").trim();
@@ -1210,7 +1249,7 @@ function renderCode(ctx) {
       });
       ctx.login = data;
       if (data.state === "password_required") {
-        renderPassword(ctx, "Код принят. Аккаунт защищён паролем 2FA.");
+        renderPasswordStep(ctx, "Аккаунт защищён паролем 2FA.", "code");
       } else if (data.state === "authorized") {
         finishAdd(ctx, data);
       } else {
@@ -1222,12 +1261,15 @@ function renderCode(ctx) {
       setBusy(button, false);
     }
   });
-  $("#resend-code", ctx.body).addEventListener("click", async (event) => {
+  $("#code-resend").addEventListener("click", async (event) => {
     const button = event.currentTarget;
-    setBusy(button, true);
     clearAddError(ctx);
+    setBusy(button, true);
     try {
-      ctx.login = await api(`/api/logins/${ctx.login.id}/resend`, { method: "POST", body: {} });
+      ctx.login = await api(`/api/logins/${ctx.login.id}/resend`, {
+        method: "POST",
+        body: {},
+      });
       toast("Код отправлен повторно");
     } catch (err) {
       showAddError(ctx, err.message);
@@ -1235,31 +1277,33 @@ function renderCode(ctx) {
       setBusy(button, false);
     }
   });
-  $("#back-to-creds", ctx.body).addEventListener("click", async () => {
-    await cancelLogin(ctx);
-    renderCredentials(ctx);
+  $("#code-back").addEventListener("click", () => {
+    cancelLogin(ctx);
+    renderAdd(ctx, "code");
   });
 }
 
-function renderPassword(ctx, message) {
-  ctx.body.innerHTML = `
-    ${loginSteps("code")}
-    <div class="alert alert--warn">${icon("key")}<span>${esc(message || "Введите пароль двухфакторной аутентификации.")}</span></div>
-    <form id="password-form" class="form-grid" autocomplete="off" style="margin-top:16px">
-      <label class="form-field span-2">
+function renderPasswordStep(ctx, message, origin = "code") {
+  ctx.passwordOrigin = origin;
+  ctx.body.querySelector("#add-content").innerHTML = `
+    <div class="alert alert--warning">${icon("key")}<span>${esc(message || "Введите пароль 2FA.")}</span></div>
+    <form id="password-step-form" class="form-grid" autocomplete="off" style="margin-top:14px">
+      <label class="form-field form-field--full">
         <span>Пароль 2FA</span>
-        <input name="password" type="password" autocomplete="current-password" placeholder="Пароль облачного аккаунта" required>
+        <input name="password" type="password" autocomplete="current-password" required>
       </label>
-      <div class="section-actions span-2">
-        <button class="btn btn--filled" type="submit">${icon("check")} Подтвердить</button>
-        <button class="btn btn--text" type="button" id="back-to-creds">Назад</button>
+      <div id="add-error" class="form-field--full"></div>
+      <div class="form-actions form-field--full">
+        <button class="btn btn--secondary" type="button" id="password-back">Назад</button>
+        <button class="btn btn--primary" type="submit">Подтвердить</button>
       </div>
-    </form>
-    <div id="add-error"></div>`;
-  $("#password-form", ctx.body).addEventListener("submit", async (event) => {
+    </form>`;
+  $("#password-step-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     clearAddError(ctx);
-    const password = String(new FormData(event.currentTarget).get("password") || "");
+    const password = String(
+      new FormData(event.currentTarget).get("password") || "",
+    );
     const button = event.currentTarget.querySelector("button[type=submit]");
     setBusy(button, true);
     try {
@@ -1276,43 +1320,85 @@ function renderPassword(ctx, message) {
       setBusy(button, false);
     }
   });
-  $("#back-to-creds", ctx.body).addEventListener("click", async () => {
-    await cancelLogin(ctx);
-    renderCredentials(ctx);
+  $("#password-back").addEventListener("click", () => {
+    cancelLogin(ctx);
+    renderAdd(ctx, ctx.passwordOrigin === "qr" ? "qr" : "code");
   });
 }
 
-function renderQr(ctx) {
+function renderQrForm(ctx) {
+  const container = ctx.body.querySelector("#add-content");
+  if (!ctx.options.has_credentials) {
+    container.innerHTML = `
+      ${alertHtml(
+        "Нет api_id/api_hash приложения. Укажите их на вкладке «По коду» или в telegram.api_id/api_hash (configs/config.yml).",
+        "warning",
+      )}
+      <p class="form-hint" style="margin-top:12px">QR-вход требует api_id/api_hash приложения на уровне Telegram. Панель не может сгенерировать QR без них.</p>`;
+    return;
+  }
+  container.innerHTML = `
+    <div class="credentials-note">
+      <span>api_id и api_hash не нужны. ${esc(credentialsSourceLabel(ctx))}.</span>
+    </div>
+    <p class="form-hint">Нажмите «Сгенерировать QR» и отсканируйте код в Telegram. Номер аккаунта определится автоматически.</p>
+    <div id="add-error"></div>
+    <div class="form-actions">
+      <button class="btn btn--primary" id="qr-generate">${icon("qr")} Сгенерировать QR</button>
+    </div>`;
+  $("#qr-generate").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    clearAddError(ctx);
+    setBusy(button, true);
+    try {
+      const data = await api("/api/logins", {
+        method: "POST",
+        body: { method: "qr" },
+      });
+      ctx.login = data;
+      renderQrStep(ctx);
+      startQrPoll(ctx);
+    } catch (err) {
+      showAddError(ctx, err.message);
+    } finally {
+      setBusy(button, false);
+    }
+  });
+}
+
+function renderQrStep(ctx) {
   const svg = ctx.login.qr_svg || "";
-  ctx.lastSvg = svg;
-  ctx.body.innerHTML = `
-    ${loginSteps("code")}
+  ctx.body.querySelector("#add-content").innerHTML = `
     <div class="qr-layout">
-      <div class="qr-frame" id="qr-frame">${svg || `<span class="qr-placeholder">QR недоступен</span>`}</div>
+      <div class="qr-frame" id="qr-frame">${svg || '<span class="qr-placeholder">QR недоступен</span>'}</div>
       <div class="qr-copy">
         <h4>Сканируйте код</h4>
-        <p>Откройте Telegram на телефоне и отсканируйте QR. Если 2FA включён, панель попросит пароль.</p>
+        <p>Откройте Telegram → Настройки → Устройства → Подключить устройство.</p>
         <ol>
-          <li>Настройки → Устройства</li>
-          <li>Подключить устройство</li>
-          <li>Наведите камеру на QR</li>
+          <li>Наведите камеру на QR.</li>
+          <li>Подтвердите вход на телефоне.</li>
+          <li>Если включён 2FA, введите пароль здесь.</li>
         </ol>
       </div>
     </div>
-    <p class="form-hint" id="qr-status" style="margin-top:14px">Ожидаю подтверждения в Telegram…</p>
+    <p class="qr-status" id="qr-status">Ожидаю подтверждения…</p>
     <div id="add-error"></div>
-    <div class="section-actions">
-      <button class="btn btn--text" type="button" id="qr-cancel">Отмена</button>
+    <div class="form-actions">
+      <button class="btn btn--secondary" type="button" id="qr-cancel">Отмена</button>
     </div>`;
-  $("#qr-cancel", ctx.body).addEventListener("click", () => ctx.modal.close());
+  $("#qr-cancel").addEventListener("click", () => ctx.modal.close());
+  ctx.lastSvg = svg;
 }
 
 function startQrPoll(ctx) {
   if (ctx.poll) clearInterval(ctx.poll);
+  const loginId = ctx.login?.id;
+  if (!loginId) return;
   ctx.poll = setInterval(async () => {
-    if (!ctx.login || ctx.login.state === "authorized") return;
+    if (!ctx.login || ctx.login.id !== loginId || ctx.login.state === "authorized") return;
     try {
-      const data = await api(`/api/logins/${ctx.login.id}`);
+      const data = await api(`/api/logins/${loginId}`);
+      if (!ctx.login || ctx.login.id !== loginId) return;
       ctx.login = data;
       if (data.state === "qr_waiting") {
         if (data.qr_svg && data.qr_svg !== ctx.lastSvg) {
@@ -1323,7 +1409,7 @@ function startQrPoll(ctx) {
       } else if (data.state === "password_required") {
         clearInterval(ctx.poll);
         ctx.poll = null;
-        renderPassword(ctx, "QR подтверждён. Введите пароль 2FA.");
+        renderPasswordStep(ctx, "QR подтверждён. Введите пароль 2FA.", "qr");
       } else if (data.state === "authorized") {
         clearInterval(ctx.poll);
         ctx.poll = null;
@@ -1359,25 +1445,24 @@ function finishAdd(ctx, login) {
 }
 
 function renderImport(ctx) {
-  ctx.body.innerHTML = `
+  ctx.body.querySelector("#add-content").innerHTML = `
     <div class="dropzone" id="dropzone" role="button" tabindex="0">
       <input id="import-files" type="file" accept=".json,application/json" multiple hidden>
       ${icon("upload")}
-      <strong>Перетащите JSON-файлы сюда</strong>
-      <span>или нажмите, чтобы выбрать несколько clients/*.json</span>
+      <strong>Перетащите JSON-файлы</strong>
+      <span>или нажмите, чтобы выбрать несколько файлов</span>
     </div>
     <ul class="file-list" id="import-file-list"></ul>
-    <label class="form-field" style="margin-top:16px">
+    <label class="form-field" style="margin-top:14px">
       <span>Или вставьте JSON</span>
-      <textarea id="import-paste" spellcheck="false" placeholder='{"phone":"79991234567","api_id":123456,"api_hash":"..."} или массив таких объектов'></textarea>
+      <textarea id="import-paste" spellcheck="false" placeholder='{"phone":"79991234567","api_id":123456,"api_hash":"..."}'></textarea>
     </label>
     <p class="form-hint">Поле phone обязательно, если конфиг вставлен без имени файла. Существующие клиенты не перезаписываются.</p>
-    <div class="section-actions">
-      <button class="btn btn--filled" id="import-run">${icon("upload")} Импортировать</button>
+    <div id="add-error"></div>
+    <div class="form-actions">
+      <button class="btn btn--primary" id="import-run">${icon("upload")} Импортировать</button>
     </div>
-    <div class="import-results" id="import-results"></div>
-    <div id="add-error"></div>`;
-
+    <div class="import-results" id="import-results"></div>`;
   const input = $("#import-files", ctx.body);
   const dropzone = $("#dropzone", ctx.body);
   const fileList = $("#import-file-list", ctx.body);
@@ -1387,22 +1472,22 @@ function renderImport(ctx) {
       .map((file) => `<li>${icon("file")}<span>${esc(file.name)}</span></li>`)
       .join("");
   };
-
   const addFiles = (files) => {
-    const next = Array.from(files || []);
-    for (const file of next) {
-      if (!ctx.files.some((item) => item.name === file.name && item.size === file.size)) {
+    for (const file of Array.from(files || [])) {
+      if (
+        !ctx.files.some(
+          (item) => item.name === file.name && item.size === file.size,
+        )
+      ) {
         ctx.files.push(file);
       }
     }
     showFiles();
   };
-
   input.addEventListener("change", () => addFiles(input.files));
   dropzone.addEventListener("click", (event) => {
     if (event.target !== input) input.click();
   });
-  if (ctx.files.length) showFiles();
   dropzone.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -1419,6 +1504,7 @@ function renderImport(ctx) {
     dropzone.classList.remove("is-drag");
     addFiles(event.dataTransfer.files);
   });
+  if (ctx.files.length) showFiles();
 
   $("#import-run", ctx.body).addEventListener("click", async (event) => {
     const button = event.currentTarget;
@@ -1436,14 +1522,18 @@ function renderImport(ctx) {
         try {
           parsed = JSON.parse(paste);
         } catch (err) {
-          throw new Error(`Некорректный JSON в поле вставки: ${err.message}`);
+          throw new Error(`Некорректный JSON: ${err.message}`);
         }
-        const configs = Array.isArray(parsed) ? parsed : [parsed];
-        for (const config of configs) items.push({ config });
+        for (const config of Array.isArray(parsed) ? parsed : [parsed]) {
+          items.push({ config });
+        }
       }
       if (!items.length) throw new Error("Добавьте файлы или вставьте JSON");
       setBusy(button, true);
-      const data = await api("/api/clients/import", { method: "POST", body: { items } });
+      const data = await api("/api/clients/import", {
+        method: "POST",
+        body: { items },
+      });
       holder.innerHTML = (data.results || [])
         .map((result) => {
           if (result.ok) {
@@ -1463,6 +1553,46 @@ function renderImport(ctx) {
   });
 }
 
+function showAddError(ctx, message) {
+  const holder = ctx.body.querySelector("#add-error");
+  if (holder) holder.innerHTML = alertHtml(message);
+  else toast(message, "error");
+}
+
+function clearAddError(ctx) {
+  const holder = ctx.body.querySelector("#add-error");
+  if (holder) holder.innerHTML = "";
+}
+
+function cleanupAdd(ctx) {
+  if (ctx.poll) {
+    clearInterval(ctx.poll);
+    ctx.poll = null;
+  }
+  if (ctx.login && ctx.login.state !== "authorized") {
+    fetch(`/api/logins/${ctx.login.id}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    }).catch(() => {});
+  }
+  ctx.login = null;
+}
+
+function cancelLogin(ctx) {
+  if (ctx.poll) {
+    clearInterval(ctx.poll);
+    ctx.poll = null;
+  }
+  const login = ctx.login;
+  ctx.login = null;
+  if (login && login.state !== "authorized") {
+    fetch(`/api/logins/${login.id}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    }).catch(() => {});
+  }
+}
+
 // ---------------------------------------------------------------- events
 
 async function onViewClick(event) {
@@ -1470,17 +1600,18 @@ async function onViewClick(event) {
   if (actionButton) {
     event.preventDefault();
     event.stopPropagation();
-    const card = actionButton.closest("[data-phone]");
-    const phone = card?.dataset.phone || state.clientPhone;
+    const row = actionButton.closest("[data-phone]");
+    const phone = row?.dataset.phone || state.clientPhone;
     const action = actionButton.dataset.action;
-    if (action === "add") return openAddDialog();
-    if (action === "import") return openAddDialog({}, "import");
+    if (action === "add") return openAddDialog("code");
+    if (action === "import") return openAddDialog("import");
     if (action === "login") {
       const client = findClient(phone) || state.client;
-      return openAddDialog(
-        { phone: client?.phone, api_id: client?.api_id },
-        "code",
-      );
+      return openAddDialog("code", {
+        phone: client?.phone,
+        api_id: client?.api_id,
+        api_hash: client?.config?.api_hash,
+      });
     }
     if (action === "open") return navigate(`client/${encodeURIComponent(phone)}`);
     if (["start", "stop", "restart"].includes(action)) {
@@ -1496,14 +1627,11 @@ async function onViewClick(event) {
     if (action === "back") return navigate("clients");
     if (action === "login") {
       const client = state.client;
-      return openAddDialog(
-        {
-          phone: client?.phone,
-          api_id: client?.api_id,
-          api_hash: client?.config?.api_hash,
-        },
-        "code",
-      );
+      return openAddDialog("code", {
+        phone: client?.phone,
+        api_id: client?.api_id,
+        api_hash: client?.config?.api_hash,
+      });
     }
     if (["start", "stop", "restart"].includes(action)) {
       return clientAction(action, state.clientPhone, detailAction);
@@ -1520,6 +1648,8 @@ async function onViewClick(event) {
     });
     $("#panel-settings").hidden = state.clientTab !== "settings";
     $("#panel-json").hidden = state.clientTab !== "json";
+    const accessSection = $("#access-section");
+    if (accessSection) accessSection.hidden = state.clientTab !== "settings";
     return;
   }
 
@@ -1529,24 +1659,19 @@ async function onViewClick(event) {
   if (event.target.closest("#save-json")) {
     return saveJson(event.target.closest("#save-json"));
   }
-  if (event.target.closest("#format-json")) {
-    return formatJson();
-  }
+  if (event.target.closest("#format-json")) return formatJson();
   if (event.target.closest("#reset-settings")) {
     return loadClient(state.clientPhone);
   }
   if (event.target.closest("#add-setting-btn")) {
     return addSetting($("#new-setting-key")?.value);
   }
-
-  const logLevel = event.target.closest("[data-log-level]");
-  if (logLevel) return setLogLevel(logLevel.dataset.logLevel);
-
   if (event.target.closest("#log-pause")) return toggleLogPause();
+  if (event.target.closest("[data-top-action]")) return;
 
-  const card = event.target.closest(".client-card");
-  if (card && !event.target.closest("button, input, label, a")) {
-    navigate(`client/${encodeURIComponent(card.dataset.phone)}`);
+  const row = event.target.closest(".clients-table tbody tr");
+  if (row && !event.target.closest("button, input, label, a")) {
+    navigate(`client/${encodeURIComponent(row.dataset.phone)}`);
   }
 }
 
@@ -1559,6 +1684,10 @@ function onViewChange(event) {
   if (detailAuto) {
     return setAutostart(state.clientPhone, detailAuto.checked, detailAuto);
   }
+  if (event.target.id === "log-level") {
+    state.logLevel = event.target.value;
+    renderLogRows();
+  }
 }
 
 function onViewInput(event) {
@@ -1568,21 +1697,19 @@ function onViewInput(event) {
   }
 }
 
-async function onTopbarClick(event) {
+async function onPageAction(event) {
   const button = event.target.closest("[data-top-action]");
   if (!button) return;
   const action = button.dataset.topAction;
-  if (action === "add") return openAddDialog();
-  if (action === "import") return openAddDialog({}, "import");
+  if (action === "add") return openAddDialog("code");
+  if (action === "import") return openAddDialog("import");
   if (action === "stop-all") return stopAll();
-  if (action === "back") return navigate("clients");
+  if (action === "refresh-system") return loadSystem(true);
   if (action === "clear-logs") {
     state.logs = [];
     renderLogRows();
     toast("Логи очищены");
-    return;
   }
-  if (action === "refresh-system") return loadSystem(true);
 }
 
 function bindEvents() {
@@ -1591,19 +1718,28 @@ function bindEvents() {
     const input = $("#login-password");
     const show = input.type === "password";
     input.type = show ? "text" : "password";
-    $("#toggle-password use").setAttribute("href", show ? "#i-eye-off" : "#i-eye");
-    $("#toggle-password").setAttribute("aria-label", show ? "Скрыть пароль" : "Показать пароль");
+    $("#toggle-password use").setAttribute(
+      "href",
+      show ? "#i-eye-off" : "#i-eye",
+    );
+    $("#toggle-password").setAttribute(
+      "aria-label",
+      show ? "Скрыть пароль" : "Показать пароль",
+    );
   });
-  $("#theme-toggle").addEventListener("click", toggleTheme);
-  $("#logout-button").addEventListener("click", logout);
-  $("#mobile-logout").addEventListener("click", logout);
+  $$("#theme-toggle, #theme-toggle-mobile").forEach((button) => {
+    button.addEventListener("click", toggleTheme);
+  });
+  $$("#logout-button, #logout-mobile").forEach((button) => {
+    button.addEventListener("click", logout);
+  });
   $$("[data-nav]").forEach((button) => {
     button.addEventListener("click", () => navigate(button.dataset.nav));
   });
   $("#view").addEventListener("click", onViewClick);
   $("#view").addEventListener("change", onViewChange);
   $("#view").addEventListener("input", onViewInput);
-  $("#topbar-actions").addEventListener("click", onTopbarClick);
+  $("#page-actions").addEventListener("click", onPageAction);
   window.addEventListener("hashchange", () => {
     if (state.authenticated) route();
   });
@@ -1619,8 +1755,9 @@ async function init() {
   bindEvents();
   themeIcon();
   try {
-    await api("/api/me");
-    await enterApp();
+    const session = await api("/api/session");
+    if (session.authenticated) await enterApp();
+    else showLogin();
   } catch {
     showLogin();
   }

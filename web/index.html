@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#5b4bff">
+  <meta name="theme-color" content="#2563eb">
   <title>LumintoGold — панель управления</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/app.css">
@@ -16,18 +16,19 @@
   </script>
 </head>
 <body>
-  <div class="aurora" aria-hidden="true">
-    <span class="aurora__blob aurora__blob--one"></span>
-    <span class="aurora__blob aurora__blob--two"></span>
-    <span class="aurora__blob aurora__blob--three"></span>
-  </div>
-
   <svg class="sprite" aria-hidden="true">
     <symbol id="i-clients" viewBox="0 0 24 24">
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
       <circle cx="9" cy="7" r="4"/>
       <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
       <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </symbol>
+    <symbol id="i-logs" viewBox="0 0 24 24">
+      <path d="M4 17l6-6-6-6"/>
+      <path d="M12 19h8"/>
+    </symbol>
+    <symbol id="i-system" viewBox="0 0 24 24">
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
     </symbol>
     <symbol id="i-plus" viewBox="0 0 24 24">
       <path d="M12 5v14M5 12h14"/>
@@ -41,7 +42,7 @@
       <path d="M7 4l13 8-13 8V4z"/>
     </symbol>
     <symbol id="i-stop" viewBox="0 0 24 24">
-      <rect x="6" y="6" width="12" height="12" rx="2"/>
+      <rect x="6" y="6" width="12" height="12" rx="1"/>
     </symbol>
     <symbol id="i-restart" viewBox="0 0 24 24">
       <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
@@ -50,13 +51,6 @@
     <symbol id="i-settings" viewBox="0 0 24 24">
       <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/>
       <path d="M1 14h6M9 8h6M17 16h6"/>
-    </symbol>
-    <symbol id="i-logs" viewBox="0 0 24 24">
-      <path d="M4 17l6-6-6-6"/>
-      <path d="M12 19h8"/>
-    </symbol>
-    <symbol id="i-system" viewBox="0 0 24 24">
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
     </symbol>
     <symbol id="i-logout" viewBox="0 0 24 24">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -72,9 +66,6 @@
     </symbol>
     <symbol id="i-close" viewBox="0 0 24 24">
       <path d="M18 6L6 18M6 6l12 12"/>
-    </symbol>
-    <symbol id="i-back" viewBox="0 0 24 24">
-      <path d="M15 18l-6-6 6-6"/>
     </symbol>
     <symbol id="i-check" viewBox="0 0 24 24">
       <path d="M20 6L9 17l-5-5"/>
@@ -111,125 +102,103 @@
       <circle cx="11" cy="11" r="7"/>
       <path d="M21 21l-4.35-4.35"/>
     </symbol>
-    <symbol id="i-pause" viewBox="0 0 24 24">
-      <path d="M8 5v14M16 5v14"/>
-    </symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24">
       <path d="M23 4v6h-6M1 20v-6h6"/>
       <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
     </symbol>
-    <symbol id="i-power" viewBox="0 0 24 24">
-      <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
-      <path d="M12 2v10"/>
-    </symbol>
-    <symbol id="i-spark" viewBox="0 0 24 24">
-      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/>
-      <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/>
+    <symbol id="i-pause" viewBox="0 0 24 24">
+      <path d="M8 5v14M16 5v14"/>
     </symbol>
   </svg>
 
-  <section id="login-screen" class="login-screen">
-    <div class="login-visual">
-      <div class="brand brand--large">
-        <span class="brand-mark">L</span>
-        <span class="brand-copy">
-          <strong>LumintoGold</strong>
-          <small>control room</small>
-        </span>
-      </div>
-      <h1 class="login-title">Клиенты под контролем.<br><em>Без консоли.</em></h1>
-      <p class="login-lead">Запускайте, останавливайте и правьте клиентские конфиги на лету. Вход в аккаунты, импорт JSON и живые логи — в одном месте.</p>
-      <div class="login-features">
-        <span class="feature-pill"><svg class="icon"><use href="#i-clients"/></svg>Клиенты</span>
-        <span class="feature-pill"><svg class="icon"><use href="#i-qr"/></svg>QR-вход</span>
-        <span class="feature-pill"><svg class="icon"><use href="#i-logs"/></svg>Живые логи</span>
-      </div>
-    </div>
+  <section id="login-page" class="login-page">
     <form id="login-form" class="login-card" autocomplete="on">
-      <div class="login-card__top">
-        <span class="eyebrow">Вход в панель</span>
-        <span class="secure-chip"><svg class="icon"><use href="#i-key"/></svg> Пароль из config.yml</span>
+      <div class="login-brand">
+        <span class="brand-mark">L</span>
+        <div>
+          <strong>LumintoGold</strong>
+          <span>Панель управления</span>
+        </div>
       </div>
-      <h2>С возвращением</h2>
-      <p class="muted">Введите пароль, который указан в <code>web.password</code>.</p>
+      <h1>Вход</h1>
+      <p class="muted">Пароль указан в <code>configs/config.yml</code> в поле <code>web.password</code>.</p>
       <label class="field">
-        <input id="login-password" name="password" type="password" placeholder=" " autocomplete="current-password" required>
         <span class="field__label">Пароль</span>
+        <input id="login-password" type="password" placeholder=" " autocomplete="current-password" required>
         <button id="toggle-password" class="field__action" type="button" aria-label="Показать пароль">
           <svg class="icon"><use href="#i-eye"/></svg>
         </button>
       </label>
-      <p id="login-error" class="form-error" role="alert" hidden></p>
-      <button id="login-submit" class="btn btn--filled btn--block" type="submit">
-        <svg class="icon"><use href="#i-power"/></svg>
-        Войти в панель
-      </button>
-      <p class="login-footnote">Сессия хранится в памяти процесса. После перезапуска панели потребуется войти снова.</p>
+      <p id="login-error" class="alert alert--error" role="alert" hidden></p>
+      <button id="login-submit" class="btn btn--primary btn--block" type="submit">Войти</button>
+      <p class="login-note">Сессия хранится в памяти до перезапуска панели.</p>
     </form>
   </section>
 
   <div id="app" class="app" hidden>
-    <aside class="rail">
-      <a class="brand brand--rail" href="#/clients" aria-label="LumintoGold">
+    <aside class="sidebar">
+      <a class="sidebar-brand" href="#/clients" aria-label="LumintoGold">
         <span class="brand-mark">L</span>
-        <span class="brand-copy"><strong>Luminto</strong><small>gold</small></span>
+        <span class="sidebar-brand__text"><strong>LumintoGold</strong><small>Панель управления</small></span>
       </a>
-      <nav class="rail-nav" aria-label="Основная навигация">
-        <button class="rail-item" data-nav="clients">
+      <nav class="nav" aria-label="Основная навигация">
+        <button class="nav__item" data-nav="clients">
           <svg class="icon"><use href="#i-clients"/></svg><span>Клиенты</span>
         </button>
-        <button class="rail-item" data-nav="logs">
+        <button class="nav__item" data-nav="logs">
           <svg class="icon"><use href="#i-logs"/></svg><span>Логи</span>
         </button>
-        <button class="rail-item" data-nav="system">
+        <button class="nav__item" data-nav="system">
           <svg class="icon"><use href="#i-system"/></svg><span>Система</span>
         </button>
       </nav>
-      <div class="rail-bottom">
-        <button id="theme-toggle" class="rail-item" aria-label="Переключить тему">
+      <div class="sidebar__footer">
+        <button id="theme-toggle" class="nav__item">
           <svg class="icon"><use href="#i-moon"/></svg><span>Тема</span>
         </button>
-        <button id="logout-button" class="rail-item" aria-label="Выйти">
+        <button id="logout-button" class="nav__item">
           <svg class="icon"><use href="#i-logout"/></svg><span>Выйти</span>
         </button>
       </div>
     </aside>
 
-    <main class="main">
+    <div class="workspace">
       <header class="topbar">
-        <div class="topbar__start">
-          <div class="mobile-brand">
-            <span class="brand-mark">L</span>
-          </div>
-          <div>
-            <p id="eyebrow" class="eyebrow">LumintoGold</p>
-            <h1 id="page-title">Клиенты</h1>
-            <p id="page-subtitle" class="subtitle">Загрузка…</p>
+        <div class="topbar__title">
+          <h1 id="page-title">Клиенты</h1>
+          <p id="page-subtitle"></p>
+        </div>
+        <div class="topbar__actions">
+          <div id="page-actions" class="page-actions"></div>
+          <div class="topbar__tools">
+            <button id="theme-toggle-mobile" class="icon-btn" aria-label="Переключить тему">
+              <svg class="icon"><use href="#i-moon"/></svg>
+            </button>
+            <button id="logout-mobile" class="icon-btn" aria-label="Выйти">
+              <svg class="icon"><use href="#i-logout"/></svg>
+            </button>
           </div>
         </div>
-        <div id="topbar-actions" class="topbar__actions"></div>
       </header>
-      <section id="view" class="view" aria-live="polite"></section>
-    </main>
 
-    <nav class="bottom-nav" aria-label="Мобильная навигация">
-      <button class="bottom-nav__item" data-nav="clients">
-        <svg class="icon"><use href="#i-clients"/></svg><span>Клиенты</span>
-      </button>
-      <button class="bottom-nav__item" data-nav="logs">
-        <svg class="icon"><use href="#i-logs"/></svg><span>Логи</span>
-      </button>
-      <button class="bottom-nav__item" data-nav="system">
-        <svg class="icon"><use href="#i-system"/></svg><span>Система</span>
-      </button>
-      <button id="mobile-logout" class="bottom-nav__item">
-        <svg class="icon"><use href="#i-logout"/></svg><span>Выйти</span>
-      </button>
-    </nav>
+      <nav class="mobile-nav" aria-label="Мобильная навигация">
+        <button class="mobile-nav__item" data-nav="clients">
+          <svg class="icon"><use href="#i-clients"/></svg><span>Клиенты</span>
+        </button>
+        <button class="mobile-nav__item" data-nav="logs">
+          <svg class="icon"><use href="#i-logs"/></svg><span>Логи</span>
+        </button>
+        <button class="mobile-nav__item" data-nav="system">
+          <svg class="icon"><use href="#i-system"/></svg><span>Система</span>
+        </button>
+      </nav>
+
+      <main id="view" class="view" aria-live="polite"></main>
+    </div>
   </div>
 
   <div id="modal-root"></div>
-  <div id="snackbar" class="snackbar" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="/static/app.js" defer></script>
 </body>

@@ -138,6 +138,8 @@ class Panel:
         host: str,
         port: int,
         password: str,
+        default_api_id: int = 0,
+        default_api_hash: str = "",
         managers: dict[str, Any],
         statuses: dict[str, dict[str, Any]],
         launch: Callable[[str], Awaitable[bool]],
@@ -150,6 +152,8 @@ class Panel:
         self._host = host
         self._port = port
         self._password = password
+        self._default_api_id = default_api_id
+        self._default_api_hash = default_api_hash
         self._managers = managers
         self._statuses = statuses
         self._launch = launch
@@ -214,7 +218,8 @@ class Panel:
         app.router.add_static("/static", self._web_dir / "static")
         app.router.add_post("/api/login", self._login)
         app.router.add_post("/api/logout", self._logout)
-        app.router.add_get("/api/me", self._me)
+        app.router.add_get("/api/session", self._session_info)
+        app.router.add_get("/api/login-options", self._login_options)
         app.router.add_get("/api/clients", self._list_clients)
         app.router.add_post("/api/clients/import", self._import_clients)
         app.router.add_post("/api/clients/stop-all", self._stop_all_clients)
@@ -241,7 +246,7 @@ class Panel:
     async def _auth_middleware(self, request: web.Request, handler):
         if (
             request.path.startswith("/api/")
-            and request.path != "/api/login"
+            and request.path not in ("/api/login", "/api/session")
             and not self._authorized(request)
         ):
             response = self._error(401, "Требуется вход в панель")
@@ -331,6 +336,30 @@ class Panel:
             return None, "Конфиг должен быть JSON-объектом"
         return data, None
 
+    async def _default_credentials(
+        self,
+    ) -> tuple[tuple[int, str] | None, str | None]:
+        try:
+            credentials = validate_credentials(
+                self._default_api_id, self._default_api_hash
+            )
+        except ValueError:
+            pass
+        else:
+            return credentials, "config.yml"
+        for path in sorted(pathes.clients.glob("*.json")):
+            data, error = await self._read_config(path.stem)
+            if error or not data:
+                continue
+            try:
+                credentials = validate_credentials(
+                    data.get("api_id"), data.get("api_hash")
+                )
+            except ValueError:
+                continue
+            return credentials, f"клиент +{path.stem}"
+        return None, None
+
     async def _write_config(self, phone: str, data: dict) -> None:
         manager = self._managers.get(phone)
         target = manager.settings if manager else settings.UBSettings(phone)
@@ -408,8 +437,17 @@ class Panel:
         response.del_cookie(SESSION_COOKIE, path="/")
         return response
 
-    async def _me(self, request: web.Request) -> web.Response:
-        return self._json({"ok": True})
+    async def _session_info(self, request: web.Request) -> web.Response:
+        return self._json({"authenticated": self._authorized(request)})
+
+    async def _login_options(self, request: web.Request) -> web.Response:
+        credentials, source = await self._default_credentials()
+        return self._json(
+            {
+                "has_credentials": credentials is not None,
+                "source": source,
+            }
+        )
 
     def _prune_sessions(self) -> None:
         now = time.time()
@@ -700,22 +738,45 @@ class Panel:
         except web.HTTPException as exc:
             return self._error(exc.status, exc.text)
         try:
-            phone = normalize_phone(body.get("phone"))
             method = str(body.get("method") or "code")
             if method not in ("code", "qr"):
                 raise ValueError("Неизвестный способ входа")
-            existing, existing_error = await self._read_config(phone)
-            if existing_error:
-                raise ValueError(
-                    "Конфиг клиента повреждён — сначала исправьте JSON"
-                )
-            api_id, api_hash = validate_credentials(
-                body.get("api_id") or (existing or {}).get("api_id"),
-                body.get("api_hash") or (existing or {}).get("api_hash"),
-            )
+            raw_phone = body.get("phone")
+            phone = normalize_phone(raw_phone) if raw_phone else ""
+            if method == "code" and not phone:
+                raise ValueError("Введите номер телефона")
+            existing = None
+            if phone:
+                existing, existing_error = await self._read_config(phone)
+                if existing_error:
+                    raise ValueError(
+                        "Конфиг клиента повреждён — сначала исправьте JSON"
+                    )
+            raw_id = body.get("api_id")
+            raw_hash = body.get("api_hash")
+            api_id = None
+            api_hash = None
+            if raw_id or raw_hash:
+                api_id, api_hash = validate_credentials(raw_id, raw_hash)
+            else:
+                if existing:
+                    with contextlib.suppress(ValueError):
+                        api_id, api_hash = validate_credentials(
+                            existing.get("api_id"),
+                            existing.get("api_hash"),
+                        )
+                if api_id is None or api_hash is None:
+                    defaults, _ = await self._default_credentials()
+                    if not defaults:
+                        raise ValueError(
+                            "Не заданы api_id/api_hash. Укажите их в форме "
+                            "или в telegram.api_id/api_hash "
+                            "(configs/config.yml)"
+                        )
+                    api_id, api_hash = defaults
         except ValueError as exc:
             return self._error(400, str(exc))
-        manager = self._managers.get(phone)
+        manager = self._managers.get(phone) if phone else None
         if manager and not manager._stopped:
             return self._error(409, "Клиент уже запущен")
         async with self._login_admin_lock:
@@ -768,7 +829,9 @@ class Panel:
                 self._logins[login_id] = login
                 if method == "qr":
                     login.qr_task = asyncio.create_task(self._qr_loop(login_id))
-                logger.info(f"Веб-панель: начат вход {phone} ({method})")
+                logger.info(
+                    f"Веб-панель: начат вход {phone or 'QR'} ({method})"
+                )
                 return self._json(self._login_payload(login))
             except Exception as exc:
                 if login is not None:
@@ -782,7 +845,7 @@ class Panel:
     def _login_payload(self, login: LoginSession) -> dict:
         return {
             "id": login.id,
-            "phone": login.phone,
+            "phone": login.phone or login.result_phone or "",
             "method": login.method,
             "state": login.state,
             "error": login.error,
@@ -919,14 +982,18 @@ class Panel:
             if me and me.phone:
                 with contextlib.suppress(ValueError):
                     actual_phone = normalize_phone(me.phone)
-            if actual_phone != login.phone:
-                requested_exists = self._config_path(login.phone).exists()
-                actual_exists = self._config_path(actual_phone).exists()
-                if requested_exists or actual_exists:
-                    raise ValueError(
-                        "Вход выполнен под другим номером "
-                        f"+{actual_phone}, а конфиг уже существует"
-                    )
+            if not actual_phone:
+                raise ValueError("Telegram не вернул номер аккаунта")
+            if (
+                login.phone
+                and actual_phone != login.phone
+                and self._config_path(login.phone).exists()
+            ):
+                raise ValueError(
+                    "Вход выполнен под другим номером "
+                    f"+{actual_phone}, а конфиг +{login.phone} "
+                    "уже существует"
+                )
             if actual_phone in self._managers:
                 raise ValueError(f"Клиент +{actual_phone} уже запущен")
             existing, existing_error = await self._read_config(actual_phone)
@@ -961,7 +1028,9 @@ class Panel:
             login.state = "error"
             login.error = self._friendly_error(exc)
             login.finished_at = time.time()
-            logger.warning(f"Веб-панель: ошибка входа {login.phone}: {exc}")
+            logger.warning(
+                f"Веб-панель: ошибка входа {login.phone or 'QR'}: {exc}"
+            )
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(login.client.disconnect(), 5)
             if login.qr_task and login.qr_task is not asyncio.current_task():

@@ -1346,10 +1346,16 @@ async def main():
     log_broker = web.LogBroker(loop)
     logger.add(log_broker, level="INFO")
 
+    try:
+        default_api_id = int(config.config.telegram.api_id or 0)
+    except (TypeError, ValueError):
+        default_api_id = 0
     panel = web.Panel(
         host=str(config.config.web.host),
         port=int(config.config.web.port),
         password=str(config.config.web.password or ""),
+        default_api_id=default_api_id,
+        default_api_hash=str(config.config.telegram.api_hash or ""),
         managers=_managers,
         statuses=_client_status,
         launch=_launch_manager,

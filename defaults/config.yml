@@ -7,6 +7,12 @@ web:
   port: 8080
   password: "luminto" # Смените перед публикацией панели
 
+# Необязательно: api_id/api_hash приложения для QR-входа и новых клиентов.
+# Если не заданы, панель берёт их из первого клиента в clients/.
+telegram:
+  api_id: 0
+  api_hash: ""
+
 # Не трогай это, если не знаешь! URL для API
 url:
   geoapify: "https://api.geoapify.com/v1/geocode/reverse"
