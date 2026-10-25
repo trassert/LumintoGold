@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import random
 
 from loguru import logger
@@ -26,7 +27,9 @@ class AutoChatManager:
     async def stop(self):
         self._running = False
         if self._task:
-            await self._task
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
             self._task = None
 
     async def _worker(self):
@@ -40,7 +43,8 @@ class AutoChatManager:
             delay = await self.settings.get("autochat.delay", 1000)
 
             if not (chat_ids and ad_chat and ad_id):
-                await asyncio.sleep(60)
+                idle = await self.settings.get("autochat.idle_sleep", 60)
+                await asyncio.sleep(idle)
                 continue
 
             if not current_chats:

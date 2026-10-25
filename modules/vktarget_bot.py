@@ -251,10 +251,12 @@ class VKTargetRefactored:
 
     async def _poll_loop(self) -> None:
         try:
-            await asyncio.sleep(5)
+            initial = await self.settings.get("vktarget.poll_initial_delay", 5)
+            await asyncio.sleep(initial)
             while self._active:
                 base_wait = await self.settings.get("vktarget.poll_wait")
-                delay = base_wait * 60 + random.uniform(-30, 30)
+                jitter = await self.settings.get("vktarget.poll_jitter", 30)
+                delay = base_wait * 60 + random.uniform(-jitter, jitter)
                 await asyncio.sleep(max(10, delay))
                 if not self._active:
                     break

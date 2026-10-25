@@ -16,18 +16,15 @@ from pathlib import Path
 from typing import Any
 
 import orjson
+import yaml
 from aiohttp import WSMsgType, web
 from loguru import logger
 from telethon import TelegramClient, errors
 from telethon.tl.custom.qrlogin import QRLogin
 
-from . import pathes, settings
+from . import config, pathes, settings
 
 DEFAULT_PASSWORD = "luminto"
-SESSION_COOKIE = "luminto_session"
-SESSION_TTL = 7 * 24 * 60 * 60
-LOGIN_TTL = 15 * 60
-NETWORK_TIMEOUT = 20
 PHONE_RE = re.compile(r"^\+?\d{5,20}$")
 HASH_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 LOGIN_ID_RE = re.compile(r"^[a-f0-9]{32}$")
@@ -91,7 +88,7 @@ class LoginSession:
     qr: QRLogin | None = None
     qr_svg: str | None = None
     result_phone: str | None = None
-    expires_at: float = field(default_factory=lambda: time.time() + LOGIN_TTL)
+    expires_at: float = 0.0
     finished_at: float | None = None
     closed: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -117,11 +114,15 @@ def validate_credentials(api_id: Any, api_hash: Any) -> tuple[int, str]:
     return api_id, api_hash.lower()
 
 
-def qr_svg(data: str) -> str:
+def qr_svg(data: str, box_size: int = 10, border: int = 2) -> str:
     import qrcode
     from qrcode.image.svg import SvgPathImage
 
-    qr = qrcode.QRCode(image_factory=SvgPathImage, box_size=10, border=2)
+    qr = qrcode.QRCode(
+        image_factory=SvgPathImage,
+        box_size=box_size,
+        border=border,
+    )
     qr.add_data(data)
     qr.make(fit=True)
     image = qr.make_image()
@@ -138,8 +139,6 @@ class Panel:
         host: str,
         port: int,
         password: str,
-        default_api_id: int = 0,
-        default_api_hash: str = "",
         managers: dict[str, Any],
         statuses: dict[str, dict[str, Any]],
         launch: Callable[[str], Awaitable[bool]],
@@ -152,8 +151,6 @@ class Panel:
         self._host = host
         self._port = port
         self._password = password
-        self._default_api_id = default_api_id
-        self._default_api_hash = default_api_hash
         self._managers = managers
         self._statuses = statuses
         self._launch = launch
@@ -170,6 +167,27 @@ class Panel:
         self._runner: web.AppRunner | None = None
         self._cleanup_task: asyncio.Task | None = None
         self._closing = False
+        self._session_ttl = 0
+        self._login_ttl = 0
+        self._network_timeout = 0
+        self._login_max_attempts = 0
+        self._login_block_seconds = 0
+        self._qr_box_size = 10
+        self._qr_border = 2
+        self._max_request_size = 0
+        self._cookie_name = "luminto_session"
+        self._reload_web_limits()
+
+    def _reload_web_limits(self) -> None:
+        web_cfg = config.config.web
+        self._session_ttl = max(60, int(web_cfg.session_ttl_hours) * 3600)
+        self._login_ttl = max(60, int(web_cfg.login_ttl_minutes) * 60)
+        self._network_timeout = max(5, int(web_cfg.network_timeout_seconds))
+        self._login_max_attempts = max(1, int(web_cfg.login_max_attempts))
+        self._login_block_seconds = max(1, int(web_cfg.login_block_seconds))
+        self._qr_box_size = max(1, int(web_cfg.qr_box_size))
+        self._qr_border = max(0, int(web_cfg.qr_border))
+        self._cookie_name = str(web_cfg.cookie_name)
 
     async def start(self) -> None:
         if not self._password:
@@ -183,9 +201,10 @@ class Panel:
                 "Веб-панель использует пароль по умолчанию. "
                 "Смените web.password в configs/config.yml!"
             )
+        self._max_request_size = int(config.config.web.max_request_size)
         app = web.Application(
             middlewares=[self._auth_middleware],
-            client_max_size=4 * 1024 * 1024,
+            client_max_size=self._max_request_size,
         )
         self._register_routes(app)
         self._runner = web.AppRunner(app, access_log=None)
@@ -220,12 +239,21 @@ class Panel:
         app.router.add_post("/api/logout", self._logout)
         app.router.add_get("/api/session", self._session_info)
         app.router.add_get("/api/login-options", self._login_options)
+        app.router.add_get("/api/settings-schema", self._settings_schema)
+        app.router.add_get("/api/global-config", self._global_config)
+        app.router.add_put("/api/global-config", self._save_global_config)
+        app.router.add_post(
+            "/api/global-config/reload", self._reload_global_config
+        )
         app.router.add_get("/api/clients", self._list_clients)
         app.router.add_post("/api/clients/import", self._import_clients)
         app.router.add_post("/api/clients/stop-all", self._stop_all_clients)
         app.router.add_get("/api/clients/{phone}", self._get_client)
         app.router.add_put("/api/clients/{phone}", self._save_client)
         app.router.add_patch("/api/clients/{phone}", self._patch_client)
+        app.router.add_patch(
+            "/api/clients/{phone}/features", self._patch_feature
+        )
         app.router.add_post("/api/clients/{phone}/start", self._start_client)
         app.router.add_post("/api/clients/{phone}/stop", self._stop_client)
         app.router.add_post(
@@ -287,7 +315,7 @@ class Panel:
         return data
 
     def _authorized(self, request: web.Request) -> bool:
-        token = request.cookies.get(SESSION_COOKIE)
+        token = request.cookies.get(self._cookie_name)
         if not token:
             return False
         expires = self._sessions.get(token)
@@ -341,9 +369,10 @@ class Panel:
     ) -> tuple[tuple[int, str] | None, str | None]:
         try:
             credentials = validate_credentials(
-                self._default_api_id, self._default_api_hash
+                config.config.telegram.api_id,
+                config.config.telegram.api_hash,
             )
-        except ValueError:
+        except TypeError, ValueError:
             pass
         else:
             return credentials, "config.yml"
@@ -407,20 +436,23 @@ class Panel:
         password = str(data.get("password") or "")
         if not hmac.compare_digest(password.encode(), self._password.encode()):
             attempts += 1
-            if attempts >= 5:
-                self._login_attempts[remote] = (0, now + 60)
+            if attempts >= self._login_max_attempts:
+                self._login_attempts[remote] = (
+                    0,
+                    now + self._login_block_seconds,
+                )
             else:
                 self._login_attempts[remote] = (attempts, 0.0)
             return self._error(401, "Неверный пароль")
         self._login_attempts.pop(remote, None)
         token = secrets.token_urlsafe(32)
-        self._sessions[token] = now + SESSION_TTL
+        self._sessions[token] = now + self._session_ttl
         self._prune_sessions()
         response = self._json({"ok": True})
         response.set_cookie(
-            SESSION_COOKIE,
+            self._cookie_name,
             token,
-            max_age=SESSION_TTL,
+            max_age=self._session_ttl,
             httponly=True,
             samesite="Lax",
             secure=request.secure,
@@ -430,11 +462,11 @@ class Panel:
         return response
 
     async def _logout(self, request: web.Request) -> web.Response:
-        token = request.cookies.get(SESSION_COOKIE)
+        token = request.cookies.get(self._cookie_name)
         if token:
             self._sessions.pop(token, None)
         response = self._json({"ok": True})
-        response.del_cookie(SESSION_COOKIE, path="/")
+        response.del_cookie(self._cookie_name, path="/")
         return response
 
     async def _session_info(self, request: web.Request) -> web.Response:
@@ -448,6 +480,108 @@ class Panel:
                 "source": source,
             }
         )
+
+    async def _settings_schema(self, request: web.Request) -> web.Response:
+        return self._json(settings.schema_payload())
+
+    async def _read_global_text(self, path: Path, defaults: Path) -> str:
+        def read() -> str:
+            target = path if path.exists() else defaults
+            if not target.exists():
+                return ""
+            return target.read_text(encoding="utf-8")
+
+        return await asyncio.to_thread(read)
+
+    @staticmethod
+    def _validate_global_yaml(text: str, label: str) -> None:
+        try:
+            data = yaml.safe_load(text) if text.strip() else {}
+        except yaml.YAMLError as exc:
+            raise ValueError(f"{label}: {exc}") from exc
+        if data is None:
+            return
+        if not isinstance(data, dict):
+            raise ValueError(f"{label}: ожидается YAML-объект")
+
+    @staticmethod
+    async def _write_global_text(path: Path, text: str) -> None:
+        def write() -> None:
+            path.parent.mkdir(exist_ok=True)
+            tmp = path.with_name(f"{path.name}.tmp")
+            tmp.write_text(text, encoding="utf-8")
+            tmp.replace(path)
+
+        await asyncio.to_thread(write)
+
+    async def _global_config(self, request: web.Request) -> web.Response:
+        return self._json(
+            {
+                "config": await self._read_global_text(
+                    pathes.config, pathes.default_config
+                ),
+                "tokens": await self._read_global_text(
+                    pathes.tokens, pathes.default_tokens
+                ),
+                "restart_required": [
+                    "web.host",
+                    "web.port",
+                    "web.max_request_size",
+                    "web.log_buffer_size",
+                    "telegram.* для уже запущенных клиентов",
+                ],
+            }
+        )
+
+    async def _save_global_config(self, request: web.Request) -> web.Response:
+        try:
+            body = await self._json_body(request)
+        except web.HTTPException as exc:
+            return self._error(exc.status, exc.text)
+        config_text = body.get("config")
+        tokens_text = body.get("tokens")
+        if config_text is not None and not isinstance(config_text, str):
+            return self._error(400, "config должен быть строкой")
+        if tokens_text is not None and not isinstance(tokens_text, str):
+            return self._error(400, "tokens должен быть строкой")
+        try:
+            if config_text is not None:
+                self._validate_global_yaml(config_text, "config.yml")
+            if tokens_text is not None:
+                self._validate_global_yaml(tokens_text, "tokens.yml")
+        except ValueError as exc:
+            return self._error(400, str(exc))
+        if config_text is not None:
+            await self._write_global_text(pathes.config, config_text)
+        if tokens_text is not None:
+            await self._write_global_text(pathes.tokens, tokens_text)
+        try:
+            await self._reload_globals()
+        except Exception as exc:
+            logger.exception("Ошибка hot-reload глобальных конфигов")
+            return self._error(500, f"Не удалось применить конфиги: {exc}")
+        return self._json({"ok": True})
+
+    async def _reload_global_config(self, request: web.Request) -> web.Response:
+        try:
+            await self._reload_globals()
+        except Exception as exc:
+            logger.exception("Ошибка hot-reload глобальных конфигов")
+            return self._error(500, f"Не удалось перечитать конфиги: {exc}")
+        return self._json({"ok": True})
+
+    async def _reload_globals(self) -> None:
+        config.reload()
+        settings.reload_schema()
+        self._reload_web_limits()
+        new_password = str(config.config.web.password or "")
+        if new_password:
+            self._password = new_password
+        self._login_attempts.clear()
+        for manager in list(self._managers.values()):
+            with contextlib.suppress(Exception):
+                await manager.apply_features()
+        logger.info("Глобальные настройки применены к запущенным клиентам")
 
     def _prune_sessions(self) -> None:
         now = time.time()
@@ -530,18 +664,7 @@ class Panel:
         summary = await self._summary(phone)
         if summary is None:
             return self._error(404, "Клиент не найден")
-        missing_defaults = {
-            key: value
-            for key, value in settings.default.items()
-            if data is None or key not in data
-        }
-        summary.update(
-            {
-                "config": data,
-                "raw": raw,
-                "available_defaults": missing_defaults,
-            }
-        )
+        summary.update({"config": data, "raw": raw})
         return self._json(summary)
 
     async def _save_client(self, request: web.Request) -> web.Response:
@@ -587,6 +710,8 @@ class Panel:
             self._set_status(phone, "disabled")
         elif restart_needed:
             await self._restart(phone)
+        elif manager and manager.status == "running":
+            await manager.apply_features()
         detail = await self._get_client(request)
         if isinstance(detail, web.Response) and detail.status == 200:
             payload = orjson.loads(detail.body)
@@ -629,6 +754,42 @@ class Panel:
         if isinstance(detail, web.Response) and detail.status == 200:
             payload = orjson.loads(detail.body)
             payload["needs_login"] = needs_login
+            return self._json(payload)
+        return detail
+
+    async def _patch_feature(self, request: web.Request) -> web.Response:
+        phone = request.match_info["phone"]
+        if not PHONE_RE.fullmatch(phone):
+            return self._error(400, "Некорректный номер")
+        try:
+            body = await self._json_body(request)
+        except web.HTTPException as exc:
+            return self._error(exc.status, exc.text)
+        key = str(body.get("key") or "")
+        value = body.get("value")
+        meta = settings.fields.get(key)
+        if not meta or not meta.get("feature"):
+            return self._error(400, "Неизвестная функция")
+        if not isinstance(value, bool):
+            return self._error(400, "value должен быть true или false")
+        data, error = await self._read_config(phone)
+        if error:
+            return self._error(400, "Сначала исправьте JSON-конфиг")
+        if data is None:
+            return self._error(404, "Клиент не найден")
+        data[key] = value
+        manager = self._managers.get(phone)
+        target = manager.settings if manager else settings.UBSettings(phone)
+        await target.replace(data)
+        applied = bool(manager and manager.status == "running")
+        if applied:
+            await manager.apply_features()
+        detail = await self._get_client(request)
+        if isinstance(detail, web.Response) and detail.status == 200:
+            payload = orjson.loads(detail.body)
+            payload["feature_applied"] = applied
+            payload["feature"] = key
+            payload["value"] = value
             return self._json(payload)
         return detail
 
@@ -795,9 +956,9 @@ class Panel:
                     temp_session,
                     connection_retries=3,
                 )
-                await asyncio.wait_for(client.connect(), NETWORK_TIMEOUT)
+                await asyncio.wait_for(client.connect(), self._network_timeout)
                 if await asyncio.wait_for(
-                    client.is_user_authorized(), NETWORK_TIMEOUT
+                    client.is_user_authorized(), self._network_timeout
                 ):
                     with contextlib.suppress(Exception):
                         await asyncio.wait_for(client.disconnect(), 5)
@@ -811,20 +972,23 @@ class Panel:
                     method=method,
                     client=client,
                     temp_session=temp_session,
+                    expires_at=time.time() + self._login_ttl,
                 )
                 if method == "code":
                     sent = await asyncio.wait_for(
                         client.send_code_request(phone),
-                        NETWORK_TIMEOUT,
+                        self._network_timeout,
                     )
                     login.phone_code_hash = sent.phone_code_hash
                     login.state = "code_sent"
                 else:
                     qr = await asyncio.wait_for(
-                        client.qr_login(), NETWORK_TIMEOUT
+                        client.qr_login(), self._network_timeout
                     )
                     login.qr = qr
-                    login.qr_svg = qr_svg(qr.url)
+                    login.qr_svg = qr_svg(
+                        qr.url, self._qr_box_size, self._qr_border
+                    )
                     login.state = "qr_waiting"
                 self._logins[login_id] = login
                 if method == "qr":
@@ -900,7 +1064,7 @@ class Panel:
                         code=code,
                         phone_code_hash=login.phone_code_hash,
                     ),
-                    NETWORK_TIMEOUT,
+                    self._network_timeout,
                 )
             except errors.SessionPasswordNeededError:
                 login.state = "password_required"
@@ -932,7 +1096,7 @@ class Panel:
             try:
                 await asyncio.wait_for(
                     login.client.sign_in(password=password),
-                    NETWORK_TIMEOUT,
+                    self._network_timeout,
                 )
             except Exception as exc:
                 login.error = self._friendly_error(exc)
@@ -952,7 +1116,7 @@ class Panel:
             try:
                 sent = await asyncio.wait_for(
                     login.client.send_code_request(login.phone),
-                    NETWORK_TIMEOUT,
+                    self._network_timeout,
                 )
                 login.phone_code_hash = sent.phone_code_hash
                 login.state = "code_sent"
@@ -978,7 +1142,9 @@ class Panel:
         login.state = "finishing"
         actual_phone = login.phone
         try:
-            me = await asyncio.wait_for(login.client.get_me(), NETWORK_TIMEOUT)
+            me = await asyncio.wait_for(
+                login.client.get_me(), self._network_timeout
+            )
             if me and me.phone:
                 with contextlib.suppress(ValueError):
                     actual_phone = normalize_phone(me.phone)
@@ -1057,14 +1223,16 @@ class Panel:
                             return
                         try:
                             await asyncio.wait_for(
-                                qr.recreate(), NETWORK_TIMEOUT
+                                qr.recreate(), self._network_timeout
                             )
                         except Exception as exc:
                             login.state = "error"
                             login.error = self._friendly_error(exc)
                             login.finished_at = time.time()
                             return
-                        login.qr_svg = qr_svg(qr.url)
+                        login.qr_svg = qr_svg(
+                            qr.url, self._qr_box_size, self._qr_border
+                        )
                     continue
                 except errors.SessionPasswordNeededError:
                     async with login.lock:

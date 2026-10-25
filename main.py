@@ -90,19 +90,24 @@ def _make_client(
     api_id: int,
     api_hash: str,
     session_path: Path | None = None,
-    connection_retries: int = -1,
+    connection_retries: int | None = None,
 ) -> TelegramClient:
+    telegram = config.config.telegram
     return TelegramClient(
         session=str(session_path or pathes.sessions / phone),
         api_id=api_id,
         api_hash=api_hash,
         use_ipv6=config.config.use_ipv6,
-        system_version="4.16.30-vxCUSTOM",
-        device_model="LumintoGold",
-        system_lang_code="ru",
-        lang_code="ru",
-        connection_retries=connection_retries,
-        retry_delay=3,
+        system_version=str(telegram.system_version),
+        device_model=str(telegram.device_model),
+        system_lang_code=str(telegram.system_lang_code),
+        lang_code=str(telegram.lang_code),
+        connection_retries=(
+            connection_retries
+            if connection_retries is not None
+            else int(telegram.connection_retries)
+        ),
+        retry_delay=int(telegram.retry_delay),
         connection=ConnectionTcpObfuscated,
     )
 
@@ -129,20 +134,14 @@ class UserbotManager:
         self._stopped = False
         self.status = "starting"
         self.error: str | None = None
+        self._task_signatures: dict[str, tuple] = {}
+        self._ai_signature: tuple | None = None
+        self.ai_client = None
+        self.ai_chat = None
 
     async def init(self):
         use_ipv6 = await self.settings.get("use.ipv6")
         self.client.use_ipv6 = use_ipv6
-        try:
-            self.ai_client = ai.GroqClient(
-                api_key=await self.settings.get("token.groq"),
-                proxy=await self.settings.get("groq.proxy"),
-                chat_model=await self.settings.get("ai.model"),
-            )
-            self.ai_client.init_client()
-            self.ai_chat = self.ai_client.chat(self.phone)
-        except Exception:
-            logger.warning("Установите Groq-токен (.иитокен <токен>)")
         await self.client.connect()
         if not await self.client.is_user_authorized():
             raise ClientNotAuthorized(
@@ -150,44 +149,7 @@ class UserbotManager:
             )
         logger.info(f"Запущен клиент ({self.phone})")
         self._register_handlers()
-        if await self.settings.get("block.voice"):
-            self.client.add_event_handler(self.block_voice, events.NewMessage())
-        if await self.settings.get("luminto.reactions"):
-            for chat in ("lumintoch", "luminto_faq"):
-                self.client.add_event_handler(
-                    self.reactions, events.NewMessage(chats=chat)
-                )
-        if await self.settings.get("iris.farm"):
-            await self.iris_task.create(
-                func=self.iris_farm, task_param=4, random_delay=(5, 360)
-            )
-        if await self.settings.get("iceyes.bonus"):
-            await self.iceyes_task.create(
-                func=self.iceyes_bonus,
-                task_param=1,
-                random_delay=(1, 60),
-            )
-        if await self.settings.get("auto.online"):
-            await self.online_task.create(
-                func=self.auto_online, task_param=30, unit="seconds"
-            )
-        if await self.settings.get("vktarget.enabled", False):
-            await self.vktarget.start()
-        if await self.settings.get("autochat.enabled"):
-            await self.autochat.start()
-        if await self.settings.get("clickbee.enabled", False):
-            await self.clickbee.start()
-        if await self.settings.get("tg2vk.enabled", False):
-            target_chat = await self.settings.get("tg2vk.chat")
-            if target_chat:
-                self.client.add_event_handler(
-                    self._handle_tg_to_vk,
-                    events.NewMessage(chats=target_chat),
-                )
-        if await self.settings.get("battery.status"):
-            await self.battery_task.create(
-                func=self.chk_battery, task_param=15, unit="seconds"
-            )
+        await self.apply_features()
         self.telemt_client = telemt.TelemtClient(
             base_url=await self.settings.get("telemt.url"),
             auth_token=await self.settings.get("telemt.token"),
@@ -199,6 +161,218 @@ class UserbotManager:
             logger.warning(
                 "Не удалось подключиться к Telemt API. Проверьте URL и токен."
             )
+
+    async def _sync_task(
+        self,
+        name,
+        generator,
+        enabled_key,
+        func,
+        interval_key,
+        unit="hours",
+        random_keys=None,
+    ):
+        if not await self.settings.get(enabled_key):
+            generator.stop()
+            self._task_signatures.pop(name, None)
+            return
+        interval = max(1, int(await self.settings.get(interval_key, 1)))
+        random_delay = None
+        if random_keys:
+            low = max(0, int(await self.settings.get(random_keys[0], 0)))
+            high = max(low, int(await self.settings.get(random_keys[1], low)))
+            random_delay = (low, high)
+        signature = (interval, random_delay)
+        if (
+            generator.is_running
+            and self._task_signatures.get(name) == signature
+        ):
+            return
+        await generator.create(
+            func=func,
+            task_param=interval,
+            random_delay=random_delay,
+            unit=unit,
+        )
+        self._task_signatures[name] = signature
+
+    async def _sync_iris(self):
+        await self._sync_task(
+            "iris",
+            self.iris_task,
+            "iris.farm",
+            self.iris_farm,
+            "iris.farm.interval",
+            "hours",
+            ("iris.farm.random_min", "iris.farm.random_max"),
+        )
+
+    async def _sync_iceyes(self):
+        await self._sync_task(
+            "iceyes",
+            self.iceyes_task,
+            "iceyes.bonus",
+            self.iceyes_bonus,
+            "iceyes.bonus.interval",
+            "hours",
+            ("iceyes.bonus.random_min", "iceyes.bonus.random_max"),
+        )
+
+    async def _sync_online(self):
+        await self._sync_task(
+            "online",
+            self.online_task,
+            "auto.online",
+            self.auto_online,
+            "auto.online.interval",
+            "seconds",
+        )
+
+    async def _sync_battery(self):
+        await self._sync_task(
+            "battery",
+            self.battery_task,
+            "battery.status",
+            self.chk_battery,
+            "battery.status.interval",
+            "seconds",
+        )
+
+    async def _sync_ai(self):
+        token = await self.settings.get("token.groq")
+        proxy = await self.settings.get("groq.proxy")
+        model = await self.settings.get("ai.model") or "openai/gpt-oss-120b"
+        voice_model = (
+            await self.settings.get("ai.voice_model")
+            or "whisper-large-v3-turbo"
+        )
+        try:
+            temperature = float(await self.settings.get("ai.temperature", 1.0))
+        except TypeError, ValueError:
+            temperature = 1.0
+        try:
+            max_tokens = int(await self.settings.get("ai.max_tokens", 2048))
+        except TypeError, ValueError:
+            max_tokens = 2048
+        signature = (
+            str(token or ""),
+            str(proxy or ""),
+            str(model),
+            str(voice_model),
+            temperature,
+            max_tokens,
+        )
+        if (
+            token
+            and self.ai_client is not None
+            and self._ai_signature == signature
+        ):
+            return
+        old_client = self.ai_client
+        if old_client is not None:
+            with contextlib.suppress(Exception):
+                await old_client.close()
+        self.ai_client = None
+        self.ai_chat = None
+        self._ai_signature = None
+        if not token:
+            logger.warning("Установите Groq-токен (.иитокен <токен>)")
+            return
+        try:
+            client = ai.GroqClient(
+                api_key=token,
+                proxy=proxy,
+                chat_model=model,
+                voice_model=voice_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            client.init_client()
+            self.ai_client = client
+            self.ai_chat = client.chat(self.phone)
+            self._ai_signature = signature
+        except Exception:
+            logger.exception("Не удалось инициализировать Groq-клиент")
+
+    async def _sync_block_voice(self):
+        with contextlib.suppress(Exception):
+            self.client.remove_event_handler(self.block_voice)
+        if await self.settings.get("block.voice"):
+            self.client.add_event_handler(self.block_voice, events.NewMessage())
+
+    async def _sync_reactions(self):
+        with contextlib.suppress(Exception):
+            self.client.remove_event_handler(self.reactions)
+        if await self.settings.get("luminto.reactions"):
+            for chat in ("lumintoch", "luminto_faq"):
+                self.client.add_event_handler(
+                    self.reactions, events.NewMessage(chats=chat)
+                )
+
+    async def _sync_tg2vk(self):
+        with contextlib.suppress(Exception):
+            self.client.remove_event_handler(self._handle_tg_to_vk)
+        if not await self.settings.get("tg2vk.enabled"):
+            return
+        target_chat = await self.settings.get("tg2vk.chat")
+        if isinstance(target_chat, str):
+            raw_chat = target_chat.strip()
+            if raw_chat.lstrip("-").isdigit():
+                target_chat = int(raw_chat)
+        if not target_chat:
+            logger.warning(f"tg2vk ({self.phone}): не задан tg2vk.chat")
+            return
+        self.client.add_event_handler(
+            self._handle_tg_to_vk,
+            events.NewMessage(chats=target_chat),
+        )
+
+    async def _sync_vktarget(self):
+        enabled = bool(await self.settings.get("vktarget.enabled"))
+        active = bool(getattr(self.vktarget, "_active", False))
+        if enabled and not active:
+            await self.vktarget.start()
+        elif not enabled and active:
+            self.vktarget.stop()
+
+    async def _sync_autochat(self):
+        enabled = bool(await self.settings.get("autochat.enabled"))
+        running = bool(getattr(self.autochat, "_running", False))
+        if enabled and not running:
+            await self.autochat.start()
+        elif not enabled and running:
+            await self.autochat.stop()
+
+    async def _sync_clickbee(self):
+        enabled = bool(await self.settings.get("clickbee.enabled"))
+        active = bool(getattr(self.clickbee, "_active", False))
+        if enabled and not active:
+            await self.clickbee.start()
+        elif not enabled and active:
+            self.clickbee.stop()
+
+    async def apply_features(self) -> None:
+        """Применяет функции клиента без полного перезапуска."""
+        if self._stopped:
+            return
+        steps = (
+            ("AI", self._sync_ai),
+            ("Iris", self._sync_iris),
+            ("Iceyes", self._sync_iceyes),
+            ("Онлайн", self._sync_online),
+            ("Батарея", self._sync_battery),
+            ("Голосовые", self._sync_block_voice),
+            ("Реакции", self._sync_reactions),
+            ("TG → VK", self._sync_tg2vk),
+            ("VKTarget", self._sync_vktarget),
+            ("AutoChat", self._sync_autochat),
+            ("ClickBee", self._sync_clickbee),
+        )
+        for label, step in steps:
+            try:
+                await step()
+            except Exception:
+                logger.exception(f"Не удалось применить {label} у {self.phone}")
 
     def _register_handlers(self):
         self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
@@ -332,6 +506,23 @@ class UserbotManager:
                 task.stop()
         with contextlib.suppress(Exception):
             self.vktarget.stop()
+        with contextlib.suppress(Exception):
+            await self.autochat.stop()
+        with contextlib.suppress(Exception):
+            self.clickbee.stop()
+        for handler in (
+            self.block_voice,
+            self.reactions,
+            self._handle_tg_to_vk,
+        ):
+            with contextlib.suppress(Exception):
+                self.client.remove_event_handler(handler)
+        self._task_signatures.clear()
+        if self.ai_client is not None:
+            with contextlib.suppress(Exception):
+                await self.ai_client.close()
+            self.ai_client = None
+            self.ai_chat = None
         with contextlib.suppress(Exception):
             await self.client.disconnect()
         self.status = "stopped"
@@ -633,14 +824,17 @@ class UserbotManager:
         return await event.edit(phrase.emoji.get.format(", ".join(text)))
 
     async def iris_farm(self):
-        target = -1002355128955
+        target = int(
+            await self.settings.get("iris.farm.target", -1002355128955)
+        )
+        bot = str(await self.settings.get("iris.farm.bot", "iris_cm_bot"))
         try:
             await self.client.send_message(
                 target, random.choice(phrase.iris.farm_cmds)
             )
         except Exception:
             await self.client.send_message(
-                "iris_cm_bot", random.choice(phrase.iris.farm_cmds)
+                bot, random.choice(phrase.iris.farm_cmds)
             )
         logger.info(f"{self.phone} - сработала автоферма")
 
@@ -1343,19 +1537,15 @@ async def main():
     pathes.clients.mkdir(exist_ok=True)
     pathes.sessions.mkdir(exist_ok=True)
     loop = asyncio.get_running_loop()
-    log_broker = web.LogBroker(loop)
+    log_broker = web.LogBroker(
+        loop, int(config.config.web.log_buffer_size)
+    )
     logger.add(log_broker, level="INFO")
 
-    try:
-        default_api_id = int(config.config.telegram.api_id or 0)
-    except (TypeError, ValueError):
-        default_api_id = 0
     panel = web.Panel(
         host=str(config.config.web.host),
         port=int(config.config.web.port),
         password=str(config.config.web.password or ""),
-        default_api_id=default_api_id,
-        default_api_hash=str(config.config.telegram.api_hash or ""),
         managers=_managers,
         statuses=_client_status,
         launch=_launch_manager,

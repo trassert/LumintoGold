@@ -6,12 +6,28 @@ web:
   host: "127.0.0.1" # 0.0.0.0 — доступ по сети (HTTP не шифрует пароль!)
   port: 8080
   password: "luminto" # Смените перед публикацией панели
+  cookie_name: "luminto_session"
+  session_ttl_hours: 168
+  login_ttl_minutes: 15
+  network_timeout_seconds: 20
+  login_max_attempts: 5
+  login_block_seconds: 60
+  log_buffer_size: 1000
+  max_request_size: 4194304
+  qr_box_size: 10
+  qr_border: 2
 
 # Необязательно: api_id/api_hash приложения для QR-входа и новых клиентов.
 # Если не заданы, панель берёт их из первого клиента в clients/.
 telegram:
   api_id: 0
   api_hash: ""
+  system_version: "4.16.30-vxCUSTOM"
+  device_model: "LumintoGold"
+  system_lang_code: "ru"
+  lang_code: "ru"
+  connection_retries: -1
+  retry_delay: 3
 
 # Не трогай это, если не знаешь! URL для API
 url:

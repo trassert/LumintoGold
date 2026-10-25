@@ -9,6 +9,7 @@ tokens = Path("configs") / "tokens.yml"
 
 default_config = Path("defaults") / "config.yml"
 default_tokens = Path("defaults") / "tokens.yml"
+settings_schema = Path("defaults") / "settings.yml"
 
 notes = Path("notes")
 clients = Path("clients")

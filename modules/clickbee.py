@@ -13,8 +13,6 @@ from . import settings
 
 logger.info(f"Загружен модуль {__name__}!")
 TASK_BUTTONS = ["🤖 Join Bots", "📢 Join Channels", "📄 View Posts"]
-MAX_RETRIES = 3
-BOT_CONVERSATION_TIMEOUT = 45
 
 
 class _CyclicIterator:
@@ -174,16 +172,16 @@ class ClickBeeAutomation:
             )
             return await self._skip_or_back(event)
         logger.info(f"ClickBee: Запрашиваю /start у {mybot}")
-        for attempt in range(1, MAX_RETRIES + 1):
+        for attempt in range(1, self._max_retries + 1):
             try:
                 async with self.client.conversation(
                     mybot,
-                    timeout=BOT_CONVERSATION_TIMEOUT,
-                    total_timeout=BOT_CONVERSATION_TIMEOUT,
+                    timeout=self._conversation_timeout,
+                    total_timeout=self._conversation_timeout,
                 ) as conv:
                     await conv.send_message("/start")
                     response = await asyncio.wait_for(
-                        conv.get_response(), timeout=BOT_CONVERSATION_TIMEOUT
+                        conv.get_response(), timeout=self._conversation_timeout
                     )
                     await self.client.forward_messages(
                         entity=event.sender_id,
@@ -194,13 +192,13 @@ class ClickBeeAutomation:
                     return None
             except TimeoutError:
                 logger.warning(
-                    f"ClickBee: {mybot} не ответил (попытка {attempt}/{MAX_RETRIES})"
+                    f"ClickBee: {mybot} не ответил (попытка {attempt}/{self._max_retries})"
                 )
             except Exception as exc:
                 logger.warning(
                     f"ClickBee: Ошибка при работе с {mybot}: {exc} (попытка {attempt})"
                 )
-            if attempt < MAX_RETRIES:
+            if attempt < self._max_retries:
                 await asyncio.sleep(random.uniform(3, 7))
         logger.info(f"ClickBee: {mybot} недоступен, пропускаю задание")
         await self._skip_or_back(event)
@@ -230,7 +228,7 @@ class ClickBeeAutomation:
         logger.warning(
             f"ClickBee: Ошибка от бота (попытка {self._retry_count}): {event.text[:80]}"
         )
-        if self._retry_count >= MAX_RETRIES:
+        if self._retry_count >= self._max_retries:
             self._retry_count = 0
             logger.info(
                 "ClickBee: Превышен лимит ошибок, перехожу к следующей задаче"

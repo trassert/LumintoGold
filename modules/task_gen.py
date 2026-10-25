@@ -34,6 +34,10 @@ class Generator:
         self._next_run_timestamp: float = None
         Generator._instances[key_name] = self
 
+    @property
+    def is_running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
     def _get_random_delay(self) -> float:
         if self._random_delay is None:
             return 0.0

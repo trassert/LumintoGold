@@ -21,11 +21,15 @@ class GroqClient:
         chats_dir: Path = pathes.ai,
         chat_model: str = "openai/gpt-oss-120b",
         voice_model: str = "whisper-large-v3-turbo",
+        temperature: float = 1.0,
+        max_tokens: int = 2048,
     ):
         self.api_key = api_key
         self.proxy = proxy
         self.chat_model = chat_model
         self.voice_model = voice_model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
         self.chats_dir = chats_dir or Path(pathes.ai)
         self.chats_dir.mkdir(parents=True, exist_ok=True)
         self.client: AsyncGroq | None = None
@@ -54,6 +58,8 @@ class GroqClient:
             client=self.client,
             chats_dir=self.chats_dir,
             model=self.chat_model,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
         )
 
     async def transcribe_voice(self, number: str, voice_id: str) -> str:
@@ -86,10 +92,14 @@ class GroqChatSession:
         client: AsyncGroq,
         chats_dir: Path,
         model: str,
+        temperature: float = 1.0,
+        max_tokens: int = 2048,
     ):
         self.chat_id = chat_id
         self.client = client
         self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
         self._path = chats_dir / f"{chat_id}.json"
         self._history: list[dict[str, str]] = []
 
@@ -114,8 +124,8 @@ class GroqChatSession:
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=self.history,
-                temperature=1,
-                max_completion_tokens=2048,
+                temperature=self.temperature,
+                max_completion_tokens=self.max_tokens,
                 top_p=1,
                 stop=None,
                 tools=[{"type": "browser_search"}],
