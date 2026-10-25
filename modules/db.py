@@ -20,4 +20,4 @@ async def _load_json_async(filepath: str) -> dict:
 
 async def get_animation(name) -> int:
     data = await _load_json_async(pathes.animations)
-    return data.get(name, None)
+    return data.get(name)

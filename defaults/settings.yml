@@ -1,0 +1,497 @@
+# Реестр клиентских настроек: группы, переводы, типы и дефолты.
+# Этот файл — источник defaults для clients/<phone>.json и структуры UI.
+groups:
+  - id: general
+    title: Основное
+    description: Поведение клиента по умолчанию.
+  - id: ai
+    title: AI и Groq
+    description: Модели, лимиты и доступ к Groq.
+  - id: tokens
+    title: Токены API
+    description: Ключи внешних сервисов. Пустое значение отключает интеграцию.
+  - id: profile
+    title: Профиль
+    description: Тексты био для обычного режима и АФК.
+  - id: iris
+    title: Iris
+    description: Автоферма Iris и её расписание.
+  - id: iceyes
+    title: Iceyes
+    description: Автобонус Iceyes и его расписание.
+  - id: online
+    title: Онлайн
+    description: Поддержание статуса онлайн.
+  - id: battery
+    title: Батарея
+    description: Уведомления о зарядке.
+  - id: voice
+    title: Голосовые
+    description: Блокировка голосовых сообщений.
+  - id: reactions
+    title: Реакции
+    description: Автоматические реакции в каналах Luminto.
+  - id: vktarget
+    title: VKTarget
+    description: Автовыполнение заданий VKTarget.
+  - id: autochat
+    title: AutoChat
+    description: Автопостинг в чаты.
+  - id: clickbee
+    title: ClickBee
+    description: Автоматизация ClickBee-ботов.
+  - id: tg2vk
+    title: TG → VK
+    description: Репост постов из Telegram в VK.
+  - id: telemt
+    title: Telemt
+    description: Подключение к API Telemt.
+  - id: advanced
+    title: Дополнительно
+    description: Редкие и служебные параметры.
+
+fields:
+  typings:
+    group: general
+    label: Индикатор набора
+    hint: Что показывать при имитации набора текста.
+    type: string
+    default: ".."
+
+  typing.delay:
+    group: general
+    label: Задержка набора
+    hint: Пауза между шагами имитации в секундах.
+    type: float
+    default: 0.05
+    unit: сек
+
+  use.ipv6:
+    group: general
+    label: Использовать IPv6
+    hint: Применяется только после перезапуска клиента.
+    type: bool
+    default: false
+    restart_required: true
+
+  default.currency:
+    group: general
+    label: Валюта по умолчанию
+    hint: Код валюты для команды конвертации.
+    type: string
+    default: "RUB"
+
+  toggle.afk:
+    group: general
+    label: АФК-статус
+    hint: Текущее состояние АФК. Обычно меняется командой .афк.
+    type: bool
+    default: false
+
+  ai.model:
+    group: ai
+    label: Модель чата Groq
+    hint: Идентификатор модели, например openai/gpt-oss-120b.
+    type: string
+    default: "openai/gpt-oss-120b"
+
+  ai.voice_model:
+    group: ai
+    label: Модель распознавания голоса
+    hint: Модель Whisper для команды .voice.
+    type: string
+    default: "whisper-large-v3-turbo"
+
+  ai.temperature:
+    group: ai
+    label: Температура
+    hint: Больше — разнообразнее ответы, меньше — стабильнее.
+    type: float
+    default: 1.0
+
+  ai.max_tokens:
+    group: ai
+    label: Максимум токенов ответа
+    hint: Верхняя граница длины ответа Groq.
+    type: int
+    default: 2048
+
+  groq.proxy:
+    group: ai
+    label: Прокси Groq
+    hint: HTTP/SOCKS-прокси для запросов Groq. Пусто — без прокси.
+    type: nullable_string
+    default: null
+
+  token.groq:
+    group: ai
+    label: Токен Groq
+    hint: API-ключ Groq. Пусто — AI-функции отключены.
+    type: secret
+    nullable: true
+    default_from: tokens.default.groq
+
+  token.geoapify:
+    group: tokens
+    label: Токен Geoapify
+    hint: Определение часового пояса по координатам.
+    type: secret
+    default_from: tokens.default.geoapify
+
+  token.openweathermap:
+    group: tokens
+    label: Токен OpenWeatherMap
+    hint: Погода по городу.
+    type: secret
+    default_from: tokens.default.openweathermap
+
+  token.exchangerate:
+    group: tokens
+    label: Токен ExchangeRate
+    hint: Конвертация валют.
+    type: secret
+    default_from: tokens.default.exchangerate
+
+  bio.normal:
+    group: profile
+    label: Обычное био
+    hint: Возвращается при снятии АФК.
+    type: text
+    default: ""
+
+  bio.afk:
+    group: profile
+    label: Био в АФК
+    hint: Устанавливается при включении АФК.
+    type: text
+    default: "Занято! Не писать."
+
+  iris.farm:
+    group: iris
+    label: Автоферма Iris
+    hint: Периодически отправляет команду фермы в Iris.
+    type: bool
+    feature: iris
+    default: false
+
+  iris.farm.interval:
+    group: iris
+    label: Интервал автофермы
+    hint: Как часто запускать ферму, в часах.
+    type: int
+    default: 4
+    unit: ч
+
+  iris.farm.random_min:
+    group: iris
+    label: Мин. случайная задержка
+    hint: Нижняя граница задержки перед отправкой, в секундах.
+    type: int
+    default: 5
+    unit: сек
+
+  iris.farm.random_max:
+    group: iris
+    label: Макс. случайная задержка
+    hint: Верхняя граница задержки перед отправкой, в секундах.
+    type: int
+    default: 360
+    unit: сек
+
+  iris.farm.target:
+    group: iris
+    label: Чат Iris
+    hint: ID чата, куда отправляется команда фермы.
+    type: int
+    default: -1002355128955
+
+  iris.farm.bot:
+    group: iris
+    label: Резервный бот Iris
+    hint: Используется, если отправка в чат не удалась.
+    type: string
+    default: "iris_cm_bot"
+
+  iceyes.bonus:
+    group: iceyes
+    label: Автобонус Iceyes
+    hint: Периодически забирает бонус в Iceyes.
+    type: bool
+    feature: iceyes
+    default: false
+
+  iceyes.bonus.interval:
+    group: iceyes
+    label: Интервал автобонуса
+    hint: Как часто забирать бонус, в часах.
+    type: int
+    default: 1
+    unit: ч
+
+  iceyes.bonus.random_min:
+    group: iceyes
+    label: Мин. случайная задержка
+    hint: Нижняя граница задержки перед отправкой, в секундах.
+    type: int
+    default: 1
+    unit: сек
+
+  iceyes.bonus.random_max:
+    group: iceyes
+    label: Макс. случайная задержка
+    hint: Верхняя граница задержки перед отправкой, в секундах.
+    type: int
+    default: 60
+    unit: сек
+
+  auto.online:
+    group: online
+    label: Автоонлайн
+    hint: Поддерживает статус онлайн.
+    type: bool
+    feature: online
+    default: false
+
+  auto.online.interval:
+    group: online
+    label: Интервал обновления
+    hint: Как часто обновлять статус, в секундах.
+    type: int
+    default: 30
+    unit: сек
+
+  battery.status:
+    group: battery
+    label: Мониторинг батареи
+    hint: Присылает уведомления об отключении и восстановлении зарядки.
+    type: bool
+    feature: battery
+    default: false
+
+  battery.status.interval:
+    group: battery
+    label: Интервал проверки
+    hint: Как часто читать статус батареи, в секундах.
+    type: int
+    default: 15
+    unit: сек
+
+  battery.chat:
+    group: battery
+    label: Чат уведомлений
+    hint: ID чата для сообщений о батарее.
+    type: nullable_int
+    default: null
+
+  battery.msg_no:
+    group: battery
+    label: Текст без зарядки
+    hint: Сообщение при отключении питания.
+    type: text
+    default: "❌ : Нет зарядки!"
+
+  battery.msg_yes:
+    group: battery
+    label: Текст восстановления
+    hint: Сообщение при восстановлении питания.
+    type: text
+    default: "✅ : Зарядка восстановлена."
+
+  block.voice:
+    group: voice
+    label: Блокировать голосовые
+    hint: Удаляет входящие голосовые в личных чатах и отвечает текстом.
+    type: bool
+    feature: block_voice
+    default: false
+
+  luminto.reactions:
+    group: reactions
+    label: Реакции Luminto
+    hint: Ставит реакцию на новые посты в каналах Luminto.
+    type: bool
+    feature: reactions
+    default: true
+
+  vktarget.enabled:
+    group: vktarget
+    label: Авто VKTarget
+    hint: Выполняет задания VKTarget.
+    type: bool
+    feature: vktarget
+    default: false
+
+  vk.token:
+    group: vktarget
+    label: Токен VK
+    hint: Токен для VKTarget и TG → VK.
+    type: secret
+    nullable: true
+    default: null
+
+  vktarget.poll_wait:
+    group: vktarget
+    label: Интервал опроса
+    hint: Как часто отправлять «Задания», в минутах.
+    type: int
+    default: 5
+    unit: мин
+
+  vktarget.poll_jitter:
+    group: vktarget
+    label: Разброс опроса
+    hint: Случайное отклонение интервала, в секундах.
+    type: int
+    default: 30
+    unit: сек
+
+  vktarget.poll_initial_delay:
+    group: vktarget
+    label: Стартовая задержка
+    hint: Пауза перед первым опросом, в секундах.
+    type: int
+    default: 5
+    unit: сек
+
+  autochat.enabled:
+    group: autochat
+    label: AutoChat
+    hint: Автоматически пересылает рекламный пост в список чатов.
+    type: bool
+    feature: autochat
+    default: false
+
+  autochat.chats:
+    group: autochat
+    label: Чаты для автопостинга
+    hint: JSON-массив ID чатов.
+    type: json
+    default: []
+
+  autochat.ad_chat:
+    group: autochat
+    label: Чат с рекламой
+    hint: ID чата, откуда берётся сообщение.
+    type: int
+    default: -1002783775634
+
+  autochat.ad_id:
+    group: autochat
+    label: ID рекламного сообщения
+    hint: Номер сообщения для пересылки.
+    type: int
+    default: 589
+
+  autochat.delay:
+    group: autochat
+    label: Пауза между чатами
+    hint: Задержка после отправки, в секундах.
+    type: int
+    default: 3600
+    unit: сек
+
+  autochat.idle_sleep:
+    group: autochat
+    label: Пауза при пустом списке
+    hint: Сколько ждать, если чаты или реклама не заданы, в секундах.
+    type: int
+    default: 60
+    unit: сек
+
+  clickbee.enabled:
+    group: clickbee
+    label: Авто ClickBee
+    hint: Автоматически выполняет задания в ClickBee-ботах.
+    type: bool
+    feature: clickbee
+    default: false
+
+  clickbee.username:
+    group: clickbee
+    label: Бот ClickBee
+    hint: Username бота без @.
+    type: string
+    default: "ClickBeeDOGEBot"
+
+  clickbee.sleep_between:
+    group: clickbee
+    label: Пауза между заданиями
+    hint: Задержка после выполненного задания, в секундах.
+    type: int
+    default: 300
+    unit: сек
+
+  clickbee.site_wait:
+    group: clickbee
+    label: Ожидание сайта
+    hint: Сколько держать сайт открытым, в секундах.
+    type: int
+    default: 120
+    unit: сек
+
+  clickbee.retry_count:
+    group: clickbee
+    label: Повторы
+    hint: Сколько раз повторять неудачное действие.
+    type: int
+    default: 3
+
+  clickbee.conversation_timeout:
+    group: clickbee
+    label: Таймаут диалога
+    hint: Ожидание ответа бота, в секундах.
+    type: int
+    default: 45
+    unit: сек
+
+  tg2vk.enabled:
+    group: tg2vk
+    label: Репост TG → VK
+    hint: Пересылает новые посты из Telegram в VK.
+    type: bool
+    feature: tg2vk
+    default: false
+
+  tg2vk.chat:
+    group: tg2vk
+    label: Чат-источник
+    hint: Username, ссылка или ID Telegram-чата.
+    type: nullable_string
+    default: null
+
+  tg2vk.vk_group:
+    group: tg2vk
+    label: ID группы VK
+    hint: Числовой ID сообщества VK.
+    type: nullable_string
+    default: null
+
+  telemt.url:
+    group: telemt
+    label: URL Telemt API
+    hint: Базовый адрес API.
+    type: string
+    default: "http://127.0.0.1:9091"
+
+  telemt.token:
+    group: telemt
+    label: Токен Telemt
+    hint: Bearer-токен API.
+    type: secret
+    default: ""
+
+  flood.msg:
+    group: advanced
+    label: Предупреждение о флуде
+    hint: Текст, который отправляется нарушителю.
+    type: text
+    default: |-
+      Варн
+      Флуд
+
+  mask.read:
+    group: advanced
+    label: Чаты с маскировкой прочтения
+    hint: JSON-массив ID чатов, где сообщения помечаются прочитанными.
+    type: json
+    default: []

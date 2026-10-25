@@ -1,56 +1,82 @@
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import aiofiles
 import orjson
+import yaml
 from loguru import logger
 
 from . import config, pathes
 
 logger.info(f"Загружен модуль {__name__}!")
 
-default = {
-    "typings": "..",
-    "typing.delay": 0.05,
-    "iris.farm": False,
-    "iceyes.bonus": False,
-    "block.voice": False,
-    "mask.read": [],
-    "luminto.reactions": True,
-    "ai.model": None,
-    "use.ipv6": False,
-    "auto.online": False,
-    "token.geoapify": config.tokens.default.geoapify,
-    "token.openweathermap": config.tokens.default.openweathermap,
-    "flood.msg": "Варн\nФлуд",
-    "autochat.chats": [],
-    "autochat.ad_chat": -1002783775634,
-    "autochat.ad_id": 589,
-    "autochat.delay": 3600,
-    "autochat.enabled": False,
-    "tg2vk.enabled": False,
-    "tg2vk.chat": None,
-    "vk.token": None,
-    "vktarget.poll_wait": 5,
-    "tg2vk.vk_group": None,
-    "battery.status": False,
-    "battery.chat": None,
-    "battery.msg_no": "❌ : Нет зарядки!",
-    "battery.msg_yes": "✅ : Зарядка восстановлена.",
-    "groq.proxy": None,
-    "token.groq": config.tokens.default.groq,
-    "clickbee.enabled": False,
-    "clickbee.sleep_between": 300,
-    "clickbee.username": "ClickBeeDOGEBot",
-    "clickbee.site_wait": 120,
-    "default.currency": "RUB",
-    "token.exchangerate": config.tokens.default.exchangerate,
-    "telemt.url": "http://127.0.0.1:9091",
-    "telemt.token": "",
-    "bio.normal": "",
-    "bio.afk": "Занято! Не писать.",
-    "toggle.afk": False,
-}
+groups: list[dict] = []
+fields: dict[str, dict] = {}
+default: dict[str, Any] = {}
+
+
+def _resolve_default(meta: dict) -> Any:
+    source = meta.get("default_from")
+    if not source:
+        return meta.get("default")
+    target: Any = config
+    try:
+        for part in str(source).split("."):
+            target = getattr(target, part)
+    except AttributeError:
+        logger.error(f"Не найден источник default: {source}")
+        return None
+    return target
+
+
+def _load_schema() -> tuple[list[dict], dict[str, dict], dict[str, Any]]:
+    raw = yaml.safe_load(pathes.settings_schema.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("settings.yml должен быть объектом")
+    raw_groups = raw.get("groups") or []
+    raw_fields = raw.get("fields") or {}
+    if not isinstance(raw_groups, list) or not isinstance(raw_fields, dict):
+        raise ValueError("settings.yml: groups/fields имеют неверный формат")
+    group_ids = {
+        str(group.get("id")) for group in raw_groups if isinstance(group, dict)
+    }
+    resolved_fields: dict[str, dict] = {}
+    resolved_defaults: dict[str, Any] = {}
+    for key, meta in raw_fields.items():
+        if not isinstance(meta, dict):
+            raise ValueError(f"settings.yml: поле {key} должно быть объектом")
+        item = dict(meta)
+        if item.get("group") not in group_ids:
+            item["group"] = "advanced"
+        resolved_fields[str(key)] = item
+        resolved_defaults[str(key)] = _resolve_default(item)
+    return raw_groups, resolved_fields, resolved_defaults
+
+
+def reload_schema() -> None:
+    """Перечитывает реестр настроек и пересобирает defaults."""
+    new_groups, new_fields, new_defaults = _load_schema()
+    groups[:] = new_groups
+    fields.clear()
+    fields.update(new_fields)
+    default.clear()
+    default.update(new_defaults)
+    logger.info(f"Реестр настроек: {len(fields)} полей, {len(groups)} групп")
+
+
+def schema_payload() -> dict:
+    """Схема для UI с уже разрешёнными defaults."""
+    return {
+        "groups": deepcopy(groups),
+        "fields": {
+            key: {**meta, "default": deepcopy(default.get(key))}
+            for key, meta in fields.items()
+        },
+    }
+
+
+reload_schema()
 
 
 class UBSettings:
@@ -59,52 +85,44 @@ class UBSettings:
         self._data: dict = None
 
     async def _ensure_loaded(self, forced=False) -> None:
-        if not (self._data is None or forced):
+        if self._data is not None and not forced:
             return
         if not self.filename.exists():
             self._data = {}
             return
         async with aiofiles.open(self.filename, "rb") as f:
-            contents = await f.read()
-            self._data = orjson.loads(contents)
+            self._data = orjson.loads(await f.read())
 
-    def _sync_ensure_loaded(self, forced=False) -> None:
-        if not (self._data is None or forced):
-            return
-        if not self.filename.exists():
-            self._data = {}
-            return
-        with self.filename.open("rb") as f:
-            self._data = orjson.loads(f.read())
-
-    async def make(self, api_id: int, api_hash: str) -> None:
-        self._data = {"api_id": api_id, "api_hash": api_hash}
+    async def _flush(self) -> None:
         async with aiofiles.open(self.filename, "wb") as f:
-            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
-            await f.write(content)
+            await f.write(orjson.dumps(self._data, option=orjson.OPT_INDENT_2))
+
+    async def reload(self) -> None:
+        await self._ensure_loaded(forced=True)
+
+    async def all(self) -> dict:
+        await self._ensure_loaded()
+        return dict(self._data)
+
+    async def replace(self, data: dict) -> None:
+        self._data = dict(data)
+        await self._flush()
 
     async def get(self, name_setting: str, if_none: Any = None) -> Any:
         await self._ensure_loaded()
         if if_none is not None:
             return self._data.get(name_setting, if_none)
-        return self._data.get(name_setting, default[name_setting])
-
-    def sync_get(self, name_setting: str, if_none: Any = None) -> Any:
-        self._sync_ensure_loaded()
-        if if_none is not None:
-            return self._data.get(name_setting, if_none)
-        return self._data.get(name_setting, default[name_setting])
+        value = self._data.get(name_setting, default.get(name_setting))
+        if isinstance(value, (dict, list)):
+            return deepcopy(value)
+        return value
 
     async def set(self, key: str, value: Any) -> None:
         await self._ensure_loaded()
         self._data[key] = value
-        async with aiofiles.open(self.filename, "wb") as f:
-            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
-            await f.write(content)
+        await self._flush()
 
-    async def remove(self, key: str):
+    async def remove(self, key: str) -> None:
         await self._ensure_loaded()
-        del self._data[key]
-        async with aiofiles.open(self.filename, "wb") as f:
-            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
-            await f.write(content)
+        self._data.pop(key, None)
+        await self._flush()

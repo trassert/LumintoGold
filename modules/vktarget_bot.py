@@ -29,9 +29,6 @@ class VKActions:
         self.logger = logger
         self.api = API(token)
 
-    async def init(self) -> None:
-        pass
-
     async def close(self) -> None:
         with contextlib.suppress(Exception):
             await self.api.ctx_api_interceptor.close_session()
@@ -41,18 +38,12 @@ class VKActions:
         await asyncio.sleep(random.uniform(min_s, max_s))
 
     def _extract_ids_from_url(self, url: str) -> tuple[str, str, str]:
-        url = url.strip().replace("https://", "").replace("http://", "")
+        url = url.strip().removeprefix("https://").removeprefix("http://")
         content_type = "post"
-        if "/video" in url:
-            content_type = "video"
-        elif "/photo" in url:
-            content_type = "photo"
-        elif "/audio" in url:
-            content_type = "audio"
-        elif "/market" in url:
-            content_type = "market"
-        elif "/clip" in url:
-            content_type = "clip"
+        for kind in ("video", "photo", "audio", "market", "clip"):
+            if f"/{kind}" in url:
+                content_type = kind
+                break
         clean_path = re.sub(
             r"/(wall|video|photo|audio|market|clip|note)/", "/", url
         )
@@ -62,17 +53,14 @@ class VKActions:
         if owner_raw.startswith("id"):
             owner_id = owner_raw[2:]
         elif owner_raw.startswith(("club", "public")):
-            nums = re.findall(r"\d+", owner_raw)
-            owner_id = "-" + nums[0] if nums else "0"
+            owner_id = "-" + (re.findall(r"\d+", owner_raw) or ["0"])[0]
         elif "-" in owner_raw:
-            nums = re.findall(r"-?\d+", owner_raw)
-            owner_id = nums[0] if nums else "0"
+            owner_id = (re.findall(r"-?\d+", owner_raw) or ["0"])[0]
         elif owner_raw.isdigit():
             owner_id = owner_raw
         else:
-            nums = re.findall(r"\d+", owner_raw)
-            owner_id = "-" + nums[0] if nums else "0"
-        return owner_id, item_id, content_type
+            owner_id = "-" + (re.findall(r"\d+", owner_raw) or ["0"])[0]
+        return owner_id, item_id or "0", content_type
 
     async def like(self, url: str) -> TaskResult:
         await self._human_delay(2.0, 4.0)
@@ -96,14 +84,9 @@ class VKActions:
         await self._human_delay(3.0, 5.0)
         try:
             match = re.search(r"(club|public)(\d+)", url)
+            numbers = re.findall(r"\d+", url)
             group_id = (
-                match.group(2)
-                if match
-                else (
-                    re.findall(r"\d+", url)[-1]
-                    if re.findall(r"\d+", url)
-                    else "0"
-                )
+                match.group(2) if match else numbers[-1] if numbers else "0"
             )
             self.logger.info(f"Вступление в группу: {group_id}")
             resp = await self.api.request(
@@ -123,14 +106,9 @@ class VKActions:
         await self._human_delay(4.0, 7.0)
         try:
             match = re.search(r"id(\d+)", url)
+            numbers = re.findall(r"\d+", url)
             user_id = (
-                match.group(1)
-                if match
-                else (
-                    re.findall(r"\d+", url)[-1]
-                    if re.findall(r"\d+", url)
-                    else "0"
-                )
+                match.group(1) if match else numbers[-1] if numbers else "0"
             )
             self.logger.info(f"Добавление в друзья: {user_id}")
             resp = await self.api.request(
@@ -142,9 +120,6 @@ class VKActions:
         except Exception as e:
             self.logger.exception(f"Ошибка добавления в друзья: {e}")
             return TaskResult(False, "friend", str(e))
-
-    async def subscribe_channel(self, url: str) -> TaskResult:
-        return await self.join_group(url)
 
     async def subscribe_telegram_channel(
         self, url: str, client: TelegramClient
@@ -216,6 +191,7 @@ class VKTargetRefactored:
         self.logger = logger
         self.vk: VKActions | None = None
         self._poll_task: asyncio.Task | None = None
+        self._handler = None
         self._active = False
         self._lock = asyncio.Lock()
         self._empty_count = 0
@@ -227,34 +203,44 @@ class VKTargetRefactored:
             self.logger.error("❌ VK Token не найден!")
             return
         self.vk = VKActions(token, self.logger)
-        await self.vk.init()
         self._active = True
+        if self._handler is not None:
+            with contextlib.suppress(Exception):
+                self.client.remove_event_handler(self._handler)
 
-        @self.client.on(
-            events.NewMessage(
-                chats="vktarget_bot", func=lambda e: e.text and not e.out
-            )
-        )
         async def handler(event: Message) -> None:
             async with self._lock:
                 if self._active:
                     await self._process_message(event)
 
+        self._handler = handler
+        self.client.add_event_handler(
+            handler,
+            events.NewMessage(
+                chats="vktarget_bot", func=lambda e: e.text and not e.out
+            ),
+        )
         self.logger.info("VKTarget Automation запущен (Safe Mode)")
         self._poll_task = asyncio.create_task(self._poll_loop())
 
     def stop(self) -> None:
         self._active = False
+        if self._handler is not None:
+            with contextlib.suppress(Exception):
+                self.client.remove_event_handler(self._handler)
+            self._handler = None
         if self._poll_task:
             self._poll_task.cancel()
         self.logger.info("VKTarget Automation остановлен")
 
     async def _poll_loop(self) -> None:
         try:
-            await asyncio.sleep(5)
+            initial = await self.settings.get("vktarget.poll_initial_delay", 5)
+            await asyncio.sleep(initial)
             while self._active:
                 base_wait = await self.settings.get("vktarget.poll_wait")
-                delay = base_wait * 60 + random.uniform(-30, 30)
+                jitter = await self.settings.get("vktarget.poll_jitter", 30)
+                delay = base_wait * 60 + random.uniform(-jitter, jitter)
                 await asyncio.sleep(max(10, delay))
                 if not self._active:
                     break
@@ -276,16 +262,14 @@ class VKTargetRefactored:
             return
         await event.mark_read()
         lower_text = text.lower()
-        if any(
-            k in lower_text
-            for k in [
-                "начали поиск",
-                "нет доступных",
-                "задания закончились",
-                "скрыли данное",
-                "ты в главном",
-            ]
-        ):
+        empty_markers = (
+            "начали поиск",
+            "нет доступных",
+            "задания закончились",
+            "скрыли данное",
+            "ты в главном",
+        )
+        if any(marker in lower_text for marker in empty_markers):
             self.logger.debug("Заданий нет, жду...")
             self._empty_count += 1
             return
@@ -301,22 +285,17 @@ class VKTargetRefactored:
         url = links[0].strip()
         self.logger.info(f"Обработка задачи: {text[:40]}...")
         self._empty_count = 0
-        result = TaskResult(False, "unknown", "")
         if "t.me/" in url:
-            if (
-                "подпишитесь" in lower_text
-                or "вступите" in lower_text
-                or "канал" in lower_text
-                or "чат" in lower_text
+            if any(
+                word in lower_text
+                for word in ("подпишитесь", "вступите", "канал", "чат")
             ):
                 result = await self.vk.subscribe_telegram_channel(
                     url, self.client
                 )
-            elif (
-                "просмотр" in lower_text
-                or "посмотрите" in lower_text
-                or "запись" in lower_text
-                or "пост" in lower_text
+            elif any(
+                word in lower_text
+                for word in ("просмотр", "посмотрите", "запись", "пост")
             ):
                 result = await self.vk.view_telegram_post(url, self.client)
             else:
@@ -324,20 +303,21 @@ class VKTargetRefactored:
                     url, self.client
                 )
         elif "vk.com" in url:
-            if "Вступите в" in text or "группу" in text or "сообщество" in text:
+            if any(
+                word in text for word in ("Вступите в", "группу", "сообщество")
+            ):
                 result = await self.vk.join_group(url)
-            elif (
-                "Поставьте лайк" in text
-                or "лайк на" in text
-                or "оцените" in text
+            elif any(
+                word in text
+                for word in ("Поставьте лайк", "лайк на", "оцените")
             ):
                 result = await self.vk.like(url)
-            elif "Добавить в друзья" in text or "в друзья" in text:
+            elif "в друзья" in text:
                 result = await self.vk.add_friend(url)
             elif "канал" in text and (
                 "подпишитесь" in text or "Вступите" in text
             ):
-                result = await self.vk.subscribe_channel(url)
+                result = await self.vk.join_group(url)
             else:
                 self.logger.debug(f"Неизвестный тип задачи VK: {text[:30]}")
                 return

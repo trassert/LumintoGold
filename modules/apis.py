@@ -7,7 +7,7 @@ logger.info(f"Загружен модуль {__name__}!")
 
 
 async def get_weather(city, token=""):
-    if token == "":
+    if not token:
         return phrase.weather.no_token
     async with (
         aiohttp.ClientSession() as session,

@@ -20,16 +20,6 @@ class Default:
 
 
 def gen_pass(length: int, letters: bool, digits: bool, special: bool) -> str:
-    chars = ""
-
-    if letters:
-        chars += CHARSETS["letters"]
-    if digits:
-        chars += CHARSETS["digits"]
-    if special:
-        chars += CHARSETS["special"]
-
-    if not chars:
-        chars = CHARSETS["letters"]
-
-    return "".join(random.choices(chars, k=length))
+    flags = (("letters", letters), ("digits", digits), ("special", special))
+    chars = "".join(CHARSETS[name] for name, enabled in flags if enabled)
+    return "".join(random.choices(chars or CHARSETS["letters"], k=length))

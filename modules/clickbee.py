@@ -68,7 +68,6 @@ class ClickBeeAutomation:
     def stop(self) -> None:
         self._active = False
         self._unregister_handler()
-        self._browser = None
         logger.info("ClickBee остановлен")
 
     async def toggle(self, event: Message) -> None:
@@ -210,19 +209,13 @@ class ClickBeeAutomation:
 
     async def _handle_join_channel(self, event: Message) -> None:
         """Задание: вступить в канал/группу (публичный или приватный)."""
-        channel_link = self._parse_channel_link(event.text or "")
-        if channel_link:
-            success = await self._join_channel_safe(channel_link)
-            if not success:
-                logger.warning(
-                    f"ClickBee: Не смог вступить в {channel_link}, ищу Skip"
-                )
-                clicked = await self._click_button(event, "Skip")
-                if clicked:
-                    return
+        link = self._parse_channel_link(event.text or "")
+        if link and not await self._join_channel_safe(link):
+            logger.warning(f"ClickBee: Не смог вступить в {link}, ищу Skip")
+            if await self._click_button(event, "Skip"):
+                return
         await asyncio.sleep(random.uniform(2, 5))
-        clicked = await self._click_button(event, "✅")
-        if not clicked:
+        if not await self._click_button(event, "✅"):
             await self._next_task(event)
 
     async def _handle_error(self, event: Message) -> None:
@@ -301,16 +294,6 @@ class ClickBeeAutomation:
         return False
 
     @staticmethod
-    def _extract_button_url(event: Message, text_fragment: str) -> str | None:
-        if not event.reply_markup:
-            return None
-        for row in event.reply_markup.rows:
-            for button in row.buttons:
-                if text_fragment in (button.text or ""):
-                    return getattr(button, "url", None)
-        return None
-
-    @staticmethod
     async def _click_button(event: Message, text_fragment: str) -> bool:
         if not event.reply_markup:
             return False
@@ -325,33 +308,18 @@ class ClickBeeAutomation:
     @staticmethod
     def _parse_bot_username(text: str) -> str | None:
         """Извлекает username бота из текста, сохраняя параметры."""
-
-        patterns = [
-            r"(?:https?://)?t\.me/([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)",
-            r"(?:https?://)?telegram\.me/([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)",
+        patterns = (
+            r"(?:https?://)?(?:t\.me|telegram\.me)/([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)",
             r"@([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)",
-            r"\[.*?\]\((?:https?://)?t\.me/([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)\)",
-            r"\[.*?\]\((?:https?://)?telegram\.me/([a-zA-Z0-9_]{5,32}(?:\?[^\s)\]]*)?)\)",
-        ]
-
+        )
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                username = match.group(1)
-                if (
-                    "_bot" in username.lower()
-                    or "bot" in username.lower()
-                    or "🔗" in text
-                ):
-                    return username
-
+            if match and ("bot" in match.group(1).lower() or "🔗" in text):
+                return match.group(1)
         fallback = re.search(
             r"([a-zA-Z0-9_]{5,32}_bot)(?:[?\s/#)\]]|$)", text, re.IGNORECASE
         )
-        if fallback:
-            return fallback.group(1)
-
-        return None
+        return fallback.group(1) if fallback else None
 
     @staticmethod
     def _parse_channel_link(text: str) -> str | None:

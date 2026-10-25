@@ -15,10 +15,7 @@ try:
     tf = TimezoneFinder()
 
     async def get_timezone(lat, lon, api_key) -> str:
-        return tf.timezone_at(
-            lng=lon,
-            lat=lat,
-        )
+        return tf.timezone_at(lng=lon, lat=lat)
 
     logger.info("Использую timezonefinder")
 except ModuleNotFoundError:

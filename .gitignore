@@ -3,6 +3,7 @@ sessions/*
 db/*
 notes/*
 configs/*
+ui
 
 **/__pycache__/
 .venv

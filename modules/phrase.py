@@ -2,6 +2,7 @@ class afk:
     set = "🙈 : АФК статус установлен."
     unset = "🐵 : АФК статус снят."
 
+
 class voicerec:
     done = "🎙 : {}"
     no_reply = "❌ : Ответь на голосовое сообщение командой `.voice`."
@@ -201,11 +202,6 @@ result_empty = "❌ : Результат пуст."
 
 class misc:
     startup = "LumintoGold запускается..."
-    no_clients = "Нет ни одного клиента! Создаём нового.."
-    input_number = "Введи номер: "
-    input_api_id = "Введи api_id: "
-    input_api_hash = "Введи api_hash: "
-    no_valid_clients = "Нет ни одного валидного клиента."
     uvloop_missing = "Uvloop не найден! Установите его: pip install uvloop"
     shutting_down = "Закрываю бота..."
 
