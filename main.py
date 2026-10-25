@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+import os
 import random
 import re
 import sys
@@ -1481,8 +1482,14 @@ async def main():
         await _launch_manager(phone)
 
     stop_event = asyncio.Event()
+    stopping = False
 
     def request_stop(*_args) -> None:
+        nonlocal stopping
+        if stopping:
+            logger.warning("Повторный сигнал — принудительный выход")
+            os._exit(130)
+        stopping = True
         stop_event.set()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -1493,8 +1500,18 @@ async def main():
         await stop_event.wait()
     finally:
         logger.info("Останавливаю веб-панель и клиентов…")
-        await panel.stop()
-        await _stop_all_managers()
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(
+                    panel.stop(),
+                    _stop_all_managers(),
+                    return_exceptions=True,
+                ),
+                timeout=20,
+            )
+        except TimeoutError:
+            logger.warning("Остановка зависла — принудительный выход")
+            os._exit(1)
 
 
 if __name__ == "__main__":

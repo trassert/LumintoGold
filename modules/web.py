@@ -17,7 +17,7 @@ from typing import Any
 
 import orjson
 import yaml
-from aiohttp import WSMsgType, web
+from aiohttp import WSCloseCode, WSMsgType, web
 from loguru import logger
 from telethon import TelegramClient, errors
 from telethon.tl.custom.qrlogin import QRLogin
@@ -174,6 +174,7 @@ class Panel:
         self._logins: dict[str, LoginSession] = {}
         self._login_admin_lock = asyncio.Lock()
         self._runner: web.AppRunner | None = None
+        self._websockets: set[web.WebSocketResponse] = set()
         self._cleanup_task: asyncio.Task | None = None
         self._closing = False
         self._session_ttl = 0
@@ -216,7 +217,7 @@ class Panel:
             client_max_size=self._max_request_size,
         )
         self._register_routes(app)
-        self._runner = web.AppRunner(app, access_log=None)
+        self._runner = web.AppRunner(app, access_log=None, shutdown_timeout=5)
         await self._runner.setup()
         site = web.TCPSite(self._runner, self._host, self._port)
         await site.start()
@@ -237,6 +238,21 @@ class Panel:
             self._cleanup_task = None
         for login in list(self._logins.values()):
             await self._cancel_login(login)
+        if self._websockets:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        *(
+                            ws.close(
+                                code=WSCloseCode.GOING_AWAY,
+                                message=b"shutdown",
+                            )
+                            for ws in list(self._websockets)
+                        ),
+                        return_exceptions=True,
+                    ),
+                    timeout=2,
+                )
         if self._runner:
             await self._runner.cleanup()
             self._runner = None
@@ -1382,39 +1398,43 @@ class Panel:
             return self._error(401, "Требуется вход в панель")
         ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
-        async with self._log_broker.subscribe() as queue:
-            await ws.send_str(
-                orjson.dumps(
-                    {
-                        "type": "history",
-                        "entries": self._log_broker.history(),
-                    }
-                ).decode()
-            )
+        self._websockets.add(ws)
+        try:
+            async with self._log_broker.subscribe() as queue:
+                await ws.send_str(
+                    orjson.dumps(
+                        {
+                            "type": "history",
+                            "entries": self._log_broker.history(),
+                        }
+                    ).decode()
+                )
 
-            async def sender() -> None:
+                async def sender() -> None:
+                    try:
+                        while True:
+                            entry = await queue.get()
+                            await ws.send_str(
+                                orjson.dumps(
+                                    {"type": "log", "entry": entry}
+                                ).decode()
+                            )
+                    except (
+                        asyncio.CancelledError,
+                        ConnectionResetError,
+                        RuntimeError,
+                    ):
+                        return
+
+                send_task = asyncio.create_task(sender())
                 try:
-                    while True:
-                        entry = await queue.get()
-                        await ws.send_str(
-                            orjson.dumps(
-                                {"type": "log", "entry": entry}
-                            ).decode()
-                        )
-                except (
-                    asyncio.CancelledError,
-                    ConnectionResetError,
-                    RuntimeError,
-                ):
-                    return
-
-            send_task = asyncio.create_task(sender())
-            try:
-                async for message in ws:
-                    if message.type == WSMsgType.ERROR:
-                        break
-            finally:
-                send_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await send_task
+                    async for message in ws:
+                        if message.type == WSMsgType.ERROR:
+                            break
+                finally:
+                    send_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await send_task
+        finally:
+            self._websockets.discard(ws)
         return ws
