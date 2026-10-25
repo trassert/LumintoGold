@@ -73,7 +73,6 @@ class TelemtClient:
         self,
         base_url: str,
         auth_token: str | None = None,
-        whitelist_check: bool = True,
     ):
         self.base_url = base_url.rstrip("/")
         self.auth_token = auth_token
@@ -161,30 +160,18 @@ class TelemtClient:
         secret = data.get("secret")
         return UserInfo.from_dict(user_data), secret
 
-    async def update_user(self, username: str, **kwargs) -> UserInfo:
-        endpoint = f"/users/{username}"
-        payload = {k: v for k, v in kwargs.items() if v is not None}
-        if not payload:
-            raise ValueError("Нет полей для обновления")
-        data, _ = await self._request("PATCH", endpoint, payload=payload)
-        return UserInfo.from_dict(data)
-
     async def delete_user(self, username: str) -> str:
         endpoint = f"/users/{username}"
         data, _ = await self._request("DELETE", endpoint)
         return data
 
     def get_links_from_user(self, user: UserInfo) -> dict[str, str]:
-        if not user.links:
-            return {}
-        result = {}
-        if user.links.get("secure"):
-            result["secure"] = user.links["secure"][0]
-        if user.links.get("tls"):
-            result["tls"] = user.links["tls"][0]
-        if user.links.get("classic"):
-            result["classic"] = user.links["classic"][0]
-        return result
+        links = user.links or {}
+        return {
+            key: links[key][0]
+            for key in ("secure", "tls", "classic")
+            if links.get(key)
+        }
 
     async def create_user_with_links(
         self, user_req: CreateUserRequest

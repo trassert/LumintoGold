@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import random
 import time
@@ -21,7 +23,7 @@ RandomDelay = tuple[int, int] | None
 
 
 class Generator:
-    _instances: dict[str, "Generator"] = {}  # noqa: UP037
+    _instances: dict[str, Generator] = {}
 
     def __init__(self, key_name: str, filename: Path = pathes.tasks) -> None:
         logger.info(f"Инициализирован таск-ген {key_name}")
@@ -160,7 +162,6 @@ class Generator:
         return (await self._get_all_data()).get(self.key_name, {})
 
     async def _update_task_data(self, last_run: float) -> None:
-        await self._ensure_directory_exists()
         data = await self._get_all_data()
         data[self.key_name] = {
             "last_run": last_run,
@@ -172,33 +173,25 @@ class Generator:
             await f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
 
     async def info(self) -> float | None:
+        if self._task and self._next_run_timestamp is not None:
+            return max(0.0, self._next_run_timestamp - time.time())
         data = await self._get_task_data()
-        if not self._task or self._next_run_timestamp is None:
-            if not data:
+        task_type = data.get("task_type")
+        task_param = data.get("task_param")
+        last_run = data.get("last_run")
+        if not task_type or task_param is None or last_run is None:
+            return None
+        if task_type == "interval" and isinstance(task_param, int):
+            next_run = last_run + task_param * 3600
+        elif task_type == "daily" and isinstance(task_param, str):
+            try:
+                target = datetime.strptime(task_param, "%H:%M").time()
+            except ValueError:
                 return None
-            task_type = data.get("task_type")
-            task_param = data.get("task_param")
-            last_run = data.get("last_run")
-            if not all(
-                (task_type, task_param is not None, last_run is not None)
-            ):
-                return None
-            if task_type == "interval":
-                if not isinstance(task_param, int):
-                    return None
-                next_run = last_run + (task_param * 3600)
-            elif task_type == "daily":
-                if not isinstance(task_param, str):
-                    return None
-                try:
-                    tm = datetime.strptime(task_param, "%H:%M").time()
-                    next_run = self._get_next_daily_run(tm)
-                except ValueError:
-                    return None
-            else:
-                return None
-            return max(0.0, next_run - time.time())
-        return max(0.0, self._next_run_timestamp - time.time())
+            next_run = self._get_next_daily_run(target)
+        else:
+            return None
+        return max(0.0, next_run - time.time())
 
     def stop(self) -> None:
         if self._task and not self._task.done():
@@ -208,7 +201,6 @@ class Generator:
 
     @classmethod
     async def cleanup(cls) -> None:
-        for key in list(cls._instances):
-            instance = cls._instances[key]
+        for instance in list(cls._instances.values()):
             instance.stop()
-            del cls._instances[key]
+        cls._instances.clear()

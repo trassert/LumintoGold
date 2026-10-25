@@ -15,15 +15,15 @@ config = ConfigManager(pathes.config, defaults=pathes.default_config)
 tokens = ConfigManager(pathes.tokens, defaults=pathes.default_tokens)
 
 
+def _read_yaml(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
 def _load_section(path: Path, defaults: Path) -> ConfigSection:
-    default_data = {}
-    if defaults.exists():
-        default_data = yaml.safe_load(
-            defaults.read_text(encoding="utf-8")
-        ) or {}
-    data = {}
-    if path.exists():
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    default_data = _read_yaml(defaults)
+    data = _read_yaml(path)
     if not isinstance(data, dict) or not isinstance(default_data, dict):
         raise ValueError(f"{path}: ожидается YAML-объект")
     return ConfigSection(data, default_data)
@@ -42,7 +42,7 @@ async def load_client(clients_dir: Path, client_file: str):
     try:
         async with aiofiles.open(clients_dir / client_file, "rb") as f:
             data = orjson.loads(await f.read())
-        phone = client_file.replace(".json", "")
+        phone = Path(client_file).stem
         return phone, data["api_id"], data["api_hash"]
     except orjson.JSONDecodeError:
         logger.error(

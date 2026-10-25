@@ -213,7 +213,6 @@ async function enterApp() {
       try {
         if (state.view === "clients") await refreshClients(true);
       } catch {
-        // next poll will retry
       } finally {
         state.refreshing = false;
       }
@@ -288,7 +287,6 @@ async function route() {
   updateNav();
 }
 
-// ---------------------------------------------------------------- clients
 
 async function refreshClients(silent = false) {
   const data = await api("/api/clients");
@@ -397,6 +395,14 @@ function clientRow(client) {
     </tr>`;
 }
 
+function openLoginFor(client) {
+  return openAddDialog("code", {
+    phone: client?.phone,
+    api_id: client?.api_id,
+    api_hash: client?.config?.api_hash,
+  });
+}
+
 function findClient(phone) {
   return state.clients.find((client) => client.phone === phone) || null;
 }
@@ -422,13 +428,7 @@ async function clientAction(action, phone, button) {
     toast(err.message, "error");
     if (err.message.includes("сессии")) {
       const client = findClient(phone) || state.client;
-      if (client) {
-        openAddDialog("code", {
-          phone: client.phone,
-          api_id: client.api_id,
-          api_hash: client.config?.api_hash,
-        });
-      }
+      if (client) openLoginFor(client);
     }
     await refreshClients(true).catch(() => {});
   } finally {
@@ -476,7 +476,6 @@ async function stopAll() {
   }
 }
 
-// ---------------------------------------------------------------- detail
 
 async function loadClient(phone) {
   state.clientPhone = phone;
@@ -855,7 +854,6 @@ async function toggleFeature(input) {
   }
 }
 
-// ---------------------------------------------------------------- logs
 
 function connectLogs() {
   if (state.ws) {
@@ -1004,7 +1002,6 @@ function toggleLogPause() {
   if (!state.logPaused) renderLogRows();
 }
 
-// ---------------------------------------------------------------- system
 
 function stopSystemTimer() {
   clearInterval(state.systemTimer);
@@ -1095,7 +1092,6 @@ function systemHtml(data) {
     </article>`;
 }
 
-// ---------------------------------------------------------------- global
 
 async function renderGlobal() {
   setCrumbs([{ label: "Настройки" }]);
@@ -1170,7 +1166,6 @@ async function reloadGlobal(button) {
   }
 }
 
-// ---------------------------------------------------------------- modal
 
 function openModal({ title, subtitle = "", body = "", wide = false, onClose = null }) {
   closeModal();
@@ -1240,7 +1235,6 @@ function confirmDialog(title, message, confirmLabel = "Подтвердить") 
   });
 }
 
-// ---------------------------------------------------------------- add client
 
 async function fetchLoginOptions() {
   try {
@@ -1265,7 +1259,7 @@ async function openAddDialog(initialTab = "code", prefill = {}) {
     subtitle: "Вход по коду, QR или импорт конфигурации",
     wide: true,
     body: '<p class="form-hint">Загрузка…</p>',
-    onClose: () => cleanupAdd(ctx),
+    onClose: () => cancelLogin(ctx),
   });
   ctx.modal = modal;
   ctx.body = modal.bodyEl;
@@ -1548,6 +1542,11 @@ function renderQrStep(ctx) {
   ctx.lastSvg = svg;
 }
 
+function stopPoll(ctx) {
+  if (ctx.poll) clearInterval(ctx.poll);
+  ctx.poll = null;
+}
+
 function startQrPoll(ctx) {
   if (ctx.poll) clearInterval(ctx.poll);
   const loginId = ctx.login?.id;
@@ -1565,22 +1564,18 @@ function startQrPoll(ctx) {
           if (frame) frame.innerHTML = data.qr_svg;
         }
       } else if (data.state === "password_required") {
-        clearInterval(ctx.poll);
-        ctx.poll = null;
+        stopPoll(ctx);
         renderPasswordStep(ctx, "QR подтверждён. Введите пароль 2FA.", "qr");
       } else if (data.state === "authorized") {
-        clearInterval(ctx.poll);
-        ctx.poll = null;
+        stopPoll(ctx);
         finishAdd(ctx, data);
       } else if (data.state === "error" || data.state === "expired") {
-        clearInterval(ctx.poll);
-        ctx.poll = null;
+        stopPoll(ctx);
         showAddError(ctx, data.error || "Время входа истекло");
       }
     } catch (err) {
       if (err.message.includes("не найден") || err.message.includes("истёк")) {
-        clearInterval(ctx.poll);
-        ctx.poll = null;
+        stopPoll(ctx);
         showAddError(ctx, err.message);
       }
     }
@@ -1589,10 +1584,7 @@ function startQrPoll(ctx) {
 
 function finishAdd(ctx, login) {
   ctx.login = login;
-  if (ctx.poll) {
-    clearInterval(ctx.poll);
-    ctx.poll = null;
-  }
+  stopPoll(ctx);
   const phone = login.result_phone || login.phone;
   toast(`Клиент +${phone} добавлен`);
   ctx.modal.close();
@@ -1716,25 +1708,8 @@ function clearAddError(ctx) {
   if (holder) holder.innerHTML = "";
 }
 
-function cleanupAdd(ctx) {
-  if (ctx.poll) {
-    clearInterval(ctx.poll);
-    ctx.poll = null;
-  }
-  if (ctx.login && ctx.login.state !== "authorized") {
-    fetch(`/api/logins/${ctx.login.id}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-    }).catch(() => {});
-  }
-  ctx.login = null;
-}
-
 function cancelLogin(ctx) {
-  if (ctx.poll) {
-    clearInterval(ctx.poll);
-    ctx.poll = null;
-  }
+  stopPoll(ctx);
   const login = ctx.login;
   ctx.login = null;
   if (login && login.state !== "authorized") {
@@ -1745,7 +1720,6 @@ function cancelLogin(ctx) {
   }
 }
 
-// ---------------------------------------------------------------- events
 
 async function onViewClick(event) {
   const action = event.target.closest("[data-action]");
@@ -1757,14 +1731,7 @@ async function onViewClick(event) {
     const name = action.dataset.action;
     if (name === "add") return openAddDialog("code");
     if (name === "import") return openAddDialog("import");
-    if (name === "login") {
-      const client = findClient(phone) || state.client;
-      return openAddDialog("code", {
-        phone: client?.phone,
-        api_id: client?.api_id,
-        api_hash: client?.config?.api_hash,
-      });
-    }
+    if (name === "login") return openLoginFor(findClient(phone) || state.client);
     if (name === "open") return navigate(`client/${encodeURIComponent(phone)}`);
     if (["start", "stop", "restart"].includes(name)) {
       return clientAction(name, phone, action);
@@ -1776,14 +1743,7 @@ async function onViewClick(event) {
   if (detailAction) {
     event.preventDefault();
     const actionName = detailAction.dataset.detailAction;
-    if (actionName === "login") {
-      const client = state.client;
-      return openAddDialog("code", {
-        phone: client?.phone,
-        api_id: client?.api_id,
-        api_hash: client?.config?.api_hash,
-      });
-    }
+    if (actionName === "login") return openLoginFor(state.client);
     if (["start", "stop", "restart"].includes(actionName)) {
       return clientAction(actionName, state.clientPhone, detailAction);
     }

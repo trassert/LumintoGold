@@ -28,6 +28,15 @@ DEFAULT_PASSWORD = "luminto"
 PHONE_RE = re.compile(r"^\+?\d{5,20}$")
 HASH_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 LOGIN_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+_TG_ERRORS = (
+    (errors.ApiIdInvalidError, "Неверный api_id/api_hash", 400),
+    (errors.PhoneNumberInvalidError, "Неверный номер телефона", 400),
+    (errors.PhoneNumberBannedError, "Номер заблокирован в Telegram", 400),
+    (errors.PhoneCodeInvalidError, "Неверный код из Telegram", 400),
+    (errors.PhoneCodeExpiredError, "Код истёк — запросите новый", 400),
+    (errors.PasswordHashInvalidError, "Неверный пароль 2FA", 400),
+    (errors.SessionPasswordNeededError, "Требуется пароль 2FA", 500),
+)
 
 
 class LogBroker:
@@ -272,22 +281,21 @@ class Panel:
 
     @web.middleware
     async def _auth_middleware(self, request: web.Request, handler):
-        if (
-            request.path.startswith("/api/")
-            and request.path not in ("/api/login", "/api/session")
-            and not self._authorized(request)
-        ):
-            response = self._error(401, "Требуется вход в панель")
-        else:
-            response = await handler(request)
+        try:
+            if (
+                request.path.startswith("/api/")
+                and request.path not in ("/api/login", "/api/session")
+                and not self._authorized(request)
+            ):
+                response = self._error(401, "Требуется вход в панель")
+            else:
+                response = await handler(request)
+        except web.HTTPException as exc:
+            response = self._error(exc.status, exc.text)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         return response
-
-    # ------------------------------------------------------------------
-    # helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _error(status: int, message: str) -> web.Response:
@@ -300,6 +308,32 @@ class Panel:
             status=status,
             dumps=lambda obj: orjson.dumps(obj).decode(),
         )
+
+    def _phone(self, request: web.Request) -> str | None:
+        phone = request.match_info["phone"]
+        return phone if PHONE_RE.fullmatch(phone) else None
+
+    async def _client_or_error(self, request: web.Request):
+        phone = self._phone(request)
+        if not phone:
+            return None, None, self._error(400, "Некорректный номер")
+        data, error = await self._read_config(phone)
+        if error:
+            return (
+                phone,
+                None,
+                self._error(400, "Сначала исправьте JSON-конфиг"),
+            )
+        if data is None:
+            return phone, None, self._error(404, "Клиент не найден")
+        return phone, data, None
+
+    def _with_detail(self, detail, **extra) -> web.Response:
+        if isinstance(detail, web.Response) and detail.status == 200:
+            payload = orjson.loads(detail.body)
+            payload.update(extra)
+            return self._json(payload)
+        return detail
 
     async def _json_body(self, request: web.Request) -> dict:
         if not request.content_type.startswith("application/json"):
@@ -411,10 +445,6 @@ class Panel:
             raise ValueError("Конфиг слишком большой")
         return result
 
-    # ------------------------------------------------------------------
-    # auth
-    # ------------------------------------------------------------------
-
     async def _index(self, request: web.Request) -> web.FileResponse:
         response = web.FileResponse(self._web_dir / "index.html")
         response.headers["Cache-Control"] = "no-store"
@@ -429,10 +459,7 @@ class Panel:
             return self._error(
                 429, f"Слишком много попыток. Повторите через {wait} с."
             )
-        try:
-            data = await self._json_body(request)
-        except web.HTTPException as exc:
-            return self._error(exc.status, exc.text)
+        data = await self._json_body(request)
         password = str(data.get("password") or "")
         if not hmac.compare_digest(password.encode(), self._password.encode()):
             attempts += 1
@@ -534,16 +561,12 @@ class Panel:
         )
 
     async def _save_global_config(self, request: web.Request) -> web.Response:
-        try:
-            body = await self._json_body(request)
-        except web.HTTPException as exc:
-            return self._error(exc.status, exc.text)
+        body = await self._json_body(request)
         config_text = body.get("config")
         tokens_text = body.get("tokens")
-        if config_text is not None and not isinstance(config_text, str):
-            return self._error(400, "config должен быть строкой")
-        if tokens_text is not None and not isinstance(tokens_text, str):
-            return self._error(400, "tokens должен быть строкой")
+        for name, value in (("config", config_text), ("tokens", tokens_text)):
+            if value is not None and not isinstance(value, str):
+                return self._error(400, f"{name} должен быть строкой")
         try:
             if config_text is not None:
                 self._validate_global_yaml(config_text, "config.yml")
@@ -589,17 +612,14 @@ class Panel:
             if expires <= now:
                 self._sessions.pop(token, None)
 
-    # ------------------------------------------------------------------
-    # clients
-    # ------------------------------------------------------------------
-
     async def _summary(self, phone: str) -> dict | None:
         data, error = await self._read_config(phone)
         if data is None and error is None:
             return None
         has_session = self._has_session(phone)
-        status = (self._statuses.get(phone) or {}).get("status")
-        status_error = (self._statuses.get(phone) or {}).get("error")
+        status_entry = self._statuses.get(phone) or {}
+        status = status_entry.get("status")
+        status_error = status_entry.get("error")
         disabled = bool((data or {}).get("disabled", False))
         if error:
             status = "invalid"
@@ -654,13 +674,12 @@ class Panel:
         return self._json({"clients": clients, "counts": counts})
 
     async def _get_client(self, request: web.Request) -> web.Response:
-        phone = request.match_info["phone"]
-        if not PHONE_RE.fullmatch(phone):
+        if not (phone := self._phone(request)):
             return self._error(400, "Некорректный номер")
         raw = await self._read_raw(phone)
         if raw is None:
             return self._error(404, "Клиент не найден")
-        data, error = await self._read_config(phone)
+        data, _ = await self._read_config(phone)
         summary = await self._summary(phone)
         if summary is None:
             return self._error(404, "Клиент не найден")
@@ -668,15 +687,11 @@ class Panel:
         return self._json(summary)
 
     async def _save_client(self, request: web.Request) -> web.Response:
-        phone = request.match_info["phone"]
-        if not PHONE_RE.fullmatch(phone):
+        if not (phone := self._phone(request)):
             return self._error(400, "Некорректный номер")
         if not self._config_path(phone).exists():
             return self._error(404, "Клиент не найден")
-        try:
-            body = await self._json_body(request)
-        except web.HTTPException as exc:
-            return self._error(exc.status, exc.text)
+        body = await self._json_body(request)
         if "raw" in body:
             try:
                 data = orjson.loads(str(body["raw"]))
@@ -712,26 +727,15 @@ class Panel:
             await self._restart(phone)
         elif manager and manager.status == "running":
             await manager.apply_features()
-        detail = await self._get_client(request)
-        if isinstance(detail, web.Response) and detail.status == 200:
-            payload = orjson.loads(detail.body)
-            payload["restarted"] = restart_needed
-            return self._json(payload)
-        return detail
+        return self._with_detail(
+            await self._get_client(request), restarted=restart_needed
+        )
 
     async def _patch_client(self, request: web.Request) -> web.Response:
-        phone = request.match_info["phone"]
-        if not PHONE_RE.fullmatch(phone):
-            return self._error(400, "Некорректный номер")
-        data, error = await self._read_config(phone)
+        phone, data, error = await self._client_or_error(request)
         if error:
-            return self._error(400, "Сначала исправьте JSON-конфиг клиента")
-        if data is None:
-            return self._error(404, "Клиент не найден")
-        try:
-            body = await self._json_body(request)
-        except web.HTTPException as exc:
-            return self._error(exc.status, exc.text)
+            return error
+        body = await self._json_body(request)
         disabled = body.get("disabled")
         if not isinstance(disabled, bool):
             return self._error(400, "disabled должен быть true или false")
@@ -750,21 +754,15 @@ class Panel:
             )
         else:
             await self._launch(phone)
-        detail = await self._get_client(request)
-        if isinstance(detail, web.Response) and detail.status == 200:
-            payload = orjson.loads(detail.body)
-            payload["needs_login"] = needs_login
-            return self._json(payload)
-        return detail
+        return self._with_detail(
+            await self._get_client(request), needs_login=needs_login
+        )
 
     async def _patch_feature(self, request: web.Request) -> web.Response:
-        phone = request.match_info["phone"]
-        if not PHONE_RE.fullmatch(phone):
-            return self._error(400, "Некорректный номер")
-        try:
-            body = await self._json_body(request)
-        except web.HTTPException as exc:
-            return self._error(exc.status, exc.text)
+        phone, data, error = await self._client_or_error(request)
+        if error:
+            return error
+        body = await self._json_body(request)
         key = str(body.get("key") or "")
         value = body.get("value")
         meta = settings.fields.get(key)
@@ -772,11 +770,6 @@ class Panel:
             return self._error(400, "Неизвестная функция")
         if not isinstance(value, bool):
             return self._error(400, "value должен быть true или false")
-        data, error = await self._read_config(phone)
-        if error:
-            return self._error(400, "Сначала исправьте JSON-конфиг")
-        if data is None:
-            return self._error(404, "Клиент не найден")
         data[key] = value
         manager = self._managers.get(phone)
         target = manager.settings if manager else settings.UBSettings(phone)
@@ -784,32 +777,24 @@ class Panel:
         applied = bool(manager and manager.status == "running")
         if applied:
             await manager.apply_features()
-        detail = await self._get_client(request)
-        if isinstance(detail, web.Response) and detail.status == 200:
-            payload = orjson.loads(detail.body)
-            payload["feature_applied"] = applied
-            payload["feature"] = key
-            payload["value"] = value
-            return self._json(payload)
-        return detail
+        return self._with_detail(
+            await self._get_client(request),
+            feature_applied=applied,
+            feature=key,
+            value=value,
+        )
 
     async def _start_client(self, request: web.Request) -> web.Response:
-        phone = request.match_info["phone"]
-        if not PHONE_RE.fullmatch(phone):
-            return self._error(400, "Некорректный номер")
-        data, error = await self._read_config(phone)
+        phone, _, error = await self._client_or_error(request)
         if error:
-            return self._error(400, "Сначала исправьте JSON-конфиг")
-        if data is None:
-            return self._error(404, "Клиент не найден")
+            return error
         if not self._has_session(phone):
             return self._error(400, "Нет сессии — войдите в аккаунт")
         await self._launch(phone)
         return self._json({"ok": True})
 
     async def _stop_client(self, request: web.Request) -> web.Response:
-        phone = request.match_info["phone"]
-        if not PHONE_RE.fullmatch(phone):
+        if not (phone := self._phone(request)):
             return self._error(400, "Некорректный номер")
         data, error = await self._read_config(phone)
         if data is None and error is None:
@@ -820,14 +805,9 @@ class Panel:
         return self._json({"ok": True})
 
     async def _restart_client(self, request: web.Request) -> web.Response:
-        phone = request.match_info["phone"]
-        if not PHONE_RE.fullmatch(phone):
-            return self._error(400, "Некорректный номер")
-        data, error = await self._read_config(phone)
+        phone, _, error = await self._client_or_error(request)
         if error:
-            return self._error(400, "Сначала исправьте JSON-конфиг")
-        if data is None:
-            return self._error(404, "Клиент не найден")
+            return error
         if not self._has_session(phone):
             return self._error(400, "Нет сессии — войдите в аккаунт")
         await self._restart(phone)
@@ -842,10 +822,7 @@ class Panel:
         return self._json({"ok": True, "stopped": count})
 
     async def _import_clients(self, request: web.Request) -> web.Response:
-        try:
-            body = await self._json_body(request)
-        except web.HTTPException as exc:
-            return self._error(exc.status, exc.text)
+        body = await self._json_body(request)
         items = body.get("items")
         if not isinstance(items, list) or not items:
             return self._error(400, "Нет конфигов для импорта")
@@ -857,21 +834,21 @@ class Panel:
             try:
                 if not isinstance(item, dict):
                     raise ValueError("Некорректный элемент импорта")
-                config = item.get("config")
-                if config is None:
+                item_config = item.get("config")
+                if item_config is None:
                     content = item.get("content")
                     if not isinstance(content, str):
                         raise ValueError("Нет содержимого файла")
-                    config = orjson.loads(content)
-                if not isinstance(config, dict):
+                    item_config = orjson.loads(content)
+                if not isinstance(item_config, dict):
                     raise ValueError("Конфиг должен быть JSON-объектом")
-                source = config.get("phone") or Path(name).name
+                source = item_config.get("phone") or Path(name).name
                 phone = normalize_phone(Path(str(source)).stem)
-                config.pop("phone", None)
-                config = self._validate_config(config)
+                item_config.pop("phone", None)
+                item_config = self._validate_config(item_config)
                 if self._config_path(phone).exists():
                     raise ValueError("Клиент уже существует")
-                await self._write_config(phone, config)
+                await self._write_config(phone, item_config)
                 results.append(
                     {
                         "ok": True,
@@ -889,15 +866,8 @@ class Panel:
                 )
         return self._json({"results": results})
 
-    # ------------------------------------------------------------------
-    # login
-    # ------------------------------------------------------------------
-
     async def _create_login(self, request: web.Request) -> web.Response:
-        try:
-            body = await self._json_body(request)
-        except web.HTTPException as exc:
-            return self._error(exc.status, exc.text)
+        body = await self._json_body(request)
         try:
             method = str(body.get("method") or "code")
             if method not in ("code", "qr"):
@@ -1047,10 +1017,7 @@ class Panel:
         login = await self._find_login(request)
         if isinstance(login, web.Response):
             return login
-        try:
-            body = await self._json_body(request)
-        except web.HTTPException as exc:
-            return self._error(exc.status, exc.text)
+        body = await self._json_body(request)
         code = str(body.get("code") or "").strip()
         if not code.isdigit() or not (3 <= len(code) <= 8):
             return self._error(400, "Введите код из Telegram")
@@ -1083,10 +1050,7 @@ class Panel:
         login = await self._find_login(request)
         if isinstance(login, web.Response):
             return login
-        try:
-            body = await self._json_body(request)
-        except web.HTTPException as exc:
-            return self._error(exc.status, exc.text)
+        body = await self._json_body(request)
         password = str(body.get("password") or "")
         if not password:
             return self._error(400, "Введите пароль 2FA")
@@ -1268,25 +1232,11 @@ class Panel:
         if isinstance(exc, (ConnectionError, OSError)):
             return f"Ошибка сети: {exc}"
         if isinstance(exc, errors.FloodWaitError):
-            return (
-                "Telegram просит подождать "
-                f"{exc.seconds} с. из-за лимита попыток"
-            )
-        if isinstance(exc, errors.ApiIdInvalidError):
-            return "Неверный api_id/api_hash"
-        if isinstance(exc, errors.PhoneNumberInvalidError):
-            return "Неверный номер телефона"
-        if isinstance(exc, errors.PhoneNumberBannedError):
-            return "Номер заблокирован в Telegram"
-        if isinstance(exc, errors.PhoneCodeInvalidError):
-            return "Неверный код из Telegram"
-        if isinstance(exc, errors.PhoneCodeExpiredError):
-            return "Код истёк — запросите новый"
-        if isinstance(exc, errors.PasswordHashInvalidError):
-            return "Неверный пароль 2FA"
-        if isinstance(exc, errors.SessionPasswordNeededError):
-            return "Требуется пароль 2FA"
-        return f"{type(exc).__name__}: {exc}"
+            return f"Telegram просит подождать {exc.seconds} с. из-за лимита попыток"
+        return next(
+            (text for cls, text, _ in _TG_ERRORS if isinstance(exc, cls)),
+            f"{type(exc).__name__}: {exc}",
+        )
 
     def _error_status(self, exc: Exception) -> int:
         if isinstance(exc, TimeoutError):
@@ -1295,19 +1245,10 @@ class Panel:
             return 502
         if isinstance(exc, errors.FloodWaitError):
             return 429
-        if isinstance(
-            exc,
-            (
-                errors.ApiIdInvalidError,
-                errors.PhoneNumberInvalidError,
-                errors.PhoneNumberBannedError,
-                errors.PhoneCodeInvalidError,
-                errors.PhoneCodeExpiredError,
-                errors.PasswordHashInvalidError,
-            ),
-        ):
-            return 400
-        return 500
+        return next(
+            (status for cls, _, status in _TG_ERRORS if isinstance(exc, cls)),
+            500,
+        )
 
     def _telegram_error(self, exc: Exception) -> web.Response:
         return self._error(self._error_status(exc), self._friendly_error(exc))
@@ -1369,10 +1310,6 @@ class Panel:
                         await self._remove_temp_session(login.temp_session)
         except asyncio.CancelledError:
             raise
-
-    # ------------------------------------------------------------------
-    # system + logs
-    # ------------------------------------------------------------------
 
     async def _system(self, request: web.Request) -> web.Response:
         import platform

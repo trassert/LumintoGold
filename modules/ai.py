@@ -47,15 +47,18 @@ class GroqClient:
             await self.client.close()
             self.client = None
 
-    def chat(self, chat_id: str) -> GroqChatSession:
-        """Создаёт сессию чата для конкретного chat_id."""
+    def _require_client(self) -> AsyncGroq:
         if self.client is None:
             raise RuntimeError(
                 "Groq client not initialized. Call init_client() first."
             )
+        return self.client
+
+    def chat(self, chat_id: str) -> GroqChatSession:
+        """Создаёт сессию чата для конкретного chat_id."""
         return GroqChatSession(
             chat_id=chat_id,
-            client=self.client,
+            client=self._require_client(),
             chats_dir=self.chats_dir,
             model=self.chat_model,
             temperature=self.temperature,
@@ -64,17 +67,14 @@ class GroqClient:
 
     async def transcribe_voice(self, number: str, voice_id: str) -> str:
         """Транскрибирует OGG-файл через Whisper."""
-        if self.client is None:
-            raise RuntimeError(
-                "Groq client not initialized. Call init_client() first."
-            )
+        client = self._require_client()
         voice_path = pathes.voice / number / f"voice_{voice_id}.ogg"
         if not voice_path.exists():
             raise FileNotFoundError(f"Voice file not found: {voice_path}")
         async with aiofiles.open(voice_path, "rb") as f:
             audio_data = await f.read()
         try:
-            transcription = await self.client.audio.transcriptions.create(
+            transcription = await client.audio.transcriptions.create(
                 file=("audio.ogg", audio_data),
                 model=self.voice_model,
                 temperature=0.0,

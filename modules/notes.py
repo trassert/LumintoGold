@@ -94,7 +94,7 @@ class Notes:
         try:
             norm_name = self._normalize_name(name)
             base_path = self.user_dir / norm_name
-            for ext in [".txt", ".jpg"]:
+            for ext in (".txt", ".jpg"):
                 p = base_path.with_suffix(ext)
                 if p.exists():
                     p.unlink()

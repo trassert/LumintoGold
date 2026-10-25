@@ -125,9 +125,6 @@ def default_path() -> Path:
         drive = os.environ.get("SYSTEMDRIVE", "C:")
         return Path(drive + "\\")
     if "ANDROID_ROOT" in os.environ or "ANDROID_DATA" in os.environ:
-        # for p in ("/storage/emulated/0", "/sdcard", str(Path.home())):
-        #     if os.path.exists(p):
-        #         return Path(p)
         return Path.cwd()
     return Path("/")
 
@@ -146,14 +143,14 @@ async def get_system_info() -> str:
     cpu_cores_phys = psutil.cpu_count(logical=False) or "?"
     cpu_cores_logical = psutil.cpu_count(logical=True) or "?"
 
-    boottime_task = await asyncio.create_task(
-        asyncio.to_thread(lambda: get_boottime())
+    boottime, cpu_load, network, temp_raw = await asyncio.gather(
+        asyncio.to_thread(get_boottime),
+        get_cpu_load(),
+        get_current_speed(),
+        asyncio.to_thread(get_temperature),
     )
-    cpu_load_task = await asyncio.create_task(get_cpu_load())
-    network_task = await asyncio.create_task(get_current_speed())
-    temp_task = await asyncio.create_task(asyncio.to_thread(get_temperature))
 
-    temp = f"\nТемпература ↑|≈|↓: {temp_task}" if temp_task is not None else ""
+    temp = f"\nТемпература ↑|≈|↓: {temp_raw}" if temp_raw is not None else ""
 
     mem_total = mem.total / (1024**3)
     mem_avail = mem.available / (1024**3)
@@ -162,12 +159,12 @@ async def get_system_info() -> str:
     disk = disk_free()
 
     return f"""⚙️ : Информация о хостинге:
-    Время работы: {boottime_task}
+    Время работы: {boottime}
     ОС: {platform.system()} {platform.release()}
     Процессор:
         Частота: {int(cpu_freq.current) if cpu_freq else "N/A"} МГц
         Ядра/Потоки: {cpu_cores_phys}/{cpu_cores_logical}
-        Загрузка: {cpu_load_task}{temp}
+        Загрузка: {cpu_load}{temp}
     ОЗУ:
         Объём: {mem_total:.1f} ГБ
         Доступно: {mem_avail:.1f} ГБ
@@ -178,6 +175,6 @@ async def get_system_info() -> str:
         Использовано: {disk[1]}
         Свободно: {disk[2]}
     Сеть:
-        Загрузка: {network_task[0]} Мбит/с
-        Выгрузка: {network_task[1]} Мбит/с
+        Загрузка: {network[0]} Мбит/с
+        Выгрузка: {network[1]} Мбит/с
     """

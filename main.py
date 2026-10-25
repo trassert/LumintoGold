@@ -4,13 +4,13 @@ import logging
 import random
 import re
 import sys
+from functools import partial
 from pathlib import Path
 from time import time
 
 import aiofiles
 from loguru import logger
 from telethon import TelegramClient, errors, events, functions, types
-from telethon.helpers import TotalList
 from telethon.network.connection import ConnectionTcpObfuscated
 from telethon.tl.custom import Message
 from telethon.tl.functions.account import (
@@ -112,13 +112,34 @@ def _make_client(
     )
 
 
+def _as_number(value, cast, fallback):
+    try:
+        return cast(value)
+    except TypeError, ValueError:
+        return fallback
+
+
+_TASK_CONFIG = {
+    "iris.farm": (4, "hours", (5, 360), (phrase.farm.on, phrase.farm.off)),
+    "iceyes.bonus": (1, "hours", (1, 60), (phrase.bonus.on, phrase.bonus.off)),
+    "auto.online": (30, "seconds", None, (phrase.online.on, phrase.online.off)),
+    "battery.status": (
+        15,
+        "seconds",
+        None,
+        (phrase.battmon.on, phrase.battmon.off),
+    ),
+}
+
+
 class UserbotManager:
     def __init__(self, phone: str, api_id: int, api_hash: str):
         self.phone = phone
         self.settings = settings.UBSettings(phone, pathes.clients)
-        self.session_path = pathes.sessions / phone
         self.voice_path = pathes.voice / phone
-        self.client = _make_client(phone, api_id, api_hash, self.session_path)
+        self.client = _make_client(
+            phone, api_id, api_hash, pathes.sessions / phone
+        )
         self.iris_task = task_gen.Generator(f"{phone}_iris")
         self.online_task = task_gen.Generator(f"{phone}_online")
         self.iceyes_task = task_gen.Generator(f"{phone}_iceyes")
@@ -246,14 +267,12 @@ class UserbotManager:
             await self.settings.get("ai.voice_model")
             or "whisper-large-v3-turbo"
         )
-        try:
-            temperature = float(await self.settings.get("ai.temperature", 1.0))
-        except TypeError, ValueError:
-            temperature = 1.0
-        try:
-            max_tokens = int(await self.settings.get("ai.max_tokens", 2048))
-        except TypeError, ValueError:
-            max_tokens = 2048
+        temperature = _as_number(
+            await self.settings.get("ai.temperature", 1.0), float, 1.0
+        )
+        max_tokens = _as_number(
+            await self.settings.get("ai.max_tokens", 2048), int, 2048
+        )
         signature = (
             str(token or ""),
             str(proxy or ""),
@@ -375,98 +394,76 @@ class UserbotManager:
                 logger.exception(f"Не удалось применить {label} у {self.phone}")
 
     def _register_handlers(self):
-        self.client.on(d.cmd(r"\.тгвк$"))(self.toggle_tg_to_vk)
-        self.client.on(d.cmd(r"\.\$(.+)"))(self.run_shell)
-        self.client.on(d.cmd(r"\+зам (.+)\n([\s\S]+)"))(self.add_note)
-        self.client.on(d.cmd(r"\-зам (.+)"))(self.rm_note)
-        self.client.on(d.cmd(r"\!(.+)"))(self.chk_note)
-        self.client.on(d.cmd(r"\.замы$"))(self.list_notes)
-        self.client.on(d.cmd(r"\.чистка$"))(self.clean_pm)
-        self.client.on(d.cmd(r"\.help$"))(self.help)
-        self.client.on(d.cmd(r"\.помощь$"))(self.help)
-        self.client.on(d.cmd(r"\.чсчистка$"))(self.clean_blacklist)
-        self.client.on(d.cmd(r"\.voice$"))(self.voice2text)
-        self.client.on(d.cmd(r"\.баттмон$"))(self.toggle_batt)
-        self.client.on(d.cmd(r"\.чатчистка$"))(self.clean_chat)
-        self.client.on(d.cmd(r"\.слов"))(self.words)
-        self.client.on(d.cmd(r"\.пинг$"))(self.ping)
-        self.client.on(d.cmd(r"\.эмоид$"))(self.get_emo_id)
-        self.client.on(d.cmd(r"\.флип"))(self.flip_text)
-        self.client.on(d.cmd(r"\.гс$"))(self.on_off_block_voice)
-        self.client.on(d.cmd(r"\.читать$"))(self.on_off_mask_read)
-        self.client.on(d.cmd(r"\.серв$"))(self.server_load)
-        self.client.on(d.cmd(r"\.релоадконфиг$"))(self.config_reload)
-        self.client.on(d.cmd(r"\.автоферма$"))(self.on_off_farming)
-        self.client.on(d.cmd(r"\.афк$"))(self.afk_bio)
-        self.client.on(d.cmd(r"\.онлайн$"))(self.toggle_online)
-        self.client.on(d.cmd(r"\.автобонус$"))(self.on_off_bonus)
-        self.client.on(d.cmd(r"\.авто vktarget_bot$"))(self.toggle_vktarget)
-        self.client.on(d.cmd(r"\.авто clickbee$"))(self.clickbee.toggle)
-        self.client.on(d.cmd(r"\.id (.+)"))(self.get_id)
-        self.client.on(d.cmd(r"\.иичистка"))(self.ai_clear)
-        self.client.on(d.cmd(r"\.иипрокси (.+)"))(self.ai_proxy)
-        self.client.on(d.cmd(r"\.иипрокси$"))(self.ai_proxy_delete)
-        self.client.on(d.cmd(r"\.иитокен (.+)"))(self.ai_token)
-        self.client.on(d.cmd(r"\.иимодель (.+)"))(self.ai_model)
-        self.client.on(d.cmd(r"\.прокси(.*)"))(self.fp)
-        self.client.on(d.cmd(r"\.погода (.+)"))(self.get_weather)
-        self.client.on(d.cmd(r"\.ip (.+)"))(self.ipman)
-        self.client.on(d.cmd(r"\.кв (.+)"))(self.currencyconventer)
-        self.client.on(d.cmd(r"\.аним (.+)"))(self.anim)
-        self.client.on(d.cmd(r"\.ии ([\s\S]+)"))(self.ai_resp)
-        self.client.on(d.cmd(r"\.т ([\s\S]+)"))(self.typing)
-        self.client.on(d.cmd(r"\.set (.+)"))(self.set_setting)
-        self.client.on(d.cmd(r"\.setint (.+)"))(self.set_int_setting)
-        self.client.on(d.cmd(r"\.время (.+)"))(self.time_by_city)
-        self.client.on(d.cmd(r"\.ад(?:\s|$)"))(self.autodelmsg)
-        self.client.on(d.cmd(r"\+авточат (-?\d+)"))(self.autochat.add_chat)
-        self.client.on(d.cmd(r"\-авточат (-?\d+)"))(self.autochat.remove_chat)
-        self.client.on(d.cmd(r"\.авточат$"))(self.autochat.toggle)
-        self.client.on(d.cmd(r"\.авточаттайм (\d+)"))(self.autochat.set_delay)
-        self.client.on(d.cmd(r"\.калк (.+)"))(self.calc)
-        self.client.on(d.cmd(r"\.к (.+)"))(self.calc)
-        self.client.on(d.cmd(r"\.calc (.+)"))(self.calc)
-        self.client.on(d.cmd(r"\.телемт$"))(self.telemt_info)
-        self.client.on(d.cmd(r"\.telemt$"))(self.telemt_info)
-        self.client.on(d.cmd(r"\+телемт юзер (.+)"))(self.telemt_adduser)
-        self.client.on(d.cmd(r"\+telemt user (.+)"))(self.telemt_adduser)
-        self.client.on(d.cmd(r"\-телемт юзер (.+)"))(self.telemt_deluser)
-        self.client.on(d.cmd(r"\-telemt user (.+)"))(self.telemt_deluser)
+        def on(pattern, handler):
+            self.client.on(d.cmd(pattern))(handler)
+
+        on(r"\.тгвк$", self.toggle_tg_to_vk)
+        on(r"\.\$(.+)", self.run_shell)
+        on(r"\+зам (.+)\n([\s\S]+)", self.add_note)
+        on(r"\-зам (.+)", self.rm_note)
+        on(r"\!(.+)", self.chk_note)
+        on(r"\.замы$", self.list_notes)
+        on(r"\.чистка$", self.clean_pm)
+        on(r"\.(?:help|помощь)$", self.help)
+        on(r"\.чсчистка$", self.clean_blacklist)
+        on(r"\.voice$", self.voice2text)
+        on(r"\.баттмон$", self.toggle_batt)
+        on(r"\.чатчистка$", self.clean_chat)
+        on(r"\.слов", self.words)
+        on(r"\.пинг$", self.ping)
+        on(r"\.эмоид$", self.get_emo_id)
+        on(r"\.флип", self.flip_text)
+        on(r"\.гс$", self.on_off_block_voice)
+        on(r"\.читать$", self.on_off_mask_read)
+        on(r"\.серв$", self.server_load)
+        on(r"\.релоадконфиг$", self.config_reload)
+        on(r"\.автоферма$", self.on_off_farming)
+        on(r"\.афк$", self.afk_bio)
+        on(r"\.онлайн$", self.toggle_online)
+        on(r"\.автобонус$", self.on_off_bonus)
+        on(r"\.авто vktarget_bot$", self.toggle_vktarget)
+        on(r"\.авто clickbee$", self.clickbee.toggle)
+        on(r"\.id (.+)", self.get_id)
+        on(r"\.иичистка", self.ai_clear)
+        on(r"\.иипрокси (.+)", self.ai_proxy)
+        on(r"\.иипрокси$", self.ai_proxy_delete)
+        on(r"\.иитокен (.+)", self.ai_token)
+        on(r"\.иимодель (.+)", self.ai_model)
+        on(r"\.прокси(.*)", self.fp)
+        on(r"\.погода (.+)", self.get_weather)
+        on(r"\.ip (.+)", self.ipman)
+        on(r"\.кв (.+)", self.currencyconventer)
+        on(r"\.аним (.+)", self.anim)
+        on(r"\.ии ([\s\S]+)", self.ai_resp)
+        on(r"\.т ([\s\S]+)", self.typing)
+        on(r"\.set (.+)", self.set_setting)
+        on(r"\.setint (.+)", self.set_int_setting)
+        on(r"\.время (.+)", self.time_by_city)
+        on(r"\.ад(?:\s|$)", self.autodelmsg)
+        on(r"\+авточат (-?\d+)", self.autochat.add_chat)
+        on(r"\-авточат (-?\d+)", self.autochat.remove_chat)
+        on(r"\.авточат$", self.autochat.toggle)
+        on(r"\.авточаттайм (\d+)", self.autochat.set_delay)
+        on(r"\.(?:калк|к|calc) (.+)", self.calc)
+        on(r"\.(?:телемт|telemt)$", self.telemt_info)
+        on(r"\+(?:телемт юзер|telemt user) (.+)", self.telemt_adduser)
+        on(r"\-(?:телемт юзер|telemt user) (.+)", self.telemt_deluser)
         self.client.on(events.NewMessage())(self._dynamic_mask_reader)
-        self.client.on(
-            d.cmd(
-                r"\.genpass(?:\s+(.+))?",
-            ),
-        )(self.gen_pass)
-        self.client.on(
-            d.cmd(
-                r"\.генпасс(?:\s+(.+))?",
-            ),
-        )(self.gen_pass)
-        self.client.on(
-            d.cmd(
-                r"\.пароль(?:\s+(.+))?",
-            ),
-        )(self.gen_pass)
+        on(r"\.(?:genpass|генпасс|пароль)(?:\s+(.+))?", self.gen_pass)
         self.client.on(events.NewMessage())(self.flood_ctrl.monitor)
-        self.client.on(d.cmd(r"\-флудстики (\d+) (\d+)$"))(
-            lambda e: self.flood_ctrl.set_rule(e, "stickers"),
-        )
-        self.client.on(d.cmd(r"\-флудгиф (\d+) (\d+)$"))(
-            lambda e: self.flood_ctrl.set_rule(e, "gifs"),
-        )
-        self.client.on(d.cmd(r"\-флудобщ (\d+) (\d+)$"))(
-            lambda e: self.flood_ctrl.set_rule(e, "messages"),
-        )
-        self.client.on(d.cmd(r"\+флудстики$"))(
-            lambda e: self.flood_ctrl.unset_rule(e, "stickers")
-        )
-        self.client.on(d.cmd(r"\+флудгиф$"))(
-            lambda e: self.flood_ctrl.unset_rule(e, "gifs")
-        )
-        self.client.on(d.cmd(r"\+флудобщ$"))(
-            lambda e: self.flood_ctrl.unset_rule(e, "messages")
-        )
+        for kind, rule in (
+            ("стики", "stickers"),
+            ("гиф", "gifs"),
+            ("общ", "messages"),
+        ):
+            on(
+                rf"\-флуд{kind} (\d+) (\d+)$",
+                partial(self.flood_ctrl.set_rule, rule_type=rule),
+            )
+            on(
+                rf"\+флуд{kind}$",
+                partial(self.flood_ctrl.unset_rule, rule_type=rule),
+            )
 
     async def afk_bio(self, event: Message):
         if await self.settings.get("toggle.afk") is True:
@@ -504,12 +501,11 @@ class UserbotManager:
         ):
             with contextlib.suppress(Exception):
                 task.stop()
-        with contextlib.suppress(Exception):
-            self.vktarget.stop()
+        for action in (self.vktarget.stop, self.clickbee.stop):
+            with contextlib.suppress(Exception):
+                action()
         with contextlib.suppress(Exception):
             await self.autochat.stop()
-        with contextlib.suppress(Exception):
-            self.clickbee.stop()
         for handler in (
             self.block_voice,
             self.reactions,
@@ -586,13 +582,7 @@ class UserbotManager:
 
     async def fp(self, event: Message):
         arg = event.pattern_match.group(1).strip().lower()
-        proxy_type = None
-        if arg == "http":
-            proxy_type = "http"
-        elif arg == "socks4":
-            proxy_type = "socks4"
-        elif arg == "socks5":
-            proxy_type = "socks5"
+        proxy_type = arg if arg in ("http", "socks4", "socks5") else None
         await event.edit(phrase.fp.wait)
         proxies = await ipman.get_working_proxies(proxy_type=proxy_type)
         if not proxies:
@@ -665,10 +655,9 @@ class UserbotManager:
                 except Exception:
                     logger.trace("Не могу удалить участника")
             await asyncio.sleep(await self.settings.get("typing.delay"))
-        async for ban in self.client.iter_participants(
+        async for user in self.client.iter_participants(
             chat, filter=types.ChannelParticipantsKicked
         ):
-            user = ban
             if user and user.deleted:
                 try:
                     await self.client.edit_permission(
@@ -694,21 +683,16 @@ class UserbotManager:
 
     async def chk_battery(self):
         async with aiofiles.open(config.config.battery_path) as f:
-            if "Discharging" in await f.read():
-                if self.batt_state is True:
-                    logger.warning("Нет зарядки!")
-                    await self.client.send_message(
-                        entity=int(await self.settings.get("battery.chat")),
-                        message=await self.settings.get("battery.msg_no"),
-                    )
-                    self.batt_state = False
-            else:
-                if self.batt_state is False:
-                    await self.client.send_message(
-                        entity=int(await self.settings.get("battery.chat")),
-                        message=await self.settings.get("battery.msg_yes"),
-                    )
-                    self.batt_state = True
+            discharging = "Discharging" in await f.read()
+        if discharging == self.batt_state:
+            key = "battery.msg_no" if discharging else "battery.msg_yes"
+            if discharging:
+                logger.warning("Нет зарядки!")
+            await self.client.send_message(
+                entity=int(await self.settings.get("battery.chat")),
+                message=await self.settings.get(key),
+            )
+            self.batt_state = not discharging
 
     async def reactions(self, event: Message):
         await asyncio.sleep(random.randint(0, 1000))
@@ -725,40 +709,6 @@ class UserbotManager:
             logger.info("Отправил реакцию!")
         except Exception:
             pass
-
-    async def _start_iris_farm(self):
-        await self.iris_task.create(
-            func=self.iris_farm, task_param=4, random_delay=(5, 360)
-        )
-
-    async def _start_iceyes_bonus(self):
-        await self.iceyes_task.create(
-            func=self.iceyes_bonus, task_param=1, random_delay=(1, 60)
-        )
-
-    async def _start_auto_online(self):
-        await self.online_task.create(
-            func=self.auto_online, task_param=30, unit="seconds"
-        )
-
-    async def _start_mon_batt(self):
-        await self.battery_task.create(
-            func=self.chk_battery, task_param=15, unit="seconds"
-        )
-
-    async def _autochat_sender(self):
-        chat_ids = await self.settings.get("autochat.chats", [])
-        ad_chat = await self.settings.get("autochat.ad_chat")
-        ad_id = await self.settings.get("autochat.ad_id")
-        if not chat_ids or not ad_chat or not ad_id:
-            return
-        for chat_id in chat_ids:
-            try:
-                await self.client.forward_messages(chat_id, int(ad_id), ad_chat)
-                logger.info(f"Автопостинг: сообщение отправлено в {chat_id}")
-            except Exception:
-                logger.warning(f"Автопостинг: ошибка при отправке в {chat_id}")
-            await asyncio.sleep(1)
 
     async def toggle_tg_to_vk(self, event: Message):
         enabled = await self.settings.get("tg2vk.enabled", False)
@@ -897,53 +847,30 @@ class UserbotManager:
     async def auto_online(self):
         await self.client(UpdateStatusRequest(offline=False))
 
-    async def _toggle_setting_and_task(
-        self,
-        setting_key: str,
-        task_attr: str,
-        on_phrase,
-        off_phrase,
-        start_func,
-        event: Message,
-    ):
+    async def _toggle_setting_and_task(self, setting_key, task, event, func):
         enabled = not await self.settings.get(setting_key)
         await self.settings.set(setting_key, enabled)
-        task = getattr(self, task_attr)
+        param, unit, delay, phrases = _TASK_CONFIG[setting_key]
         if enabled:
-            await start_func()
-            await event.edit(on_phrase)
+            options = {"random_delay": delay} if delay else {}
+            await task.create(func=func, task_param=param, unit=unit, **options)
         else:
             task.stop()
-            await event.edit(off_phrase)
+        await event.edit(phrases[0] if enabled else phrases[1])
 
     async def on_off_farming(self, event: Message):
         await self._toggle_setting_and_task(
-            "iris.farm",
-            "iris_task",
-            phrase.farm.on,
-            phrase.farm.off,
-            self._start_iris_farm,
-            event,
+            "iris.farm", self.iris_task, event, self.iris_farm
         )
 
     async def on_off_bonus(self, event: Message):
         await self._toggle_setting_and_task(
-            "iceyes.bonus",
-            "iceyes_task",
-            phrase.bonus.on,
-            phrase.bonus.off,
-            self._start_iceyes_bonus,
-            event,
+            "iceyes.bonus", self.iceyes_task, event, self.iceyes_bonus
         )
 
     async def toggle_online(self, event: Message):
         await self._toggle_setting_and_task(
-            "auto.online",
-            "online_task",
-            phrase.online.on,
-            phrase.online.off,
-            self._start_auto_online,
-            event,
+            "auto.online", self.online_task, event, self.auto_online
         )
 
     async def toggle_vktarget(self, event: Message):
@@ -958,12 +885,7 @@ class UserbotManager:
 
     async def toggle_batt(self, event: Message):
         await self._toggle_setting_and_task(
-            "battery.status",
-            "battery_task",
-            phrase.battmon.on,
-            phrase.battmon.off,
-            self._start_mon_batt,
-            event,
+            "battery.status", self.battery_task, event, self.chk_battery
         )
 
     async def on_off_block_voice(self, event: Message):
@@ -1043,13 +965,10 @@ class UserbotManager:
 
     async def get_id(self, event: Message):
         arg = event.pattern_match.group(1).strip()
-        arglist: list[str] = arg.split()
-        result = []
-        for index in arglist:
-            index = index.strip()
-            result.append(
-                f"🆔 » {index} - `{await d.get_info(self.client, index)}`"
-            )
+        result = [
+            f"🆔 » {index} - `{await d.get_info(self.client, index)}`"
+            for index in map(str.strip, arg.split())
+        ]
         if result == []:
             return await event.edit(phrase.result_empty)
         return await event.edit("\n".join(result))
@@ -1096,16 +1015,10 @@ class UserbotManager:
             user: User = dialog.entity
             if not isinstance(user, User):
                 continue
-            on_delete = False
-            if user.deleted:
-                on_delete = True
-            else:
-                messages: TotalList = await self.client.get_messages(
-                    user.id, limit=10
-                )
-                if all(isinstance(msg, MessageService) for msg in messages):
-                    on_delete = True
-            if on_delete:
+            if user.deleted or all(
+                isinstance(item, MessageService)
+                for item in await self.client.get_messages(user.id, limit=10)
+            ):
                 if user.first_name:
                     deleted.append(
                         f"[{user.first_name}](tg://user?id={user.id})"
@@ -1215,22 +1128,15 @@ class UserbotManager:
 
     async def words(self, event: Message):
         args = format.get_args(event.text.lower())
-        arg_len = next(
-            (
-                int(x.replace("л", ""))
-                for x in args
-                if "л" in x and x.replace("л", "").isdigit()
-            ),
-            None,
-        )
-        arg_count = next(
-            (
-                int(x.replace("в", ""))
-                for x in args
-                if "в" in x and x.replace("в", "").isdigit()
-            ),
-            None,
-        )
+
+        def find_number(marker):
+            for value in args:
+                number = value.replace(marker, "")
+                if marker in value and number.isdigit():
+                    return int(number)
+            return None
+
+        arg_len, arg_count = find_number("л"), find_number("в")
         words = iterators.Counter()
         total = 0
         dots = ""
@@ -1260,11 +1166,9 @@ class UserbotManager:
                 await asyncio.sleep(await self.settings.get("typing.delay"))
         freq = sorted(words, key=words.get, reverse=True)
         out = phrase.words.out
-        maxsize = min(50, len(freq))
-        if arg_count is not None:
-            maxsize = min(arg_count, len(freq))
-        for i in range(maxsize):
-            out += f"{i + 1}. {words[freq[i]]}: {freq[i]}\n"
+        maxsize = min(arg_count if arg_count is not None else 50, len(freq))
+        for index, word in enumerate(freq[:maxsize], 1):
+            out += f"{index}. {words[word]}: {word}\n"
         try:
             await msg.edit(out)
         except Exception:
@@ -1297,7 +1201,7 @@ class UserbotManager:
     async def ai_model(self, event: Message):
         model: str = event.pattern_match.group(1).strip()
         await self.settings.set("ai.model", model)
-        self.ai_chat.chat_model = model
+        self.ai_client.chat_model = model
         self.ai_chat = self.ai_client.chat(self.phone)
         await event.edit(phrase.ai.model_set)
 
@@ -1330,11 +1234,6 @@ class UserbotManager:
         expr = event.pattern_match.group(1).strip()
         if not re.fullmatch(r"[\d+\-*/().\s]+", expr):
             return await event.edit(phrase.calc.invalid_chars)
-        if any(
-            c in expr
-            for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
-        ):
-            return await event.edit(phrase.calc.forbidden)
         try:
             result = eval(expr, {"__builtins__": {}}, {})
         except ZeroDivisionError:
@@ -1371,28 +1270,19 @@ class UserbotManager:
     async def gen_pass(self, event: Message):
         args = (event.pattern_match.group(1) or "").strip()
         length = genpass.Default.length
-        letters = genpass.Default.letters
-        digits = genpass.Default.digits
-        special = genpass.Default.special
+        options = {
+            "letters": genpass.Default.letters,
+            "digits": genpass.Default.digits,
+            "special": genpass.Default.special,
+        }
         if match := re.search(r"д(\d+)", args):
             length = int(match[1])
-        letters = (
-            True
-            if re.search(r"\+б", args)
-            else (False if re.search(r"-б", args) else letters)
-        )
-        digits = (
-            True
-            if re.search(r"\+ц", args)
-            else (False if re.search(r"-ц", args) else digits)
-        )
-        special = (
-            True
-            if re.search(r"\+с", args)
-            else (False if re.search(r"-с", args) else special)
-        )
+        for flag, key in (("б", "letters"), ("ц", "digits"), ("с", "special")):
+            options[key] = bool(re.search(rf"\+{flag}", args)) or (
+                options[key] and not re.search(rf"-{flag}", args)
+            )
         try:
-            pwd = genpass.gen_pass(length, letters, digits, special)
+            pwd = genpass.gen_pass(length, **options)
             await event.edit(phrase.password.done.format(pwd))
         except Exception as ex:
             await event.edit(phrase.error.format(ex))
@@ -1410,7 +1300,6 @@ class UserbotManager:
                 cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
-                shell=True,
             )
             while proc.stdout and not proc.stdout.at_eof():
                 try:
@@ -1537,9 +1426,7 @@ async def main():
     pathes.clients.mkdir(exist_ok=True)
     pathes.sessions.mkdir(exist_ok=True)
     loop = asyncio.get_running_loop()
-    log_broker = web.LogBroker(
-        loop, int(config.config.web.log_buffer_size)
-    )
+    log_broker = web.LogBroker(loop, int(config.config.web.log_buffer_size))
     logger.add(log_broker, level="INFO")
 
     panel = web.Panel(

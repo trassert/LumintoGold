@@ -31,9 +31,7 @@ def _resolve_default(meta: dict) -> Any:
 
 
 def _load_schema() -> tuple[list[dict], dict[str, dict], dict[str, Any]]:
-    raw = yaml.safe_load(
-        pathes.settings_schema.read_text(encoding="utf-8")
-    )
+    raw = yaml.safe_load(pathes.settings_schema.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("settings.yml должен быть объектом")
     raw_groups = raw.get("groups") or []
@@ -41,9 +39,7 @@ def _load_schema() -> tuple[list[dict], dict[str, dict], dict[str, Any]]:
     if not isinstance(raw_groups, list) or not isinstance(raw_fields, dict):
         raise ValueError("settings.yml: groups/fields имеют неверный формат")
     group_ids = {
-        str(group.get("id"))
-        for group in raw_groups
-        if isinstance(group, dict)
+        str(group.get("id")) for group in raw_groups if isinstance(group, dict)
     }
     resolved_fields: dict[str, dict] = {}
     resolved_defaults: dict[str, Any] = {}
@@ -66,20 +62,18 @@ def reload_schema() -> None:
     fields.update(new_fields)
     default.clear()
     default.update(new_defaults)
-    logger.info(
-        f"Реестр настроек: {len(fields)} полей, "
-        f"{len(groups)} групп"
-    )
+    logger.info(f"Реестр настроек: {len(fields)} полей, {len(groups)} групп")
 
 
 def schema_payload() -> dict:
     """Схема для UI с уже разрешёнными defaults."""
-    payload_fields = {}
-    for key, meta in fields.items():
-        item = dict(meta)
-        item["default"] = deepcopy(default.get(key))
-        payload_fields[key] = item
-    return {"groups": deepcopy(groups), "fields": payload_fields}
+    return {
+        "groups": deepcopy(groups),
+        "fields": {
+            key: {**meta, "default": deepcopy(default.get(key))}
+            for key, meta in fields.items()
+        },
+    }
 
 
 reload_schema()
@@ -91,13 +85,17 @@ class UBSettings:
         self._data: dict = None
 
     async def _ensure_loaded(self, forced=False) -> None:
-        if not (self._data is None or forced):
+        if self._data is not None and not forced:
             return
         if not self.filename.exists():
             self._data = {}
             return
         async with aiofiles.open(self.filename, "rb") as f:
             self._data = orjson.loads(await f.read())
+
+    async def _flush(self) -> None:
+        async with aiofiles.open(self.filename, "wb") as f:
+            await f.write(orjson.dumps(self._data, option=orjson.OPT_INDENT_2))
 
     async def reload(self) -> None:
         await self._ensure_loaded(forced=True)
@@ -108,9 +106,7 @@ class UBSettings:
 
     async def replace(self, data: dict) -> None:
         self._data = dict(data)
-        async with aiofiles.open(self.filename, "wb") as f:
-            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
-            await f.write(content)
+        await self._flush()
 
     async def get(self, name_setting: str, if_none: Any = None) -> Any:
         await self._ensure_loaded()
@@ -124,13 +120,9 @@ class UBSettings:
     async def set(self, key: str, value: Any) -> None:
         await self._ensure_loaded()
         self._data[key] = value
-        async with aiofiles.open(self.filename, "wb") as f:
-            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
-            await f.write(content)
+        await self._flush()
 
     async def remove(self, key: str) -> None:
         await self._ensure_loaded()
         self._data.pop(key, None)
-        async with aiofiles.open(self.filename, "wb") as f:
-            content = orjson.dumps(self._data, option=orjson.OPT_INDENT_2)
-            await f.write(content)
+        await self._flush()

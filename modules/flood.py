@@ -14,6 +14,12 @@ from . import phrase, settings
 
 logger.info(f"Загружен модуль {__name__}!")
 
+_PHRASES = {
+    "stickers": (phrase.flood.set_stickers, phrase.flood.unset_stickers),
+    "gifs": (phrase.flood.set_gifs, phrase.flood.unset_gifs),
+    "messages": (phrase.flood.set_messages, phrase.flood.unset_messages),
+}
+
 
 class FloodController:
     def __init__(self, client: TelegramClient, settings: settings.UBSettings):
@@ -22,56 +28,51 @@ class FloodController:
         self._flood_state: dict[str, list[float]] = {}
         self._flood_rules: dict[int, dict[str, dict]] = {}
 
-    @staticmethod
-    def _is_album_photo_message(event: Message) -> bool:
-        return bool(getattr(event, "grouped_id", None))
-
     async def load_rules(self, chat_id: int):
         if chat_id not in self._flood_rules:
-            stickers = await self.settings.get(f"flood.stickers.{chat_id}", {})
-            gifs = await self.settings.get(f"flood.gifs.{chat_id}", {})
-            messages = await self.settings.get(f"flood.messages.{chat_id}", {})
             self._flood_rules[chat_id] = {
-                "stickers": stickers,
-                "gifs": gifs,
-                "messages": messages,
+                kind: await self.settings.get(f"flood.{kind}.{chat_id}", {})
+                for kind in ("stickers", "gifs", "messages")
             }
 
     async def monitor(self, event: Message):
-        if event.is_private or not event.sender_id:
-            return
-        if self._is_album_photo_message(event):
+        if (
+            event.is_private
+            or not event.sender_id
+            or getattr(event, "grouped_id", None)
+        ):
             return
         chat_id = event.chat_id
         await self.load_rules(chat_id)
         rules = self._flood_rules[chat_id]
         now = time.time()
 
-        if rules["stickers"] and isinstance(event.media, MessageMediaDocument):
-            doc = event.media.document
-            if doc and any(
-                isinstance(a, DocumentAttributeSticker)
-                for a in (doc.attributes or [])
-            ):
+        if (
+            (rules["stickers"] or rules["gifs"])
+            and isinstance(event.media, MessageMediaDocument)
+            and event.media.document
+        ):
+            attributes = event.media.document.attributes or []
+            is_sticker = any(
+                isinstance(attribute, DocumentAttributeSticker)
+                for attribute in attributes
+            )
+            is_gif = any(
+                isinstance(attribute, DocumentAttributeAnimated)
+                or (
+                    isinstance(attribute, DocumentAttributeVideo)
+                    and attribute.supports_streaming
+                )
+                for attribute in attributes
+            )
+            if rules["stickers"] and is_sticker:
                 await self._check_flood(
                     event, chat_id, "stickers", rules["stickers"], now
                 )
-
-        if rules["gifs"] and isinstance(event.media, MessageMediaDocument):
-            doc = event.media.document
-            if doc:
-                is_gif = any(
-                    isinstance(a, DocumentAttributeAnimated)
-                    or (
-                        isinstance(a, DocumentAttributeVideo)
-                        and a.supports_streaming
-                    )
-                    for a in (doc.attributes or [])
+            if rules["gifs"] and is_gif:
+                await self._check_flood(
+                    event, chat_id, "gifs", rules["gifs"], now
                 )
-                if is_gif:
-                    await self._check_flood(
-                        event, chat_id, "gifs", rules["gifs"], now
-                    )
 
         if rules["messages"] and event.text and not event.media:
             await self._check_flood(
@@ -111,20 +112,12 @@ class FloodController:
         chat_id = event.chat_id
         key = f"flood.{rule_type}.{chat_id}"
         await self.settings.set(key, {"limit": limit, "window": window})
-        if chat_id not in self._flood_rules:
-            self._flood_rules[chat_id] = {}
-        self._flood_rules[chat_id][rule_type] = {
+        self._flood_rules.setdefault(chat_id, {})[rule_type] = {
             "limit": limit,
             "window": window,
         }
-
-        phrase_map = {
-            "stickers": phrase.flood.set_stickers,
-            "gifs": phrase.flood.set_gifs,
-            "messages": phrase.flood.set_messages,
-        }
         await event.edit(
-            phrase_map[rule_type].format(limit=limit, window=window)
+            _PHRASES[rule_type][0].format(limit=limit, window=window)
         )
         return None
 
@@ -135,13 +128,6 @@ class FloodController:
         if chat_id in self._flood_rules:
             self._flood_rules[chat_id][rule_type] = {}
         prefix = f"_flood.{rule_type}.{chat_id}."
-        to_remove = [k for k in self._flood_state if k.startswith(prefix)]
-        for k in to_remove:
-            self._flood_state.pop(k, None)
-
-        phrase_map = {
-            "stickers": phrase.flood.unset_stickers,
-            "gifs": phrase.flood.unset_gifs,
-            "messages": phrase.flood.unset_messages,
-        }
-        await event.edit(phrase_map[rule_type])
+        for state_key in [k for k in self._flood_state if k.startswith(prefix)]:
+            self._flood_state.pop(state_key, None)
+        await event.edit(_PHRASES[rule_type][1])

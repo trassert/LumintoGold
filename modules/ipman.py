@@ -24,11 +24,8 @@ test_urls = [
 
 
 def is_valid_ip(ip: str) -> bool:
-    pattern = r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$"
-    match = re.match(pattern, ip)
-    if not match:
-        return False
-    return all(0 <= int(part) <= 255 for part in match.groups())
+    match = re.match(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$", ip)
+    return bool(match) and all(0 <= int(part) <= 255 for part in match.groups())
 
 
 async def get_ip_info(ip: str) -> dict:
@@ -144,33 +141,20 @@ async def get_working_proxies(
     Проверки выполняются параллельно с ограничением `max_concurrency`.
     """
     proxies = await get_proxy_list()
-
-    if proxy_type == "socks5":
-        proxies = [p for p in proxies if p.lower().startswith("socks5")]
-    elif proxy_type == "socks4":
-        proxies = [p for p in proxies if p.lower().startswith("socks4")]
-    elif proxy_type == "http":
-        proxies = [p for p in proxies if p.lower().startswith("http")]
+    if proxy_type in ("socks5", "socks4", "http"):
+        proxies = [p for p in proxies if p.lower().startswith(proxy_type)]
 
     sem = asyncio.Semaphore(max_concurrency)
 
     async def _check(proxy_line: str):
         try:
             ptype, ipport = proxy_line.split("://", 1)
-        except Exception:
+        except ValueError:
             return None
-
         async with sem:
             latency = await check_proxy_ping(ptype, ipport)
+        return (ptype, ipport, latency) if latency is not None else None
 
-        if latency is None:
-            return None
-        return ptype, ipport, latency
-
-    tasks = [asyncio.create_task(_check(p)) for p in proxies]
-    results = await asyncio.gather(*tasks)
-
-    working = [r for r in results if r is not None]
-    working.sort(key=lambda x: x[2])
-
+    results = await asyncio.gather(*(_check(proxy) for proxy in proxies))
+    working = sorted((r for r in results if r is not None), key=lambda x: x[2])
     return working[:count]
