@@ -198,7 +198,9 @@ class UserbotManager:
             generator.stop()
             self._task_signatures.pop(name, None)
             return
-        interval = max(1, int(await self.settings.get(interval_key, 1)))
+        # Если интервал не сохранён в файле клиента, берём дефолт реестра/UI.
+        fallback = _TASK_CONFIG[enabled_key][0]
+        interval = max(1, int(await self.settings.get(interval_key, fallback)))
         random_delay = None
         if random_keys:
             low = max(0, int(await self.settings.get(random_keys[0], 0)))
