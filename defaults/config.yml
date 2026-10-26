@@ -35,3 +35,20 @@ url:
   openweathermap: "https://api.openweathermap.org/data/2.5/weather?q={city}&appid={apikey}&units=metric&lang=ru"
   fp: "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text"
   exchangerate: "https://v6.exchangerate-api.com/v6/{token}/latest/{currency}"
+
+# Автороутинг AI: порядок важен — модели пробуются сверху вниз.
+ai:
+  request_timeout: 60 # Таймаут одного запроса к модели, в секундах
+  models:
+    gemini:
+      - gemini-3.8-flash
+      - gemini-3.8-live
+      - gemini-3.6-flash
+      - gemini-3-flash-preview
+      - gemini-3.1-flash-live-preview
+      - gemini-3.1-flash-tts-preview
+    groq:
+      - openai/gpt-oss-120b
+      - qwen/qwen3.8-27b
+      - openai/gpt-oss-20b
+      - allam-2-7b

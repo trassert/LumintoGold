@@ -5,8 +5,8 @@ groups:
     title: Основное
     description: Поведение клиента по умолчанию.
   - id: ai
-    title: AI и Groq
-    description: Модели, лимиты и доступ к Groq.
+    title: "AI: Gemini и Groq"
+    description: Модели, лимиты и доступ к провайдерам.
   - id: tokens
     title: Токены API
     description: Ключи внешних сервисов. Пустое значение отключает интеграцию.
@@ -88,13 +88,6 @@ fields:
     type: bool
     default: false
 
-  ai.model:
-    group: ai
-    label: Модель чата Groq
-    hint: Идентификатор модели, например openai/gpt-oss-120b.
-    type: string
-    default: "openai/gpt-oss-120b"
-
   ai.voice_model:
     group: ai
     label: Модель распознавания голоса
@@ -112,9 +105,16 @@ fields:
   ai.max_tokens:
     group: ai
     label: Максимум токенов ответа
-    hint: Верхняя граница длины ответа Groq.
+    hint: Верхняя граница длины ответа модели.
     type: int
     default: 2048
+
+  ai.disabled_models:
+    group: ai
+    label: Отключённые модели
+    hint: "ID в формате provider:model, не участвующие в автороутинге. Меняется командой .мии."
+    type: json
+    default: []
 
   groq.proxy:
     group: ai
@@ -123,13 +123,28 @@ fields:
     type: nullable_string
     default: null
 
+  gemini.proxy:
+    group: ai
+    label: Прокси Gemini
+    hint: HTTP/SOCKS-прокси для запросов Gemini. Пусто — без прокси.
+    type: nullable_string
+    default: null
+
   token.groq:
     group: ai
     label: Токен Groq
-    hint: API-ключ Groq. Пусто — AI-функции отключены.
+    hint: API-ключ Groq. Пусто — Groq не используется.
     type: secret
     nullable: true
     default_from: tokens.default.groq
+
+  token.gemini:
+    group: ai
+    label: Токен Gemini
+    hint: API-ключ Google Gemini. Пусто — Gemini не используется.
+    type: secret
+    nullable: true
+    default_from: tokens.default.gemini
 
   token.geoapify:
     group: tokens
@@ -412,6 +427,16 @@ fields:
     hint: Username бота без @.
     type: string
     default: "ClickBeeDOGEBot"
+
+  clickbee.task_buttons:
+    group: clickbee
+    label: Категории заданий
+    hint: Кнопки, которые ClickBee нажимает по кругу.
+    type: json
+    default:
+      - "🤖 Join Bots"
+      - "📢 Join Channels"
+      - "📄 View Posts"
 
   clickbee.sleep_between:
     group: clickbee

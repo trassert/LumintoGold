@@ -5,4 +5,5 @@ default: # Дефолтные токены для клиентов
   geoapify: "" 
   openweathermap: ""
   groq: ""
+  gemini: ""
   exchangerate: ""

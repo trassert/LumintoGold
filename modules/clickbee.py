@@ -12,9 +12,6 @@ from telethon.tl.functions.messages import ImportChatInviteRequest
 from . import settings
 
 logger.info(f"Загружен модуль {__name__}!")
-TASK_BUTTONS = ["🤖 Join Bots", "📢 Join Channels", "📄 View Posts"]
-MAX_RETRIES = 3
-BOT_CONVERSATION_TIMEOUT = 45
 
 
 class _CyclicIterator:
@@ -50,15 +47,21 @@ class ClickBeeAutomation:
         self._active = False
         self._lock = asyncio.Lock()
         self._handler = None
-        self._task_iter = _CyclicIterator(TASK_BUTTONS)
+        self._task_iter: _CyclicIterator | None = None
         self._retry_count: int = 0
 
     async def start(self) -> None:
         if self._active:
             return
+        tasks = list(await self.settings.get("clickbee.task_buttons") or [])
+        if not tasks:
+            logger.warning(
+                "ClickBee: clickbee.task_buttons пуст — запуск отменён"
+            )
+            return
         self._active = True
         self._retry_count = 0
-        self._task_iter.reset()
+        self._task_iter = _CyclicIterator(tasks)
         self.bot: str = await self.settings.get("clickbee.username")
         self._register_handler()
         logger.info("ClickBee запущен")
@@ -75,6 +78,10 @@ class ClickBeeAutomation:
         await self.settings.set("clickbee.enabled", enabled)
         if enabled:
             await self.start()
+            if not self._active:
+                await self.settings.set("clickbee.enabled", False)
+                await event.edit("❌ : Не заданы категории ClickBee.")
+                return
             await event.edit("✅ : Авто ClickBee включено")
         else:
             self.stop()
@@ -173,16 +180,21 @@ class ClickBeeAutomation:
             )
             return await self._skip_or_back(event)
         logger.info(f"ClickBee: Запрашиваю /start у {mybot}")
-        for attempt in range(1, MAX_RETRIES + 1):
+        retries = max(1, int(await self.settings.get("clickbee.retry_count")))
+        timeout = max(
+            1,
+            int(await self.settings.get("clickbee.conversation_timeout")),
+        )
+        for attempt in range(1, retries + 1):
             try:
                 async with self.client.conversation(
                     mybot,
-                    timeout=BOT_CONVERSATION_TIMEOUT,
-                    total_timeout=BOT_CONVERSATION_TIMEOUT,
+                    timeout=timeout,
+                    total_timeout=timeout,
                 ) as conv:
                     await conv.send_message("/start")
                     response = await asyncio.wait_for(
-                        conv.get_response(), timeout=BOT_CONVERSATION_TIMEOUT
+                        conv.get_response(), timeout=timeout
                     )
                     await self.client.forward_messages(
                         entity=event.sender_id,
@@ -193,13 +205,15 @@ class ClickBeeAutomation:
                     return None
             except TimeoutError:
                 logger.warning(
-                    f"ClickBee: {mybot} не ответил (попытка {attempt}/{MAX_RETRIES})"
+                    f"ClickBee: {mybot} не ответил "
+                    f"(попытка {attempt}/{retries})"
                 )
             except Exception as exc:
                 logger.warning(
-                    f"ClickBee: Ошибка при работе с {mybot}: {exc} (попытка {attempt})"
+                    f"ClickBee: Ошибка при работе с {mybot}: {exc} "
+                    f"(попытка {attempt})"
                 )
-            if attempt < MAX_RETRIES:
+            if attempt < retries:
                 await asyncio.sleep(random.uniform(3, 7))
         logger.info(f"ClickBee: {mybot} недоступен, пропускаю задание")
         await self._skip_or_back(event)
@@ -223,7 +237,8 @@ class ClickBeeAutomation:
         logger.warning(
             f"ClickBee: Ошибка от бота (попытка {self._retry_count}): {event.text[:80]}"
         )
-        if self._retry_count >= MAX_RETRIES:
+        retries = max(1, int(await self.settings.get("clickbee.retry_count")))
+        if self._retry_count >= retries:
             self._retry_count = 0
             logger.info(
                 "ClickBee: Превышен лимит ошибок, перехожу к следующей задаче"

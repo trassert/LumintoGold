@@ -152,8 +152,15 @@ class online:
 
 class ai:
     clear = "🧹 : Чат очищен!"
-    model_set = "✅ : Модель установлена!"
     no_token = "🚫 : Токен не установлен."
+    all_failed = "❌ : Ни одна модель не ответила."
+    models_title = "Список моделей:"
+    models_on = "✅"
+    models_off = "❌"
+    models_no_token = " (нет токена)"
+    models_bad_index = "❌ : Нет модели с номером {}. Всего моделей: {}."
+    models_enabled = "✅ : Модель {model} включена."
+    models_disabled = "❌ : Модель {model} выключена."
 
 
 class config:

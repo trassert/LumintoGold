@@ -6,6 +6,7 @@ cryptg
 geopy
 pytz
 groq
+httpx>=0.28.0
 aiohttp
 aiofiles==24.1.0
 qrcode

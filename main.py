@@ -262,10 +262,23 @@ class UserbotManager:
             "seconds",
         )
 
+    def _ai_models(self) -> list[tuple[str, str]]:
+        models: list[tuple[str, str]] = []
+        for provider, items in config.config.ai.models.items():
+            if provider not in ("groq", "gemini"):
+                logger.warning(f"AI: неизвестный провайдер {provider}")
+                continue
+            if not isinstance(items, list):
+                logger.warning(f"AI: {provider}.models должен быть списком")
+                continue
+            models.extend((str(provider), str(model)) for model in items)
+        return models
+
     async def _sync_ai(self):
-        token = await self.settings.get("token.groq")
-        proxy = await self.settings.get("groq.proxy")
-        model = await self.settings.get("ai.model") or "openai/gpt-oss-120b"
+        groq_token = await self.settings.get("token.groq")
+        gemini_token = await self.settings.get("token.gemini")
+        groq_proxy = await self.settings.get("groq.proxy")
+        gemini_proxy = await self.settings.get("gemini.proxy")
         voice_model = (
             await self.settings.get("ai.voice_model")
             or "whisper-large-v3-turbo"
@@ -276,19 +289,26 @@ class UserbotManager:
         max_tokens = _as_number(
             await self.settings.get("ai.max_tokens", 2048), int, 2048
         )
+        timeout = max(1, _as_number(config.config.ai.request_timeout, int, 60))
+        models = self._ai_models()
+        disabled = list(await self.settings.get("ai.disabled_models") or [])
         signature = (
-            str(token or ""),
-            str(proxy or ""),
-            str(model),
+            str(groq_token or ""),
+            str(gemini_token or ""),
+            str(groq_proxy or ""),
+            str(gemini_proxy or ""),
             str(voice_model),
             temperature,
             max_tokens,
+            timeout,
+            tuple(models),
         )
         if (
-            token
+            (groq_token or gemini_token)
             and self.ai_client is not None
             and self._ai_signature == signature
         ):
+            self.ai_client.disabled = set(disabled)
             return
         old_client = self.ai_client
         if old_client is not None:
@@ -297,24 +317,31 @@ class UserbotManager:
         self.ai_client = None
         self.ai_chat = None
         self._ai_signature = None
-        if not token:
-            logger.warning("Установите Groq-токен (.иитокен <токен>)")
+        if not (groq_token or gemini_token):
+            logger.warning(
+                "Установите токен AI: .иитокен <токен> "
+                "или token.gemini в настройках"
+            )
             return
         try:
-            client = ai.GroqClient(
-                api_key=token,
-                proxy=proxy,
-                chat_model=model,
+            client = ai.AIClient(
+                groq_key=groq_token,
+                gemini_key=gemini_token,
+                groq_proxy=groq_proxy,
+                gemini_proxy=gemini_proxy,
+                models=models,
+                disabled_models=disabled,
                 voice_model=voice_model,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                request_timeout=timeout,
             )
             client.init_client()
             self.ai_client = client
             self.ai_chat = client.chat(self.phone)
             self._ai_signature = signature
         except Exception:
-            logger.exception("Не удалось инициализировать Groq-клиент")
+            logger.exception("Не удалось инициализировать AI-клиент")
 
     async def _sync_block_voice(self):
         with contextlib.suppress(Exception):
@@ -431,7 +458,8 @@ class UserbotManager:
         on(r"\.иипрокси (.+)", self.ai_proxy)
         on(r"\.иипрокси$", self.ai_proxy_delete)
         on(r"\.иитокен (.+)", self.ai_token)
-        on(r"\.иимодель (.+)", self.ai_model)
+        on(r"\.мии$", self.ai_models_list)
+        on(r"\.мии (\d+)$", self.ai_toggle_model)
         on(r"\.прокси(.*)", self.fp)
         on(r"\.погода (.+)", self.get_weather)
         on(r"\.ip (.+)", self.ipman)
@@ -948,22 +976,19 @@ class UserbotManager:
 
     async def ai_proxy(self, event: Message):
         arg = event.pattern_match.group(1).strip()
-        self.ai_client.proxy = arg
         await self.settings.set("groq.proxy", arg)
-        self.ai_client.init_client()
+        await self._sync_ai()
         return await event.edit(phrase.voicerec.proxy)
 
     async def ai_proxy_delete(self, event: Message):
-        self.ai_client.proxy = None
         await self.settings.set("groq.proxy", None)
-        self.ai_client.init_client()
+        await self._sync_ai()
         return await event.edit(phrase.voicerec.delete_proxy)
 
     async def ai_token(self, event: Message):
         arg = event.pattern_match.group(1).strip()
-        self.ai_client.api_key = arg
         await self.settings.set("token.groq", arg)
-        self.ai_client.init_client()
+        await self._sync_ai()
         return await event.edit(phrase.voicerec.token)
 
     async def get_id(self, event: Message):
@@ -1201,32 +1226,73 @@ class UserbotManager:
     async def server_load(self, event: Message):
         await event.edit(await get_sys.get_system_info())
 
-    async def ai_model(self, event: Message):
-        model: str = event.pattern_match.group(1).strip()
-        await self.settings.set("ai.model", model)
-        self.ai_client.chat_model = model
-        self.ai_chat = self.ai_client.chat(self.phone)
-        await event.edit(phrase.ai.model_set)
+    async def ai_models_list(self, event: Message):
+        disabled = set(await self.settings.get("ai.disabled_models") or [])
+        lines = [phrase.ai.models_title]
+        number = 0
+        for provider, items in config.config.ai.models.items():
+            if provider not in ("groq", "gemini"):
+                continue
+            if not isinstance(items, list):
+                continue
+            token = await self.settings.get(f"token.{provider}")
+            suffix = "" if token else phrase.ai.models_no_token
+            lines.append(f"{provider}{suffix}:")
+            for model in items:
+                number += 1
+                mark = (
+                    phrase.ai.models_off
+                    if f"{provider}:{model}" in disabled
+                    else phrase.ai.models_on
+                )
+                lines.append(f"{number}. {model} {mark}")
+        await event.edit("\n".join(lines))
+
+    async def ai_toggle_model(self, event: Message):
+        index = int(event.pattern_match.group(1))
+        models = self._ai_models()
+        if not 1 <= index <= len(models):
+            return await event.edit(
+                phrase.ai.models_bad_index.format(index, len(models))
+            )
+        provider, model = models[index - 1]
+        key = f"{provider}:{model}"
+        disabled = list(await self.settings.get("ai.disabled_models") or [])
+        if key in disabled:
+            disabled.remove(key)
+            message = phrase.ai.models_enabled
+        else:
+            disabled.append(key)
+            message = phrase.ai.models_disabled
+        await self.settings.set("ai.disabled_models", disabled)
+        if self.ai_client is not None:
+            self.ai_client.disabled = set(disabled)
+        await event.edit(message.format(model=model))
+        return None
 
     async def ai_clear(self, event: Message):
+        if self.ai_chat is None:
+            return await event.edit(phrase.ai.no_token)
         await self.ai_chat.clear()
         await event.edit(phrase.ai.clear)
+        return None
 
     async def ai_resp(self, event: Message):
-        if not await self.settings.get("token.groq"):
+        if self.ai_client is None or self.ai_chat is None:
             return await event.edit(phrase.ai.no_token)
         text = event.pattern_match.group(1).strip()
+        if not text:
+            return await event.edit(phrase.no_text)
         try:
-            response = await self.ai_chat.send(text)
+            response, model = await self.ai_chat.send(text)
+        except ai.AllModelsFailed:
+            return await event.edit(phrase.ai.all_failed)
         except Exception as e:
             return await event.edit(phrase.error.format(e))
-        if len(response) > 4096:
-            chunks = format.splitter(response)
-            await event.edit(chunks[0])
-            for chunk in chunks[1:]:
-                await event.reply(chunk)
-        else:
-            await event.edit(response)
+        parts = format.ai_reply(text, response, model)
+        await event.edit(parts[0], parse_mode="html")
+        for part in parts[1:]:
+            await event.reply(part, parse_mode="html")
         return None
 
     async def config_reload(self, event: Message):
