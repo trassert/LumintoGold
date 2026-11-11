@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import aiofiles
+import aiofiles.os
 import orjson
 from loguru import logger
 from openai import AsyncOpenAI
