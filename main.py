@@ -1412,12 +1412,12 @@ async def _stop_all_managers() -> int:
 
 
 def _restart_process() -> None:
-    """Перезапускает скрипт через os.execv (git pull и uv sync уже выполнены)."""
-    python = str(Path(sys.executable).resolve())
-    args = [python]
-    if not re.search(r"python(\d+(\.\d+)*)?$", Path(python).name):
-        args.append(str(Path(__file__).resolve()))
-    args.extend(sys.argv[1:])
+    """Перезапускает скрипт через os.execv."""
+    python = sys.executable
+    script = str(Path(__file__).resolve())
+    # Формируем аргументы: [python, script, ...sys.argv[1:]]
+    args = [python, script] + sys.argv[1:]
+
     logger.info(f"Перезапуск скрипта: {' '.join(args)}")
     sys.stdout.flush()
     sys.stderr.flush()
