@@ -2,8 +2,6 @@ admins: # Администраторы скрипта (номер(а) клиен
   - 79994442266
 
 default: # Дефолтные токены для клиентов
-  geoapify: "" 
+  geoapify: ""
   openweathermap: ""
-  groq: ""
-  gemini: ""
   exchangerate: ""

@@ -5,8 +5,8 @@ groups:
     title: Основное
     description: Поведение клиента по умолчанию.
   - id: ai
-    title: "AI: Gemini и Groq"
-    description: Модели, лимиты и доступ к провайдерам.
+    title: "AI: роутер"
+    description: Модель распознавания голоса и лимиты генерации.
   - id: tokens
     title: Токены API
     description: Ключи внешних сервисов. Пустое значение отключает интеграцию.
@@ -108,43 +108,6 @@ fields:
     hint: Верхняя граница длины ответа модели.
     type: int
     default: 2048
-
-  ai.disabled_models:
-    group: ai
-    label: Отключённые модели
-    hint: "ID в формате provider:model, не участвующие в автороутинге. Меняется командой .мии."
-    type: json
-    default: []
-
-  groq.proxy:
-    group: ai
-    label: Прокси Groq
-    hint: HTTP/SOCKS-прокси для запросов Groq. Пусто — без прокси.
-    type: nullable_string
-    default: null
-
-  gemini.proxy:
-    group: ai
-    label: Прокси Gemini
-    hint: HTTP/SOCKS-прокси для запросов Gemini. Пусто — без прокси.
-    type: nullable_string
-    default: null
-
-  token.groq:
-    group: ai
-    label: Токен Groq
-    hint: API-ключ Groq. Пусто — Groq не используется.
-    type: secret
-    nullable: true
-    default_from: tokens.default.groq
-
-  token.gemini:
-    group: ai
-    label: Токен Gemini
-    hint: API-ключ Google Gemini. Пусто — Gemini не используется.
-    type: secret
-    nullable: true
-    default_from: tokens.default.gemini
 
   token.geoapify:
     group: tokens
