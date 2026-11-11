@@ -49,3 +49,40 @@ async def load_client(clients_dir: Path, client_file: str):
             f"{client_file} пуст или неправильно размечен! Отключаем клиента.."
         )
         return None
+
+
+async def set_ai_model(model: str) -> None:
+    """Точечно обновляет ai.model в config.yml, сохраняя комментарии."""
+    path = pathes.config
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+
+    ai_index = next(
+        (i for i, ln in enumerate(lines) if ln.rstrip() == "ai:" or ln.rstrip().startswith("ai: ")),
+        None,
+    )
+    if ai_index is None:
+        # ai-блока нет — добавляем в конец файла.
+        lines.append(f"\nai:\n  model: {model}\n")
+    else:
+        indent = "  "
+        model_line = next(
+            (
+                i
+                for i in range(ai_index + 1, len(lines))
+                if lines[i].strip() and not lines[i].startswith(" ")
+            ),
+            len(lines),
+        )
+        replaced = False
+        for i in range(ai_index + 1, model_line):
+            if lines[i].lstrip().startswith("model:"):
+                lines[i] = f"{indent}model: {model}\n"
+                replaced = True
+                break
+        if not replaced:
+            lines.insert(ai_index + 1, f"{indent}model: {model}\n")
+
+    path.write_text("".join(lines), encoding="utf-8")
+    reload()
+    logger.info(f"AI режим изменён на {model}")

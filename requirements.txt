@@ -5,7 +5,7 @@ psutil
 cryptg
 geopy
 pytz
-groq
+openai>=1.55.0
 httpx>=0.28.0
 aiohttp
 aiofiles==24.1.0

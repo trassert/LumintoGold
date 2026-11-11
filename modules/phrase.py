@@ -8,9 +8,6 @@ class voicerec:
     no_reply = "❌ : Ответь на голосовое сообщение командой `.voice`."
     not_recognized = "❌ : Не удалось распознать речь."
     error = "❌ : Ошибка: {error}"
-    proxy = "🚀 : Groq прокси установлен."
-    delete_proxy = "🚀 : Groq прокси удалён."
-    token = "🚀 : Groq токен установлен."
 
 
 class autodel:
@@ -152,15 +149,11 @@ class online:
 
 class ai:
     clear = "🧹 : Чат очищен!"
-    no_token = "🚫 : Токен не установлен."
-    all_failed = "❌ : Ни одна модель не ответила."
-    models_title = "Список моделей:"
-    models_on = "✅"
-    models_off = "❌"
-    models_no_token = " (нет токена)"
-    models_bad_index = "❌ : Нет модели с номером {}. Всего моделей: {}."
-    models_enabled = "✅ : Модель {model} включена."
-    models_disabled = "❌ : Модель {model} выключена."
+    no_token = "🚫 : Ключ AI не задан в configs/config.yml (ai.api_key)."
+    all_failed = "❌ : Модель не ответила."
+    model_set = "✅ : Режим модели установлен: {}"
+    model_current = "ℹ️ : Текущий режим модели: {}"
+    model_bad = "❌ : Неизвестный режим. Доступные: auto, auto:fast, auto:smart."
 
 
 class config:
