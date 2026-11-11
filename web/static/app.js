@@ -19,6 +19,7 @@ const state = {
   ws: null,
   wsRetry: 0,
   modalClose: null,
+  updateAvailable: true,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -296,6 +297,15 @@ async function refreshClients(silent = false) {
   if (state.view === "clients" && (!silent || changed)) drawClients();
 }
 
+async function checkUpdateAvailability() {
+  try {
+    const data = await api("/api/update/status");
+    state.updateAvailable = Boolean(data.available);
+  } catch {
+    /* оставляем кнопки по умолчанию */
+  }
+}
+
 async function renderClients() {
   try {
     await refreshClients(false);
@@ -317,8 +327,13 @@ function clientsSubtitle() {
 }
 
 function clientsActions() {
+  const update = state.updateAvailable
+    ? `<button class="btn ghost small" data-top-action="update">${icon("restart")} Обновить</button>`
+    : "";
   return `
     <button class="btn outline small" data-top-action="import">${icon("upload")} Импорт</button>
+    ${update}
+    <button class="btn ghost small" data-top-action="restart-panel">${icon("refresh")} Перезапустить</button>
     <button class="btn ghost small" data-top-action="stop-all">${icon("stop")} Остановить всех</button>
     <button class="btn primary small" data-top-action="add">${icon("plus")} Добавить</button>`;
 }
@@ -473,6 +488,80 @@ async function stopAll() {
     await refreshClients(true);
   } catch (err) {
     toast(err.message, "error");
+  }
+}
+
+function waitPanel(timeoutMs = 120000) {
+  // Ждём, пока панель снова ответит после перезапуска процесса.
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = async () => {
+      try {
+        const response = await fetch("/api/update/status", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (response.ok) return resolve(true);
+      } catch {
+        /* панель ещё не поднялась */
+      }
+      if (Date.now() - start >= timeoutMs) return resolve(false);
+      setTimeout(check, 1500);
+    };
+    setTimeout(check, 2500);
+  });
+}
+
+async function updateScript(button) {
+  const confirmed = await confirmDialog(
+    "Обновить скрипт?",
+    "Выполнит git pull и uv sync, затем полностью перезапустит процесс со всеми клиентами.",
+    "Обновить",
+  );
+  if (!confirmed) return;
+  setBusy(button, true);
+  toast("Обновление: git pull, uv sync…");
+  try {
+    await api("/api/update", { method: "POST" });
+  } catch (err) {
+    toast(err.message, "error");
+    setBusy(button, false);
+    return;
+  }
+  toast("Перезапуск…");
+  const online = await waitPanel();
+  if (online) {
+    toast("Скрипт обновлён и перезапущен");
+    location.reload();
+  } else {
+    toast("Панель не отвечает — проверьте логи запуска", "error");
+    setBusy(button, false);
+  }
+}
+
+async function restartPanel(button) {
+  const confirmed = await confirmDialog(
+    "Перезапустить скрипт?",
+    "Процесс будет перезапущен полностью (без git pull). Клиенты остановятся и запустятся заново.",
+    "Перезапустить",
+  );
+  if (!confirmed) return;
+  setBusy(button, true);
+  try {
+    await api("/api/restart-panel", { method: "POST" });
+  } catch (err) {
+    toast(err.message, "error");
+    setBusy(button, false);
+    return;
+  }
+  toast("Перезапуск…");
+  const online = await waitPanel();
+  if (online) {
+    toast("Скрипт перезапущен");
+    location.reload();
+  } else {
+    toast("Панель не отвечает — проверьте логи запуска", "error");
+    setBusy(button, false);
   }
 }
 

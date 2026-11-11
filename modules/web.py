@@ -2,8 +2,10 @@ import asyncio
 import contextlib
 import hmac
 import io
+import os
 import re
 import secrets
+import sys
 import time
 import traceback
 import uuid
@@ -156,6 +158,7 @@ class Panel:
         stop_all: Callable[[], Awaitable[int]],
         make_client: Callable[..., TelegramClient],
         log_broker: LogBroker,
+        restart_process: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -168,6 +171,8 @@ class Panel:
         self._stop_all = stop_all
         self._make_client = make_client
         self._log_broker = log_broker
+        self._restart_process = restart_process
+        self._updating = False
         self._web_dir = Path(__file__).resolve().parent.parent / "web"
         self._sessions: dict[str, float] = {}
         self._login_attempts: dict[str, tuple[int, float]] = {}
@@ -284,6 +289,9 @@ class Panel:
         app.router.add_post(
             "/api/clients/{phone}/restart", self._restart_client
         )
+        app.router.add_get("/api/update/status", self._update_status)
+        app.router.add_post("/api/update", self._update)
+        app.router.add_post("/api/restart-panel", self._restart_panel)
         app.router.add_post("/api/logins", self._create_login)
         app.router.add_get("/api/logins/{login_id}", self._get_login)
         app.router.add_post("/api/logins/{login_id}/code", self._submit_code)
@@ -836,6 +844,62 @@ class Panel:
             if not error and data and data.get("disabled"):
                 self._set_status(path.stem, "disabled")
         return self._json({"ok": True, "stopped": count})
+
+    @staticmethod
+    async def _run_cmd(cmd: list[str]) -> tuple[int, str]:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await proc.communicate()
+        output = stdout.decode("utf-8", errors="replace").strip()
+        return proc.returncode or 0, output[-4000:]
+
+    def _update_payload(self, message: str = "") -> dict[str, Any]:
+        return {
+            "running": self._updating,
+            "available": self._restart_process is not None,
+            "message": message,
+        }
+
+    async def _update_status(self, request: web.Request) -> web.Response:
+        return self._json(self._update_payload())
+
+    async def _update(self, request: web.Request) -> web.Response:
+        if self._restart_process is None:
+            return self._error(400, "Обновление недоступно в этом окружении")
+        if self._updating:
+            return self._error(409, "Обновление уже выполняется")
+        self._updating = True
+        logger.info("Обновление: git pull…")
+        try:
+            code, output = await self._run_cmd(["git", "pull", "--ff-only"])
+            if code != 0:
+                raise RuntimeError(f"git pull ({code}): {output}")
+            logger.info(f"git pull: {output or 'без вывода'}")
+            code, output = await self._run_cmd(["uv", "sync"])
+            if code != 0:
+                raise RuntimeError(f"uv sync ({code}): {output}")
+            logger.info(f"uv sync: {output or 'без вывода'}")
+        except Exception as exc:
+            self._updating = False
+            logger.error(f"Обновление не удалось: {exc}")
+            return self._error(500, f"Обновление не удалось: {exc}")
+        logger.info("Обновление завершено, перезапускаю скрипт…")
+        asyncio.get_running_loop().call_later(
+            0.3, lambda: asyncio.create_task(self._restart_process())
+        )
+        return self._json({"ok": True, "restarting": True})
+
+    async def _restart_panel(self, request: web.Request) -> web.Response:
+        if self._restart_process is None:
+            return self._error(400, "Перезапуск недоступен в этом окружении")
+        logger.info("Перезапуск скрипта из веб-панели…")
+        asyncio.get_running_loop().call_later(
+            0.3, lambda: asyncio.create_task(self._restart_process())
+        )
+        return self._json({"ok": True, "restarting": True})
 
     async def _import_clients(self, request: web.Request) -> web.Response:
         body = await self._json_body(request)
