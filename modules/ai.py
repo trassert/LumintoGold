@@ -32,7 +32,9 @@ class AIClient:
     ):
         self.api_key = api_key
         self.base_url = base_url
-        self.model = model if model in ("auto", "auto:fast", "auto:smart") else "auto"
+        self.model = (
+            model if model in ("auto", "auto:fast", "auto:smart") else "auto"
+        )
         self.voice_model = voice_model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -84,9 +86,7 @@ class AIClient:
         used_model = response.model or model
         return answer, used_model
 
-    async def transcribe_voice(
-        self, number: str, voice_id: int
-    ) -> str:
+    async def transcribe_voice(self, number: str, voice_id: int) -> str:
         self._require()
         file_path = pathes.voice / number / f"voice_{voice_id}.ogg"
         async with aiofiles.open(file_path, "rb") as f:

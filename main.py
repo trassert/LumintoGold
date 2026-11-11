@@ -960,7 +960,11 @@ class UserbotManager:
             return await event.edit(msg)
 
     async def ai_model(self, event: Message):
-        arg = event.pattern_match.group(1).strip() if event.pattern_match.group(1) else ""
+        arg = (
+            event.pattern_match.group(1).strip()
+            if event.pattern_match.group(1)
+            else ""
+        )
         if not arg:
             return await event.edit(
                 phrase.ai.model_current.format(self._ai_model())

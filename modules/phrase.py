@@ -153,7 +153,9 @@ class ai:
     all_failed = "❌ : Модель не ответила."
     model_set = "✅ : Режим модели установлен: {}"
     model_current = "ℹ️ : Текущий режим модели: {}"
-    model_bad = "❌ : Неизвестный режим. Доступные: auto, auto:fast, auto:smart."
+    model_bad = (
+        "❌ : Неизвестный режим. Доступные: auto, auto:fast, auto:smart."
+    )
 
 
 class config:

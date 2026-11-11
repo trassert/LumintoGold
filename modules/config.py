@@ -58,7 +58,11 @@ async def set_ai_model(model: str) -> None:
     lines = text.splitlines(keepends=True)
 
     ai_index = next(
-        (i for i, ln in enumerate(lines) if ln.rstrip() == "ai:" or ln.rstrip().startswith("ai: ")),
+        (
+            i
+            for i, ln in enumerate(lines)
+            if ln.rstrip() == "ai:" or ln.rstrip().startswith("ai: ")
+        ),
         None,
     )
     if ai_index is None:
