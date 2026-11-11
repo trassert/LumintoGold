@@ -2,10 +2,8 @@ import asyncio
 import contextlib
 import hmac
 import io
-import os
 import re
 import secrets
-import sys
 import time
 import traceback
 import uuid
