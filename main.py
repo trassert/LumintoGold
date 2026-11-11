@@ -262,14 +262,12 @@ class UserbotManager:
             "seconds",
         )
 
-    def _ai_model(self) -> str:
-        model = str(config.config.ai.model or "auto").strip()
-        return model if model in ("auto", "auto:fast", "auto:smart") else "auto"
-
     async def _sync_ai(self):
         api_key = str(config.config.ai.api_key or "").strip()
         base_url = str(config.config.ai.base_url or "").strip()
-        model = self._ai_model()
+        model = str(config.config.ai.model or "auto").strip()
+        if model not in ("auto", "auto:fast", "auto:smart"):
+            model = "auto"
         # Плейсхолдер base_url означает, что роутер ещё не настроен.
         unconfigured = not api_key or "YOUR_ROUTER_HOST" in base_url
         voice_model = (
@@ -441,8 +439,8 @@ class UserbotManager:
         on(r"\.авто clickbee$", self.clickbee.toggle)
         on(r"\.id (.+)", self.get_id)
         on(r"\.иичистка", self.ai_clear)
-        on(r"\.мии$", self.ai_model)
-        on(r"\.мии (.+)$", self.ai_model)
+        # on(r"\.мии$", self.ai_model)
+        # on(r"\.мии (.+)$", self.ai_model)
         on(r"\.прокси(.*)", self.fp)
         on(r"\.погода (.+)", self.get_weather)
         on(r"\.ip (.+)", self.ipman)
@@ -942,8 +940,6 @@ class UserbotManager:
 
     async def voice2text(self, event: Message):
         reply: Message = await event.get_reply_message()
-        if not reply or not reply.voice:
-            return await event.edit(phrase.voicerec.no_reply)
         if self.ai_client is None:
             return await event.edit(phrase.ai.no_token)
         file_path = self.voice_path / f"voice_{event.id}.ogg"
@@ -958,22 +954,6 @@ class UserbotManager:
             logger.exception("Ошибка при распознавании голоса")
             msg = phrase.voicerec.error.format(error=str(e)[:200])
             return await event.edit(msg)
-
-    async def ai_model(self, event: Message):
-        arg = (
-            event.pattern_match.group(1).strip()
-            if event.pattern_match.group(1)
-            else ""
-        )
-        if not arg:
-            return await event.edit(
-                phrase.ai.model_current.format(self._ai_model())
-            )
-        if arg not in ("auto", "auto:fast", "auto:smart"):
-            return await event.edit(phrase.ai.model_bad)
-        await config.set_ai_model(arg)
-        await self._sync_ai()
-        return await event.edit(phrase.ai.model_set.format(arg))
 
     async def get_id(self, event: Message):
         arg = event.pattern_match.group(1).strip()

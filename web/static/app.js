@@ -1894,6 +1894,8 @@ async function onHeadAction(event) {
   if (action === "refresh-system") return loadSystem(true);
   if (action === "global-save") return saveGlobal(button);
   if (action === "global-reload") return reloadGlobal(button);
+  if (action === "update") return updateScript(button);
+  if (action === "restart-panel") return restartPanel(button);
 }
 
 function bindEvents() {
