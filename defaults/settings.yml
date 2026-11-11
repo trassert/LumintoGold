@@ -202,7 +202,7 @@ fields:
     label: Мин. случайная задержка
     hint: Нижняя граница задержки перед отправкой, в секундах.
     type: int
-    default: 5
+    default: 30
     unit: сек
 
   iris.farm.random_max:
@@ -210,7 +210,7 @@ fields:
     label: Макс. случайная задержка
     hint: Верхняя граница задержки перед отправкой, в секундах.
     type: int
-    default: 360
+    default: 720
     unit: сек
 
   iris.farm.target:
