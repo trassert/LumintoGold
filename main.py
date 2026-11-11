@@ -1489,6 +1489,23 @@ async def _stop_all_managers() -> int:
     return len(phones)
 
 
+def _restart_process() -> None:
+    """Перезапускает скрипт через os.execv (git pull и uv sync уже выполнены)."""
+    python = str(Path(sys.executable).resolve())
+    args = [python]
+    if not re.search(r"python(\d+(\.\d+)*)?$", Path(python).name):
+        args.append(str(Path(__file__).resolve()))
+    args.extend(sys.argv[1:])
+    logger.info(f"Перезапуск скрипта: {' '.join(args)}")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        os.execv(python, args)
+    except OSError as exc:
+        logger.error(f"Не удалось перезапустить скрипт: {exc}")
+        os._exit(1)
+
+
 async def main():
     import signal
 
@@ -1510,6 +1527,7 @@ async def main():
         stop_all=_stop_all_managers,
         make_client=_make_client,
         log_broker=log_broker,
+        restart_process=_restart_process,
     )
     try:
         await panel.start()
