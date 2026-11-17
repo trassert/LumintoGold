@@ -1504,7 +1504,6 @@ async def main():
         logger.info("stop_event установлен")
 
     # signal handler registration
-    import signal
     def handle_sig(sig, frame):
         logger.info(f"Получен сигнал {sig}, вызываю request_stop")
         request_stop()
