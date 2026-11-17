@@ -428,7 +428,7 @@ class Panel:
                 config.config.telegram.api_id,
                 config.config.telegram.api_hash,
             )
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             pass
         else:
             return credentials, "config.yml"
@@ -1413,7 +1413,7 @@ class Panel:
             }
         try:
             load = list(psutil.getloadavg())
-        except AttributeError, OSError:
+        except (AttributeError, OSError):
             load = []
         cpu_freq = None
         net = None

@@ -105,7 +105,7 @@ class FloodController:
         try:
             limit = int(event.pattern_match.group(1))
             window = int(event.pattern_match.group(2))
-        except ValueError, IndexError:
+        except (ValueError, IndexError):
             return await event.edit(
                 "❌ Неверный формат: `.флуд <лимит> <окно>`"
             )

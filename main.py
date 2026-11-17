@@ -116,7 +116,7 @@ def _make_client(
 def _as_number(value, cast, fallback):
     try:
         return cast(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return fallback
 
 
@@ -1364,7 +1364,7 @@ async def _launch_manager(phone: str) -> bool:
         try:
             api_id = int(data["api_id"])
             api_hash = str(data["api_hash"])
-        except KeyError, TypeError, ValueError:
+        except (KeyError, TypeError, ValueError):
             _set_status(phone, "error", "В конфиге нет api_id/api_hash")
             return False
         manager = UserbotManager(phone, api_id, api_hash)

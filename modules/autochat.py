@@ -81,7 +81,7 @@ class AutoChatManager:
     async def add_chat(self, event: Message):
         try:
             chat_id = int(event.pattern_match.group(1))
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return await event.edit(phrase.autochat.invalid_id)
         chats: list = await self.settings.get("autochat.chats", [])
         if chat_id not in chats:
@@ -93,7 +93,7 @@ class AutoChatManager:
     async def remove_chat(self, event: Message):
         try:
             chat_id = int(event.pattern_match.group(1))
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return await event.edit(phrase.autochat.invalid_id)
         chats: list = await self.settings.get("autochat.chats", [])
         if chat_id in chats:
@@ -107,7 +107,7 @@ class AutoChatManager:
             delay = int(event.pattern_match.group(1))
             if delay < 10:
                 return await event.edit(phrase.autochat.too_fast)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return await event.edit(phrase.autochat.invalid_time)
         await self.settings.set("autochat.delay", delay)
         await event.edit(phrase.autochat.time_set.format(delay))

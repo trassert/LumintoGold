@@ -155,7 +155,7 @@ class Generator:
                 if not content:
                     return {}
                 return orjson.loads(content)
-        except FileNotFoundError, orjson.JSONDecodeError:
+        except (FileNotFoundError, orjson.JSONDecodeError):
             return {}
 
     async def _get_task_data(self) -> dict[str, Any]:
