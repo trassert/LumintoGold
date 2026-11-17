@@ -222,7 +222,9 @@ class Panel:
         self._register_routes(app)
         self._runner = web.AppRunner(app, access_log=None, shutdown_timeout=5)
         await self._runner.setup()
-        site = web.TCPSite(self._runner, self._host, self._port, reuse_address=True)
+        site = web.TCPSite(
+            self._runner, self._host, self._port, reuse_address=True
+        )
         await site.start()
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
         logger.info(f"Веб-панель: http://{self._host}:{self._port}")
