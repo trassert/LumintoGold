@@ -1503,9 +1503,18 @@ async def main():
         stop_event.set()
         logger.info("stop_event установлен")
 
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        with contextlib.suppress(NotImplementedError, RuntimeError, ValueError):
-            loop.add_signal_handler(sig, request_stop)
+    # signal handler registration
+    import signal
+    def handle_sig(sig, frame):
+        logger.info(f"Получен сигнал {sig}, вызываю request_stop")
+        request_stop()
+
+    signal.signal(signal.SIGINT, handle_sig)
+    signal.signal(signal.SIGTERM, handle_sig)
+
+    # for sig in (signal.SIGINT, signal.SIGTERM):
+    #    with contextlib.suppress(NotImplementedError, RuntimeError, ValueError):
+    #        loop.add_signal_handler(sig, request_stop)
 
     try:
         await stop_event.wait()
