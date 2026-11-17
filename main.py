@@ -1494,12 +1494,14 @@ async def main():
 
     def request_stop(*_args) -> None:
         nonlocal stopping
+        logger.info(f"Получен сигнал остановки (stopping={stopping})")
         if stopping:
-            logger.warning("Повторный сигнал — принудительный выход")
+            logger.warning("Принудительный выход")
             os._exit(130)
         stopping = True
-        logger.info("Получен сигнал завершения, останавливаю…")
+        logger.info("Устанавливаю stop_event")
         stop_event.set()
+        logger.info("stop_event установлен")
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         with contextlib.suppress(NotImplementedError, RuntimeError, ValueError):
@@ -1507,14 +1509,20 @@ async def main():
 
     try:
         await stop_event.wait()
+    except Exception as e:
+        logger.error(f"Ошибка в цикле остановки: {e}")
     finally:
         logger.info("Останавливаю веб-панель и клиентов…")
-        tasks = [panel.stop(), _stop_all_managers()]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for res in results:
-            if isinstance(res, Exception):
-                logger.error(f"Ошибка при остановке: {res}")
-        logger.info("Все процессы остановлены")
+        try:
+            tasks = [panel.stop(), _stop_all_managers()]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results:
+                if isinstance(res, Exception):
+                    logger.error(f"Ошибка при остановке: {res}")
+            logger.info("Все процессы остановлены")
+        except Exception as e:
+            logger.error(f"Критическая ошибка при остановке: {e}")
+            os._exit(1)
 
 
 if __name__ == "__main__":
