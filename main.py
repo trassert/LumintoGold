@@ -1498,6 +1498,7 @@ async def main():
             logger.warning("Повторный сигнал — принудительный выход")
             os._exit(130)
         stopping = True
+        logger.info("Получен сигнал завершения, останавливаю…")
         stop_event.set()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -1508,18 +1509,12 @@ async def main():
         await stop_event.wait()
     finally:
         logger.info("Останавливаю веб-панель и клиентов…")
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(
-                    panel.stop(),
-                    _stop_all_managers(),
-                    return_exceptions=True,
-                ),
-                timeout=20,
-            )
-        except TimeoutError:
-            logger.warning("Остановка зависла — принудительный выход")
-            os._exit(1)
+        tasks = [panel.stop(), _stop_all_managers()]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for res in results:
+            if isinstance(res, Exception):
+                logger.error(f"Ошибка при остановке: {res}")
+        logger.info("Все процессы остановлены")
 
 
 if __name__ == "__main__":
