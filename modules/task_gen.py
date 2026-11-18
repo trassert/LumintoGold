@@ -14,14 +14,12 @@ from loguru import logger
 
 from . import pathes
 
-logger.info(f"Загружен модуль {__name__}!")
 
 TaskType = Literal["interval", "daily"]
 TaskUnit = Literal["hours", "seconds"]
 TaskParam = int | str
 RandomDelay = tuple[int, int] | None
 
-# Задержка первого сброса после старта (чтобы накопить несколько записей)
 _FLUSH_INTERVAL = 30.0
 _FIRST_FLUSH_DELAY = 5.0
 
@@ -30,7 +28,6 @@ class Generator:
     _instances: dict[str, Generator] = {}
 
     def __init__(self, key_name: str, filename: Path = pathes.tasks) -> None:
-        logger.info(f"Инициализирован таск-ген {key_name}")
         self.key_name: str = key_name
         self.filename: Path = filename
         self._task: asyncio.Task | None = None
@@ -38,7 +35,6 @@ class Generator:
         self._task_param: TaskParam | None = None
         self._random_delay: RandomDelay = None
         self._next_run_timestamp: float = None
-        # In-memory состояние, синхронизируется с файлом периодически.
         self._last_run: float | None = None
         self._flush_task: asyncio.Task | None = None
         Generator._instances[key_name] = self
@@ -60,6 +56,7 @@ class Generator:
         random_delay: RandomDelay = None,
         unit: TaskUnit = "hours",
     ) -> None:
+        await self._load_state()
         self.stop()
         self._random_delay = random_delay
 
@@ -142,7 +139,6 @@ class Generator:
             pass
         finally:
             self._last_run = start
-            # Запись в файл не обязательна мгновенно — таймер сделает это позже.
 
     def _get_next_daily_run(self, target_time) -> float:
         now = datetime.now()
@@ -152,19 +148,24 @@ class Generator:
         return target.timestamp()
 
     def _ensure_flush_timer(self) -> None:
-        """Запускает периодический сброс in-memory состояния в файл."""
         if self._flush_task is None or self._flush_task.done():
             self._flush_task = asyncio.create_task(self._flush_loop())
 
     async def _flush_loop(self) -> None:
-        """Ждёт первый flush и затем periodically пишет изменения."""
         await asyncio.sleep(_FIRST_FLUSH_DELAY)
         while True:
             await asyncio.sleep(_FLUSH_INTERVAL)
             await self._flush_once()
 
+    async def _load_state(self) -> None:
+        try:
+            data = await self._read_all()
+            entry = data.get(self.key_name, {})
+            self._last_run = entry.get("last_run")
+        except Exception:
+            pass
+
     async def _flush_once(self) -> None:
-        """Атомарно читает файл, объединяет со своим состоянием, пишет обратно."""
         try:
             data = await self._read_all()
         except Exception:
@@ -195,7 +196,6 @@ class Generator:
     async def info(self) -> float | None:
         if self._task and self._next_run_timestamp is not None:
             return max(0.0, self._next_run_timestamp - time.time())
-        # Fallback на чтение из файла только если in-memory пусто.
         if self._last_run is None:
             try:
                 data = await self._read_all()
@@ -228,7 +228,6 @@ class Generator:
             self._task.cancel()
         self._task = None
         self._next_run_timestamp = None
-        # При остановке обязательно.flush — чтобы не потерять last_run.
         if self._last_run is not None:
             asyncio.create_task(self._flush_once())
         if self._flush_task and not self._flush_task.done():

@@ -8,7 +8,6 @@ from telethon.tl.custom import Message
 
 from . import phrase, settings
 
-logger.info(f"Загружен модуль {__name__}!")
 
 
 class AutoChatManager:
