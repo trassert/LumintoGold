@@ -10,10 +10,8 @@ from typing import Any, Literal
 
 import aiofiles
 import orjson
-from loguru import logger
 
 from . import pathes
-
 
 TaskType = Literal["interval", "daily"]
 TaskUnit = Literal["hours", "seconds"]
