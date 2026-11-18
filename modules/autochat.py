@@ -44,7 +44,10 @@ class AutoChatManager:
 
             if not (chat_ids and ad_chat and ad_id):
                 idle = await self.settings.get("autochat.idle_sleep", 60)
-                await asyncio.sleep(idle)
+                try:
+                    await asyncio.sleep(idle)
+                except asyncio.CancelledError:
+                    return
                 continue
 
             if not current_chats:
@@ -63,10 +66,13 @@ class AutoChatManager:
             except Exception:
                 logger.exception(f"Автопост: ошибка при отправке в {chat_id}")
 
-            for _ in range(delay):
-                if not self._running:
+            if delay > 0:
+                try:
+                    await asyncio.sleep(delay)
+                except asyncio.CancelledError:
                     return
-                await asyncio.sleep(1)
+            if not self._running:
+                return
 
     async def toggle(self, event: Message):
         enabled = not await self.settings.get("autochat.enabled", False)

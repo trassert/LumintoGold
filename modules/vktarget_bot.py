@@ -204,6 +204,8 @@ class VKTargetRefactored:
             return
         self.vk = VKActions(token, self.logger)
         self._active = True
+        self._poll_params: dict[str, float] = {}
+        self._last_params_read: float = 0
         if self._handler is not None:
             with contextlib.suppress(Exception):
                 self.client.remove_event_handler(self._handler)
@@ -238,8 +240,17 @@ class VKTargetRefactored:
             initial = await self.settings.get("vktarget.poll_initial_delay", 5)
             await asyncio.sleep(initial)
             while self._active:
-                base_wait = await self.settings.get("vktarget.poll_wait")
-                jitter = await self.settings.get("vktarget.poll_jitter", 30)
+                now = time.time()
+                if now - self._last_params_read > 300:
+                    self._poll_params["base_wait"] = float(
+                        await self.settings.get("vktarget.poll_wait", 5)
+                    )
+                    self._poll_params["jitter"] = float(
+                        await self.settings.get("vktarget.poll_jitter", 30)
+                    )
+                    self._last_params_read = now
+                base_wait = self._poll_params.get("base_wait", 5.0)
+                jitter = self._poll_params.get("jitter", 30.0)
                 delay = base_wait * 60 + random.uniform(-jitter, jitter)
                 await asyncio.sleep(max(10, delay))
                 if not self._active:

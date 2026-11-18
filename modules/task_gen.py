@@ -21,6 +21,10 @@ TaskUnit = Literal["hours", "seconds"]
 TaskParam = int | str
 RandomDelay = tuple[int, int] | None
 
+# Задержка первого сброса после старта (чтобы накопить несколько записей)
+_FLUSH_INTERVAL = 30.0
+_FIRST_FLUSH_DELAY = 5.0
+
 
 class Generator:
     _instances: dict[str, Generator] = {}
@@ -34,6 +38,9 @@ class Generator:
         self._task_param: TaskParam | None = None
         self._random_delay: RandomDelay = None
         self._next_run_timestamp: float = None
+        # In-memory состояние, синхронизируется с файлом периодически.
+        self._last_run: float | None = None
+        self._flush_task: asyncio.Task | None = None
         Generator._instances[key_name] = self
 
     @property
@@ -74,9 +81,8 @@ class Generator:
             raise ValueError("task_param must be int (interval) or str (HH:MM)")
 
     async def _schedule_task(self, func: Callable, interval: float) -> None:
-        data = await self._get_task_data()
         now = time.time()
-        last_run = data.get("last_run")
+        last_run = self._last_run
 
         if last_run is None or (now - last_run) >= interval:
             asyncio.create_task(self._safe_execute_with_delay(func))
@@ -85,6 +91,7 @@ class Generator:
             self._next_run_timestamp = last_run + interval
 
         self._task = asyncio.create_task(self._worker(func, interval))
+        self._ensure_flush_timer()
 
     async def _schedule_daily_task(self, func: Callable, time_str: str) -> None:
         try:
@@ -95,13 +102,13 @@ class Generator:
             ) from e
 
         self._next_run_timestamp = self._get_next_daily_run(target_time)
-        data = await self._get_task_data()
-        last_run = data.get("last_run")
+        last_run = self._last_run
 
         if last_run is None or last_run < self._next_run_timestamp - 86400:
             asyncio.create_task(self._safe_execute_with_delay(func))
 
         self._task = asyncio.create_task(self._daily_worker(func, target_time))
+        self._ensure_flush_timer()
 
     async def _worker(self, func: Callable, interval: float) -> None:
         while True:
@@ -134,7 +141,8 @@ class Generator:
         except Exception:
             pass
         finally:
-            await self._update_task_data(start)
+            self._last_run = start
+            # Запись в файл не обязательна мгновенно — таймер сделает это позже.
 
     def _get_next_daily_run(self, target_time) -> float:
         now = datetime.now()
@@ -143,12 +151,38 @@ class Generator:
             target += timedelta(days=1)
         return target.timestamp()
 
-    async def _ensure_directory_exists(self) -> None:
-        directory = Path(self.filename).parent
-        directory.mkdir(parents=True, exist_ok=True)
+    def _ensure_flush_timer(self) -> None:
+        """Запускает периодический сброс in-memory состояния в файл."""
+        if self._flush_task is None or self._flush_task.done():
+            self._flush_task = asyncio.create_task(self._flush_loop())
 
-    async def _get_all_data(self) -> dict[str, Any]:
-        await self._ensure_directory_exists()
+    async def _flush_loop(self) -> None:
+        """Ждёт первый flush и затем periodically пишет изменения."""
+        await asyncio.sleep(_FIRST_FLUSH_DELAY)
+        while True:
+            await asyncio.sleep(_FLUSH_INTERVAL)
+            await self._flush_once()
+
+    async def _flush_once(self) -> None:
+        """Атомарно читает файл, объединяет со своим состоянием, пишет обратно."""
+        try:
+            data = await self._read_all()
+        except Exception:
+            data = {}
+        entry: dict[str, Any] = {
+            "last_run": self._last_run,
+            "task_type": self._task_type,
+            "task_param": self._task_param,
+            "random_delay": self._random_delay,
+        }
+        data[self.key_name] = entry
+        try:
+            async with aiofiles.open(self.filename, "wb") as f:
+                await f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
+        except Exception:
+            pass
+
+    async def _read_all(self) -> dict[str, Any]:
         try:
             async with aiofiles.open(self.filename, "rb") as f:
                 content = await f.read()
@@ -158,27 +192,23 @@ class Generator:
         except (FileNotFoundError, orjson.JSONDecodeError):
             return {}
 
-    async def _get_task_data(self) -> dict[str, Any]:
-        return (await self._get_all_data()).get(self.key_name, {})
-
-    async def _update_task_data(self, last_run: float) -> None:
-        data = await self._get_all_data()
-        data[self.key_name] = {
-            "last_run": last_run,
-            "task_type": self._task_type,
-            "task_param": self._task_param,
-            "random_delay": self._random_delay,
-        }
-        async with aiofiles.open(self.filename, "wb") as f:
-            await f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
-
     async def info(self) -> float | None:
         if self._task and self._next_run_timestamp is not None:
             return max(0.0, self._next_run_timestamp - time.time())
-        data = await self._get_task_data()
-        task_type = data.get("task_type")
-        task_param = data.get("task_param")
-        last_run = data.get("last_run")
+        # Fallback на чтение из файла только если in-memory пусто.
+        if self._last_run is None:
+            try:
+                data = await self._read_all()
+                entry = data.get(self.key_name, {})
+            except Exception:
+                return None
+            task_type = entry.get("task_type")
+            task_param = entry.get("task_param")
+            last_run = entry.get("last_run")
+        else:
+            task_type = self._task_type
+            task_param = self._task_param
+            last_run = self._last_run
         if not task_type or task_param is None or last_run is None:
             return None
         if task_type == "interval" and isinstance(task_param, int):
@@ -198,6 +228,12 @@ class Generator:
             self._task.cancel()
         self._task = None
         self._next_run_timestamp = None
+        # При остановке обязательно.flush — чтобы не потерять last_run.
+        if self._last_run is not None:
+            asyncio.create_task(self._flush_once())
+        if self._flush_task and not self._flush_task.done():
+            self._flush_task.cancel()
+            self._flush_task = None
 
     @classmethod
     async def cleanup(cls) -> None:
