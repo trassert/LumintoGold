@@ -1494,7 +1494,8 @@ async def main():
 
     def request_stop(*_args) -> None:
         nonlocal stopping
-        if stopping: os._exit(130)
+        if stopping:
+            os._exit(130)
         stopping = True
         stop_event.set()
 
@@ -1505,7 +1506,9 @@ async def main():
         await stop_event.wait()
     finally:
         logger.info("Остановка...")
-        await asyncio.gather(panel.stop(), _stop_all_managers(), return_exceptions=True)
+        await asyncio.gather(
+            panel.stop(), _stop_all_managers(), return_exceptions=True
+        )
 
 
 if __name__ == "__main__":
