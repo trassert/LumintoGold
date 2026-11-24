@@ -10,9 +10,10 @@ from telethon.tl.types import (
     MessageMediaDocument,
 )
 
-from . import phrase, settings
+from . import config, phrase, settings
 
 logger.info(f"Загружен модуль {__name__}!")
+
 
 _PHRASES = {
     "stickers": (phrase.flood.set_stickers, phrase.flood.unset_stickers),
@@ -21,12 +22,25 @@ _PHRASES = {
 }
 
 
+def _get_max_flood_age() -> float:
+    return float(config.config.get("flood", {}).get("max_age_seconds", 3600))
+
+
 class FloodController:
     def __init__(self, client: TelegramClient, settings: settings.UBSettings):
         self.client = client
         self.settings = settings
         self._flood_state: dict[str, list[float]] = {}
         self._flood_rules: dict[int, dict[str, dict]] = {}
+        self._cleanup_counter = 0
+
+    def _cleanup_old_state(self) -> None:
+        now = time.time()
+        max_age = _get_max_flood_age()
+        for key in list(self._flood_state.keys()):
+            timestamps = self._flood_state[key]
+            if timestamps and (now - timestamps[-1]) > max_age:
+                self._flood_state.pop(key, None)
 
     async def load_rules(self, chat_id: int):
         if chat_id not in self._flood_rules:
@@ -36,6 +50,11 @@ class FloodController:
             }
 
     async def monitor(self, event: Message):
+        self._cleanup_counter += 1
+        if self._cleanup_counter >= 1000:
+            self._cleanup_counter = 0
+            self._cleanup_old_state()
+
         if (
             event.is_private
             or not event.sender_id
