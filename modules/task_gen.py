@@ -10,10 +10,8 @@ from typing import Any, Literal
 
 import aiofiles
 import orjson
-from loguru import logger
 
 from . import pathes
-
 
 TaskType = Literal["interval", "daily"]
 TaskUnit = Literal["hours", "seconds"]
@@ -233,6 +231,7 @@ class Generator:
         if self._flush_task and not self._flush_task.done():
             self._flush_task.cancel()
             self._flush_task = None
+        Generator._instances.pop(self.key_name, None)
 
     @classmethod
     async def cleanup(cls) -> None:
