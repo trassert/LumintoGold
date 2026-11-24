@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import logging
@@ -1336,6 +1338,8 @@ class UserbotManager:
                 self.status = "stopped"
             _managers.pop(self.phone, None)
             _manager_tasks.pop(self.phone, None)
+            _client_status.pop(self.phone, None)
+            _client_locks.pop(self.phone, None)
             _set_status(self.phone, self.status, self.error)
             with contextlib.suppress(Exception):
                 await self.client.disconnect()
@@ -1380,6 +1384,8 @@ async def _stop_manager(phone: str) -> bool:
     async with _client_lock(phone):
         manager = _managers.pop(phone, None)
         task = _manager_tasks.pop(phone, None)
+        _client_status.pop(phone, None)
+        _client_locks.pop(phone, None)
         if manager is None and task is None:
             _set_status(phone, "stopped")
             return False
