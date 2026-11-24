@@ -42,3 +42,6 @@ ai:
   api_key: "" # API-ключ роутера
   model: auto # auto / auto:fast / auto:smart — режим роутера
   request_timeout: 60 # Таймаут одного запроса к модели, в секундах
+
+flood:
+  max_age_seconds: 3600

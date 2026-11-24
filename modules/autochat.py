@@ -9,7 +9,6 @@ from telethon.tl.custom import Message
 from . import phrase, settings
 
 
-
 class AutoChatManager:
     def __init__(self, client: TelegramClient, settings: settings.UBSettings):
         self.client = client
