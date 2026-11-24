@@ -153,6 +153,8 @@ class AIChatSession:
             raise AllModelsFailed(str(e)) from e
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": reply})
+        if len(self.history) > 100:
+            self.history = self.history[-100:]
         await self._save_history()
         return reply, model_used
 
