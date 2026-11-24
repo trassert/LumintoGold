@@ -79,11 +79,13 @@ class Generator:
         now = time.time()
         last_run = self._last_run
 
-        if last_run is None or (now - last_run) >= interval:
+        if last_run is not None and (now - last_run) >= interval:
             asyncio.create_task(self._safe_execute_with_delay(func))
             self._next_run_timestamp = now + interval
         else:
-            self._next_run_timestamp = last_run + interval
+            self._next_run_timestamp = (
+                last_run + interval if last_run is not None else now + interval
+            )
 
         self._task = asyncio.create_task(self._worker(func, interval))
         self._ensure_flush_timer()
@@ -99,7 +101,7 @@ class Generator:
         self._next_run_timestamp = self._get_next_daily_run(target_time)
         last_run = self._last_run
 
-        if last_run is None or last_run < self._next_run_timestamp - 86400:
+        if last_run is not None and last_run < self._next_run_timestamp - 86400:
             asyncio.create_task(self._safe_execute_with_delay(func))
 
         self._task = asyncio.create_task(self._daily_worker(func, target_time))
